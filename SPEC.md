@@ -347,7 +347,7 @@ cameras:
   - { id: cam2, name: "Lobby Door (iPhone)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }
   - { id: cam3, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
   - { id: cam4, name: "Warehouse (recorded)", source: "data/demo/warehouse.mp4" }
-detector: { model: models/yolo26n.pt, fps: 10, imgsz: 640, conf: 0.35, device: cpu }
+detector: { model: models/yolo26n.pt, fps: 10, imgsz: 480, conf: 0.35, device: cpu }
 vlm:  { base_url: "http://localhost:11434", endpoint: "/api/chat", model: "qwen3.5:4b-mlx", confidence_source: logprobs   # or "model_field" (fallback), stream: true, temperature: 0, logprobs: true, top_logprobs: 10,
         max_tokens: 80, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 224,
         baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },

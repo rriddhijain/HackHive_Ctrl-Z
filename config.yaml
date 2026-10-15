@@ -8,7 +8,7 @@ cameras:
 detector:
   model: models/yolo26n.pt       # nano on CPU: leaves the GPU to the VLM (D34)
   fps: 10
-  imgsz: 640
+  imgsz: 480                     # 480 vs 640 on CPU, 3 cams: 36 vs 58 ms/frame, same detections on test clip (D36)
   conf: 0.35
   device: cpu                    # mps + VLM: YOLO 119 ms/frame, keep-up 79 %, VLM spikes; cpu: 70 ms, 99 %, VLM unaffected
   classes: [0, 24, 26, 28, 43]   # person, backpack, handbag, suitcase, knife (COCO)
