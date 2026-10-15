@@ -134,7 +134,7 @@ def metrics():
                     "gate_yield_pct": round(100 * sum(c["category"] != "normal" for c in p1) / len(p1), 1) if p1 else None,
                     "cache_hit_tokens": None, "preemptions": sum(c.get("stopped") == "cancelled" for c in calls),
                     "errors": P.vlm_errors, "gpu_duty_pct": round(100 * P.arb.duty(60), 1),
-                    "baselines_skipped": P.sched.skipped, "vetoes": len(P.vetoes)},
+                    "baselines_skipped": P.sched.skipped, "vetoes": sum(v["p_before"] >= 0.3 for v in P.vetoes)},
             "latency": {"onset_to_alert_ms": lat(O2A), "store_to_card_ms": lat(S2C[-200:])},
             "system": {"mem_used_pct": psutil.virtual_memory().percent, "uptime_s": round(time.time() - P.t0)}}
 

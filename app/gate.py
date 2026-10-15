@@ -22,7 +22,7 @@ def wide(s, cfg):
 
 
 DEFAULTS = {"down_ratio": 1.2, "down_hold_s": 0.5, "drop_frac": 0.4, "drop_window_s": 0.5, "fast_drop_max_narrow": 0.2,
-            "fight_speed": 1.0, "min_track_age_s": 0.5}
+            "fight_speed": 0.6, "min_track_age_s": 0.5}
 
 
 def _h(s):
@@ -75,11 +75,19 @@ def person_down(hist, cfg):
     return None
 
 
-def fighting(tracks, cfg):
-    """(track ids, speed) for the fastest pair of overlapping boxes moving at >= fight_speed, else None."""
+def gap(a, b):
+    """Centroid distance of two boxes (t, x1, y1, x2, y2) in body heights."""
+    return math.hypot(a[1] + a[3] - b[1] - b[3], a[2] + a[4] - b[2] - b[4]) / (_h(a) + _h(b))
+
+
+def fighting(tracks, cfg, skip=()):
+    """(track ids, speed) for the fastest pair of overlapping boxes moving at >= fight_speed, else None.
+    skip: pairs (i, j), i < j, silenced after a confident-normal verdict (D64)."""
     ok = {i: h for i, h in tracks.items() if _old_enough(h, cfg)}
     best = None
     for i, j in itertools.combinations(sorted(ok), 2):
+        if (i, j) in skip:
+            continue
         a, b = ok[i][-1], ok[j][-1]
         if min(a[3], b[3]) <= max(a[1], b[1]) or min(a[4], b[4]) <= max(a[2], b[2]):
             continue  # boxes don't overlap
@@ -110,14 +118,14 @@ def scene_change(old, new, cfg):
     return d if d > cfg["scene_change_frac"] else None
 
 
-def gate(camera_id, tracks, cfg):
-    """Motion-rule Triggers (§7.4) for one camera on this frame. tracks: {track_id: history}."""
+def gate(camera_id, tracks, cfg, skip=()):
+    """Motion-rule Triggers (§7.4) for one camera on this frame. tracks: {track_id: history}; skip: silenced fight pairs."""
     out = []
     for tid, hist in tracks.items():
         if r := person_down(hist, cfg):
             out.append({"camera_id": camera_id, "rule": "person_down", "track_ids": [tid],
                         "score": round(r[0], 2), "hint": f"Track {tid} {r[1]}.", "kind": r[2]})
-    if f := fighting(tracks, cfg):
+    if f := fighting(tracks, cfg, skip):
         (i, j), v = f
         out.append({"camera_id": camera_id, "rule": "fighting", "track_ids": [i, j],
                     "score": round(min(1.0, v / (2 * cfg["fight_speed"])), 2),
@@ -160,6 +168,8 @@ if __name__ == "__main__":
     tr = gate("cam1", {1: a, 2: b}, c)
     assert [x["rule"] for x in tr] == ["fighting"] and tr[0]["track_ids"] == [1, 2], tr
     assert gate("cam1", {1: a, 2: [(ti, 130, 100, 180, 300) for ti in t]}, c) == []
+    assert gate("cam1", {1: a, 2: b}, c, skip={(1, 2)}) == []          # silenced pair (D64)
+    assert abs(gap(a[-1], b[-1]) - 0.05) < 1e-9   # centroids 10 px apart, 200 px tall
     # Scene change: lights off (whole frame darkens) fires; a person moving (masked out) doesn't.
     lit, dark = np.full((360, 640, 3), 180, np.uint8), np.full((360, 640, 3), 20, np.uint8)
     walker = lit.copy(); walker[100:300, 300:360] = 0

@@ -1,0 +1,2 @@
+clip,label,pred,confidence,top3,onset_to_alert_ms,start_to_alert_ms,trigger_to_alert_ms,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+sample_bus.mp4,normal,normal,0.996,normal:1.00 suspicious_activity:0.00 tailgating:0.00,,,,,,data/ab/bus60_before/sample_bus.jpg,0,20,,,,0.528,

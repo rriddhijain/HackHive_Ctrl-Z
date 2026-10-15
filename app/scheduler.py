@@ -8,15 +8,18 @@ on_frame(det) runs in each camera's detector thread after every frame:
     no open event, newest frame vs the frame of the camera's last model call MAD < 6, same person track IDs, < 15 s.
   - a track whose "horizontal" person_down trigger got a confident-normal verdict (someone on a sofa, a close-up) is
     silenced until its box stops being wide, the track leaves, or horizontal_recheck_s passes (D61).
+  - likewise a fight pair (people walking past each other): silenced until either track leaves, their centroid
+    distance changes by > PAIR_REARM body heights, or horizontal_recheck_s passes (D64).
 """
 import time
 from collections import defaultdict, deque
 
 from app.config import CFG
-from app.gate import gate, grey160, mad, scene_change, wide
+from app.gate import gap, gate, grey160, mad, scene_change, wide
 from app.vlm import GATE_CAT, pick_frames
 
 G, V, D = CFG["gate"], CFG["vlm"], CFG["detector"]
+PAIR_REARM = 0.5   # body heights; a pair that closes in or separates by this much is asked about again (D64)
 
 
 def persons(entry):
@@ -31,6 +34,7 @@ class Scheduler:
         self.last_call = {}                # camera -> (time, grey160 of the call's newest frame, person id set)
         self.last_skip = {}
         self.quiet = {}                    # (camera, track id) -> time its horizontal trigger was silenced (D61)
+        self.quiet_pairs = {}              # (camera, (i, j)) -> (time silenced, gap then) (D64)
         self.skipped = 0
         self.n_triggers = 0
 
@@ -52,7 +56,12 @@ class Scheduler:
         hists = det.person_hists()
         for k in [k for k in self.quiet if k[0] == cam and (k[1] not in hists or not wide(hists[k[1]][-1], G))]:
             del self.quiet[k]                                   # re-arm: box no longer wide, or the track left
-        trigs = gate(cam, hists, G)
+        for k, (t0, g0) in list(self.quiet_pairs.items()):
+            i, j = k[1]
+            if k[0] == cam and (i not in hists or j not in hists or now - t0 >= G["horizontal_recheck_s"]
+                                or abs(gap(hists[i][-1], hists[j][-1]) - g0) > PAIR_REARM):
+                del self.quiet_pairs[k]
+        trigs = gate(cam, hists, G, skip={k[1] for k in self.quiet_pairs if k[0] == cam})
         old = next((e for e in reversed(buf) if now - e[0] >= 0.5), None)
         if old and (d := scene_change(old, new, G)):
             trigs.append({"camera_id": cam, "rule": "scene_change", "track_ids": [], "score": round(min(1.0, d * 2), 2),
@@ -106,6 +115,11 @@ class Scheduler:
     def silence(self, cam, track_ids, now):
         for i in track_ids:
             self.quiet[(cam, i)] = now
+
+    def silence_pair(self, cam, pair, hists, now):
+        i, j = sorted(pair)
+        if i in hists and j in hists:
+            self.quiet_pairs[(cam, (i, j))] = (now, gap(hists[i][-1], hists[j][-1]))
 
     def note_call(self, cam, entry):
         """At dispatch: remember the frame this camera's model call sees (the change gate compares against it)."""
@@ -171,4 +185,15 @@ if __name__ == "__main__":
     arb.q.clear(); s.silence("cam1", [3], 70.0)
     det.person_hists = lambda: {3: [(70.1, 150, 100, 200, 320)]}; step(70.1)   # stood up: re-armed
     assert ("cam1", 3) not in s.quiet
+    # Two people walking past each other: fight trigger once; after a confident-normal verdict the pair stays quiet
+    # while their distance holds, re-arms when they move apart or close in (D64).
+    arb.q.clear(); s.last_p1.clear()
+    walk = lambda t0, dx=0: {4: [(t0 + 0.1 * i, 100 + 30 * i, 100, 150 + 30 * i, 300) for i in range(8)],
+                             5: [(t0 + 0.1 * i, 120 + 30 * i + dx, 100, 170 + 30 * i + dx, 300) for i in range(8)]}
+    det.person_hists = lambda: walk(80); step(80.7)
+    assert [r["rule"] for r in arb.q] == ["fighting"]; arb.q.clear(); s.silence_pair("cam1", [5, 4], walk(80), 80.7)
+    det.person_hists = lambda: walk(82); step(82.7); assert not arb.waiting(1), "silenced pair"
+    det.person_hists = lambda: walk(84, dx=-160); step(84.7)   # gap grew by 0.6 body heights -> re-armed
+    det.person_hists = lambda: walk(84, dx=-20); step(86.7)
+    assert [r["rule"] for r in arb.waiting(1)] == ["fighting"]
     print("scheduler self-check ok")

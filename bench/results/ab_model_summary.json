@@ -1,0 +1,60 @@
+{
+ "qwen3.5:4b-mlx": {
+  "n": 7,
+  "right": 4,
+  "macro_f1": 0.389,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 0.667,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   3662,
+   4293
+  ],
+  "trigger_to_alert_p50_p95": [
+   1207,
+   1261
+  ],
+  "errors": {
+   "fighting -> normal": [
+    "v001.avi (data/ab/qwen3.5_4b-mlx/v001.jpg)",
+    "v003.avi (data/ab/qwen3.5_4b-mlx/v003.jpg)"
+   ],
+   "fighting -> person_down": [
+    "v026.avi (data/ab/qwen3.5_4b-mlx/v026.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.79
+ },
+ "qwen3.5:2b": {
+  "n": 7,
+  "right": 5,
+  "macro_f1": 0.65,
+  "labels_in_f1": [
+   "fighting",
+   "normal"
+  ],
+  "incident_recall": 0.667,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   3710,
+   8303
+  ],
+  "trigger_to_alert_p50_p95": [
+   1492,
+   1914
+  ],
+  "errors": {
+   "fighting -> normal": [
+    "v026.avi (data/ab/qwen3.5_2b/v026.jpg)",
+    "w001_masked.avi (data/ab/qwen3.5_2b/w001_masked.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.852
+ }
+}

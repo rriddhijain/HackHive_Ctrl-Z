@@ -100,10 +100,32 @@ def pick_frames(buffer, span=V["mosaic_span_s"], n=V["mosaic_frames"]):
     return picked
 
 
-def mosaic(frames):
-    """2x2 grid of letterboxed 288x160 tiles (576x320) from buffer entries (t, frame, tracks). Returns (image, b64 jpeg)."""
+def track_crop(entry, track_ids, C=V["p1_crop"]):
+    """FR-9c (D45): 16:9 crop of the trigger tracks' union box x expand from a buffer entry, or None if the box is
+    already >= max_box_frac of the frame height (close enough to see) or the tracks aren't in this frame."""
+    img, boxes = entry[1], [t["box"] for t in entry[2] if t["id"] in track_ids]
+    if not boxes:
+        return None
+    H, W = img.shape[:2]
+    x1, y1 = min(b[0] for b in boxes), min(b[1] for b in boxes)
+    x2, y2 = max(b[2] for b in boxes), max(b[3] for b in boxes)
+    if y2 - y1 >= C["max_box_frac"] * H:
+        return None
+    w = max(x2 - x1, (y2 - y1) * 16 / 9) * C["expand"]
+    w, h = min(w, W, H * 16 / 9), min(w, W, H * 16 / 9) * 9 / 16
+    cx = min(max((x1 + x2) / 2, w / 2), W - w / 2)
+    cy = min(max((y1 + y2) / 2, h / 2), H - h / 2)
+    return img[int(cy - h / 2):int(cy + h / 2), int(cx - w / 2):int(cx + w / 2)]
+
+
+def mosaic(frames, track_ids=()):
+    """2x2 grid of letterboxed 288x160 tiles (576x320) from buffer entries (t, frame, tracks). Returns (image, b64 jpeg).
+    track_ids (gate-triggered calls) + vlm.p1_crop.enabled: tile 4 becomes a crop of those tracks (FR-9c)."""
     tw, th = V["tile"]
     tiles = [letterbox(f[1], tw, th) for f in frames]
+    crop = track_crop(frames[-1], track_ids) if V["p1_crop"]["enabled"] and track_ids and frames else None
+    if crop is not None:
+        tiles[-1] = letterbox(crop, tw, th)
     tiles += [np.full((th, tw, 3), 114, np.uint8)] * (4 - len(tiles))
     grid = np.vstack([np.hstack(tiles[:2]), np.hstack(tiles[2:4])])
     return grid, base64.b64encode(cv2.imencode(".jpg", grid, [cv2.IMWRITE_JPEG_QUALITY, 85])[1]).decode()
@@ -161,7 +183,8 @@ def cross_check(p, evidence, E=CFG["events"]):
     """c = clamp(p_cal * f): f = 1.15 if a gate trigger supports the category, 0.5 if the detector contradicts it.
     evidence: {"max_persons": int over the 4 s buffer, "door": bool, "door_entries": int, "triggers": set of categories}.
     Returns (c, vetoes) where vetoes = [(category, p_before, p_after)]."""
-    contra = {"fighting": evidence["max_persons"] < 2, "person_down": evidence["max_persons"] < 1,
+    contra = {"fighting": evidence["max_persons"] < 1,   # nano misses grapplers: veto only if nobody seen (D63)
+              "person_down": evidence["max_persons"] < 1,
               "tailgating": not evidence["door"] or evidence["door_entries"] < 2}
     c, vetoes = {}, []
     for cat, v in p.items():
@@ -194,7 +217,7 @@ def call(b64, hints, on_decide=None, stop_summary_at=None, cancel=None):
     body = {"model": V["model"], "stream": True, "think": V["think"], "keep_alive": V["keep_alive"], "format": SCHEMA,
             "logprobs": True, "top_logprobs": V["top_logprobs"],
             "options": {"temperature": V["temperature"], "num_predict": V["max_tokens"], "num_ctx": V["num_ctx"]},
-            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": hints, "images": [b64]}]}
+            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": hints, "images": b64 if isinstance(b64, list) else [b64]}]}
     t = {"t_vlm_start": time.time()}
     text, steps, probs, cat, decided, stopped, last = "", [], None, None, False, None, {}
     with httpx.stream("POST", V["base_url"] + V["endpoint"], json=body, timeout=V["timeout_s"]) as r:
@@ -262,10 +285,12 @@ if __name__ == "__main__":
     assert abs(sum(p.values()) - 1) < 1e-9
     p, c = walk([(pre, "crow", [("crow", lp(0.9)), ("c", lp(0.05)), ("n", lp(0.05))])])  # "c" -> crowd only
     assert c == "crowd_incident" and abs(p["crowd_incident"] - 0.95) < 1e-9, p
-    # 2. Cross-check: one person, model says fighting -> vetoed to half; person_down corroborated by a gate -> boosted.
-    c, v = cross_check({"fighting": 0.8, "person_down": 0.2}, {"max_persons": 1, "door": False, "door_entries": 0,
+    # 2. Cross-check: nobody detected, model says fighting -> vetoed to half; person_down corroborated by a gate -> boosted.
+    c, v = cross_check({"fighting": 0.8, "person_down": 0.2}, {"max_persons": 0, "door": False, "door_entries": 0,
                                                                   "triggers": {"person_down"}})
-    assert c["fighting"] == 0.4 and abs(c["person_down"] - 0.23) < 1e-9 and v == [("fighting", 0.8, 0.4)], (c, v)
+    assert c["fighting"] == 0.4 and c["person_down"] == 0.1 and v == [("fighting", 0.8, 0.4), ("person_down", 0.2, 0.1)], (c, v)
+    c, v = cross_check({"fighting": 0.8}, {"max_persons": 1, "door": False, "door_entries": 0, "triggers": {"fighting"}})
+    assert abs(c["fighting"] - 0.92) < 1e-9 and v == [], (c, v)   # one person seen (merged grapplers): no veto (D63)
     # 3. Letterbox: 4:3 and portrait frames keep their shape inside a 16:9 tile (D44).
     for shape in [(720, 960), (1280, 720), (360, 640)]:
         tile = letterbox(np.full((*shape, 3), 255, np.uint8), 288, 160)
@@ -276,6 +301,10 @@ if __name__ == "__main__":
     assert [round(f[0], 1) for f in pick_frames(buf)] == [1.9, 2.6, 3.2, 3.9], [f[0] for f in pick_frames(buf)]
     grid, b64 = mosaic(pick_frames(buf))
     assert grid.shape == (320, 576, 3)
+    far = (0, np.zeros((360, 640, 3), np.uint8), [{"id": 7, "box": (300, 100, 330, 160)}])   # 60 px tall: crop
+    ch, cw = track_crop(far, [7]).shape[:2]
+    assert ch == 105 and abs(cw / ch - 16 / 9) < 0.02 and track_crop(far, [8]) is None, (ch, cw)   # 60 px x 1.75, 16:9
+    assert track_crop((0, far[1], [{"id": 7, "box": (300, 100, 380, 300)}]), [7]) is None   # 200 px tall: no crop
     # 4. Live call on the sample clip's first frame: valid JSON, probabilities resolved, category known before done.
     cap = cv2.VideoCapture("data/demo/sample_bus.mp4"); frames = []
     for i in range(50):

@@ -85,7 +85,7 @@ class Pipeline:
         while True:
             time.sleep(1)
             for cid, c in list(self.cams.items()):
-                if c.status in ("reconnecting", "down"):
+                if c.status in ("reconnecting", "down", "ended"):   # an ended clip/upload closes its events (E-13)
                     self.down_since.setdefault(cid, time.time())
                 else:
                     self.down_since.pop(cid, None)
@@ -107,8 +107,11 @@ class Pipeline:
         newest = frames[-1]
         self.sched.note_call(cam, newest)
         delayed = time.time() - req["created"] > V["trigger_max_age_s"]
-        grid, b64 = vlm.mosaic(frames)
+        crop = vlm.track_crop(newest, req["track_ids"]) is not None if V["p1_crop"]["enabled"] and not base else False
+        grid, b64 = vlm.mosaic(frames, req["track_ids"] if crop else ())
         hints = f"Detector: up to {ev['max_persons']} people in the last 4 s. Gate: {req['hint'] or 'no trigger'}."
+        if crop:
+            hints += " The bottom-right tile is a close-up of those tracks in the newest frame."   # FR-9c
         summary_turn = base and self.n_base[cam] % V["summary_every_n"] == 1   # 1st, 4th, 7th... baseline (D42)
         st = {}
 
@@ -144,6 +147,8 @@ class Pipeline:
         self.err_streak = 0
         if req.get("kind") == "horizontal" and st.get("top") == "normal" and st["c"]["normal"] >= 0.80:
             self.sched.silence(cam, req["track_ids"], newest[0])   # D61: don't re-ask about the same wide box
+        if req.get("rule") == "fighting" and st.get("top") == "normal" and st["c"]["normal"] >= 0.80:
+            self.sched.silence_pair(cam, req["track_ids"], det.person_hists(), newest[0])   # D64: people passing by
         if r["stopped"] == "cancelled" and "c" not in st:
             self.calls.append({"prio": req["prio"], "cam": cam, "stopped": "cancelled"})
             return                                          # preempted before the category: nothing observed
@@ -251,7 +256,7 @@ def main():
            "stopped_at_category": sum(1 for c in p.calls if c.get("stopped") == "category"),
            "cancelled": sum(1 for c in p.calls if c.get("stopped") == "cancelled"),
            "baselines_skipped": p.sched.skipped, "gate_triggers": p.sched.n_triggers, "vlm_errors": p.vlm_errors,
-           "vetoes": len(p.vetoes), "vetoes_p_ge_0.3": sum(1 for v in p.vetoes if v["p_before"] >= 0.3),
+           "vetoes": sum(1 for v in p.vetoes if v["p_before"] >= 0.3), "vetoes_logged": len(p.vetoes),   # D63
            "model_tta_ms": {"p50": pct([c["model_tta_ms"] for c in full], .5), "p95": pct([c["model_tta_ms"] for c in full], .95)},
            "call_ms": {"p50": pct([c["call_ms"] for c in full], .5), "p95": pct([c["call_ms"] for c in full], .95)},
            "queue_ms": {"p50": pct([c["queue_ms"] for c in full], .5), "p95": pct([c["queue_ms"] for c in full], .95)},
