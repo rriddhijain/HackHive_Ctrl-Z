@@ -1,0 +1,94 @@
+{
+ "mosaic": {
+  "n": 7,
+  "right": 4,
+  "macro_f1": 0.444,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 0.833,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   3948,
+   8395
+  ],
+  "trigger_to_alert_p50_p95": [
+   3163,
+   4998
+  ],
+  "errors": {
+   "fighting -> person_down": [
+    "v003.avi (data/ab/mosaic/v003.jpg)",
+    "v026.avi (data/ab/mosaic/v026.jpg)"
+   ],
+   "fighting -> normal": [
+    "w001_masked.avi (data/ab/mosaic/w001_masked.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.867
+ },
+ "person_crop": {
+  "n": 7,
+  "right": 4,
+  "macro_f1": 0.389,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 0.667,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   5399,
+   9616
+  ],
+  "trigger_to_alert_p50_p95": [
+   2605,
+   3221
+  ],
+  "errors": {
+   "fighting -> normal": [
+    "v003.avi (data/ab/person_crop/v003.jpg)",
+    "w001_masked.avi (data/ab/person_crop/w001_masked.jpg)"
+   ],
+   "fighting -> person_down": [
+    "v026.avi (data/ab/person_crop/v026.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.889
+ },
+ "native_video": {
+  "n": 7,
+  "right": 5,
+  "macro_f1": 0.489,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 0.833,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   7656,
+   13904
+  ],
+  "trigger_to_alert_p50_p95": [
+   5886,
+   7514
+  ],
+  "errors": {
+   "fighting -> person_down": [
+    "v026.avi (data/ab/native_video/v026.jpg)"
+   ],
+   "fighting -> normal": [
+    "w001_masked.avi (data/ab/native_video/w001_masked.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.974
+ }
+}

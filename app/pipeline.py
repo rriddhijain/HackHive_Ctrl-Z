@@ -128,6 +128,9 @@ class Pipeline:
             for e in opened:
                 self.alerts.append((cam, e["category"], e["_t_alert"], e))
             st.update(c=c, evs=opened + supported, top=max(c, key=c.get), t_cat=t_cat)
+            # D67: a P1 that agrees with an event already open on this camera only updates it, no summary
+            if req["prio"] == 1 and st["top"] in {e["category"] for e in supported}:
+                return True
             # FR-8a: a confident-normal verdict stops at the category (baselines except every Nth; all P1s, D61)
             return (req["prio"] == 1 or not summary_turn) and st["top"] == "normal" and c["normal"] >= 0.80
 

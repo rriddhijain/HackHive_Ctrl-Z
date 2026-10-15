@@ -1,0 +1,4 @@
+clip,label,pred,confidence,top3,onset_to_alert_ms,start_to_alert_ms,trigger_to_alert_ms,trigger_to_alert_p95,alerts,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+v001.avi,fighting,fighting,0.996,fighting:1.00 crowd_incident:0.06 suspicious_activity:0.04,,11045,4273,4273,1,fighting@3.7s fighting@4.8s fighting@6.8s fighting@9.8s,,data/ab/duty_mix_before/v001.jpg,4,6,0,2862,2969,0.491,A group of people engage in a physical altercation near an outdoor seating area.
+sample_bus.mp4,normal,normal,0.998,normal:1.00 suspicious_activity:0.00 tailgating:0.00,,,,,0,fighting@17.6s,,data/ab/duty_mix_before/sample_bus.jpg,1,6,0,51,51,0.179,
+v026.avi,fighting,person_down,0.924,person_down:0.92 fire_smoke:0.04 normal:0.02,,20296,17202,17202,1,,person_down:0.942 person_down:0.854,data/ab/duty_mix_before/v026.jpg,0,6,0,,,0.27,A person is lying on the floor in a hallway across all frames.

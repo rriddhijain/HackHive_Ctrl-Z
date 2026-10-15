@@ -138,8 +138,7 @@ def run(paths, seconds=None, tag="run"):
         obs = p.db.rows("SELECT * FROM observations WHERE camera_id=? ORDER BY ts", (cid,))
         best = evs[0] if evs else None
         pred = best["category"] if best else "normal"
-        o = max((x for x in obs if best and x["event_id"] == best["id"]), key=lambda x: x["confidence"], default=None) \
-            or (obs[-1] if obs else None)
+        o = max((x for x in obs if x["probs"]), key=lambda x: x["probs"].get(pred, 0), default=None) or (obs[-1] if obs else None)
         probs = (o["probs"] or {}) if o else {}
         hit = next((t for cam, cat, t, _ in p.alerts if cam == cid and cat == pred and pred != "normal"), None)
         calls = [x for x in p.calls if x["cam"] == cid]
@@ -157,6 +156,8 @@ def run(paths, seconds=None, tag="run"):
                      "onset_to_alert_ms": round((hit - c.t_first - onset) * 1000) if hit and onset is not None else None,
                      "start_to_alert_ms": round((hit - c.t_first) * 1000) if hit and c.t_first else None,
                      "trigger_to_alert_ms": best["time_to_alert_ms"] if best else None,
+                     "trigger_to_alert_p95": pct([e["time_to_alert_ms"] for cam, _, _, e in p.alerts if cam == cid], .95),
+                     "alerts": sum(cam == cid for cam, *_ in p.alerts),
                      "gate_fired": " ".join(f"{r}@{t}s" for r, t in gates[:6]) or None,
                      "vetoes": " ".join(f"{v['category']}:{v['p_before']}" for v in p.vetoes
                                         if v["camera_id"] == cid and v["p_before"] >= 0.3) or None,
@@ -273,7 +274,10 @@ if __name__ == "__main__":
     for f in ("model", "gate", "tiles"):
         ap.add_argument("--" + f, action="store_true")
     ap.add_argument("--run", nargs="+"); ap.add_argument("--seconds", type=float); ap.add_argument("--tag", default="x")
+    ap.add_argument("--duty-target", type=float, help="override vlm.duty_target (e.g. 1.01 = no back-off, the 'before')")
     a = ap.parse_args()
+    if a.duty_target is not None:
+        V["duty_target"] = a.duty_target
     if a.gate:
         test_gate()
     if a.model:

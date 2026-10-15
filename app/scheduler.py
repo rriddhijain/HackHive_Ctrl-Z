@@ -6,6 +6,8 @@ on_frame(det) runs in each camera's detector thread after every frame:
     (cooldown), or the camera's last P1 was < 1 s ago. At most 3 waiting P1s per camera (oldest dropped beyond that).
   - baseline: every 3 s (10 s with nobody in view) if no P1 waits anywhere -> a P3 request, unless change-gated:
     no open event, newest frame vs the frame of the camera's last model call MAD < 6, same person track IDs, < 15 s.
+    While measured GPU duty (60 s) is above vlm.duty_target, baselines back off to one per camera per 15 s (D66).
+    Gate-triggered P1s are never throttled and the arbiter serves them before any queued baseline.
   - a track whose "horizontal" person_down trigger got a confident-normal verdict (someone on a sofa, a close-up) is
     silenced until its box stops being wide, the track leaves, or horizontal_recheck_s passes (D61).
   - likewise a fight pair (people walking past each other): silenced until either track leaves, their centroid
@@ -36,6 +38,8 @@ class Scheduler:
         self.quiet = {}                    # (camera, track id) -> time its horizontal trigger was silenced (D61)
         self.quiet_pairs = {}              # (camera, (i, j)) -> (time silenced, gap then) (D64)
         self.skipped = 0
+        self.skipped_by = defaultdict(int)  # camera -> baselines skipped (change gate or duty back-off)
+        self.skipped_duty = 0
         self.n_triggers = 0
 
     def evidence(self, det, now):
@@ -102,11 +106,13 @@ class Scheduler:
         last = self.last_call.get(cam)
         if last and now - last[0] < interval:
             return
-        if last and not self.events.has_open(cam) and now - last[0] < V["baseline_skip"]["max_skip_s"]:
+        if last and now - last[0] < V["baseline_skip"]["max_skip_s"]:
             new = det.buffer[-1]
-            if {t["id"] for t in persons(new)} == last[2] and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"]:
+            busy = self.arb.duty() > V["duty_target"]               # D66: back off while the GPU is saturated
+            if busy or (not self.events.has_open(cam) and {t["id"] for t in persons(new)} == last[2]
+                        and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"]):
                 if now - self.last_skip.get(cam, 0) >= interval:   # one skip counted per baseline slot
-                    self.skipped += 1
+                    self.skipped += 1; self.skipped_by[cam] += 1; self.skipped_duty += busy
                     self.last_skip[cam] = now
                 return
         self.arb.submit({"prio": 3, "cam": cam, "rule": None, "trigger": "baseline", "created": time.time()})
@@ -135,6 +141,8 @@ if __name__ == "__main__":
         def submit(self, r): self.q.append(r); return r
         def waiting(self, prio=None, cam=None): return [r for r in self.q if (prio is None or r["prio"] == prio) and (cam is None or r["cam"] == cam)]
         def drop(self, r): self.q.remove(r)
+        def duty(self): return self.d
+        d = 0.0
     class FakeEvents:
         open = set()
         def is_open(self, cam, cat): return (cam, cat) in self.open
@@ -185,6 +193,13 @@ if __name__ == "__main__":
     arb.q.clear(); s.silence("cam1", [3], 70.0)
     det.person_hists = lambda: {3: [(70.1, 150, 100, 200, 320)]}; step(70.1)   # stood up: re-armed
     assert ("cam1", 3) not in s.quiet
+    # Duty back-off (D66): GPU above duty_target -> a changing scene still gets only one baseline per 15 s.
+    det.person_hists = lambda: {}; step(100.0); arb.q.clear(); arb.d = 0.9; s.note_call("cam1", det.buffer[-1])
+    for i in range(1001, 1150):
+        step(i / 10, frame=np.full((360, 640, 3), 100 + 20 * (i % 2), np.uint8))   # MAD 20: changing, no scene_change
+    assert not arb.waiting(3) and s.skipped_duty >= 4, s.skipped_duty   # one per 3 s slot over 15 s
+    step(115.0); assert arb.waiting(3), "max_skip_s still caps the back-off"
+    arb.q.clear(); arb.d = 0.0
     # Two people walking past each other: fight trigger once; after a confident-normal verdict the pair stays quiet
     # while their distance holds, re-arms when they move apart or close in (D64).
     arb.q.clear(); s.last_p1.clear()

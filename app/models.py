@@ -67,6 +67,7 @@ class Arbiter(threading.Thread):
                 self.busy.append((t0, time.time()))
 
     def duty(self, window=60.0, now=None):
+        """Share of the last `window` seconds a model call was running (§12)."""
         now = now or time.time()
         with self.cv:
             busy = list(self.busy) + ([(self.running["t_start"], now)] if self.running else [])
