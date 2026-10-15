@@ -66,10 +66,25 @@ class Pipeline:
         threading.Thread(target=self._ticker, daemon=True, name="events-tick").start()
         self.t0 = time.time()
 
+    def add_camera(self, c, loop=False):
+        """Runtime camera (FR-5 upload): same objects as __init__, started at once."""
+        cam = Camera(c["id"], c["name"], c["source"], loop, c.get("door_zone"), c.get("watch_zone"))
+        self.events.cam_names[c["id"]] = c["name"]
+        self.cams[c["id"]], self.dets[c["id"]] = cam, Detector(cam, on_frame=self.sched.on_frame)
+        self.dets[c["id"]].start(); cam.start()
+        return cam
+
+    def remove_camera(self, cid):
+        """Stop a camera; it counts as down from the epoch, so the next tick closes its open events (E-13)."""
+        for x in (self.cams.pop(cid, None), self.dets.pop(cid, None)):
+            if x:
+                x.stop()
+        self.down_since[cid] = 0
+
     def _ticker(self):
         while True:
             time.sleep(1)
-            for cid, c in self.cams.items():
+            for cid, c in list(self.cams.items()):
                 if c.status in ("reconnecting", "down"):
                     self.down_since.setdefault(cid, time.time())
                 else:
@@ -77,7 +92,9 @@ class Pipeline:
             self.events.tick(down_since=self.down_since)
 
     def run_call(self, req):
-        cam, det = req["cam"], self.dets[req["cam"]]
+        cam, det = req["cam"], self.dets.get(req["cam"])
+        if det is None:                                     # camera removed while the request waited
+            return
         base = req["prio"] == 3
         if base:  # P3: mosaic from the freshest buffer frames, built now (§5a step 5)
             frames = vlm.pick_frames(det.buffer)
@@ -158,6 +175,8 @@ class Pipeline:
                            "category": r["category"], "c": obs["confidence"], "summary_turn": summary_turn,
                            "model_tta_ms": ms(ts, t.get("t_category")), "queue_ms": ms(req["created"], t["t_vlm_start"]),
                            "call_ms": ms(t["t_vlm_start"], t["t_vlm_done"]), "prompt_eval_count": r["prompt_eval_count"]})
+        self.emit("trace", {"camera_id": cam, "trigger": req["trigger"], "created": req["created"], "timing": t,
+                            "hints": hints, "raw_json": r.get("raw"), "mosaic_b64": b64})   # Workflow view (FR-15)
         self.emit("observation", obs)
 
     def print_emit(self, kind, d):
@@ -189,17 +208,20 @@ def pct(xs, q):
     return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else None
 
 
+def load_labels():
+    """bench/labels.csv -> {clip file name: (label, onset_s or None)} (FR-21)."""
+    lf = ROOT / "bench" / "labels.csv"
+    return {Path(r["clip"]).name: (r["label"], float(r["onset_s"]) if r.get("onset_s") else None)
+            for r in csv.DictReader(open(lf))} if lf.exists() else {}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("clips", nargs="*")
     ap.add_argument("--label"); ap.add_argument("--onset", type=float)
     ap.add_argument("--seconds", type=float); ap.add_argument("--out")
     a = ap.parse_args()
-    labels = {}
-    lf = ROOT / "bench" / "labels.csv"
-    if lf.exists():
-        for row in csv.DictReader(open(lf)):
-            labels[Path(row["clip"]).name] = (row["label"], float(row["onset_s"]) if row.get("onset_s") else None)
+    labels = load_labels()
     if a.label:
         labels[Path(a.clips[0]).name] = (a.label, a.onset)
     cams = [{"id": f"cam{i + 1}", "name": Path(c).name, "source": c} for i, c in enumerate(a.clips)] or CFG["cameras"]

@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.8 (2026-10-16): category probabilities by a prefix-tree walk over the value tokens (D60); confident-normal gate calls stop at the category + fast-drop width guard `fast_drop_max_narrow` + horizontal-trigger re-arm (`horizontal_recheck_s`) (D61). v1.7 (2026-10-16): chat sentence-level grounding: a `summary` sentence with no valid `[#id]` is dropped, not just the bad ID (D57). v1.6 (2026-10-16 01:15 IST): judge-review package (D42–D56): baseline load control + observation-based close, 16:9 letterboxed tiles, prompt exclusions, detector cross-check moved to R1, one pixel coordinate system + person-only gates, honest latency definitions, operator metrics (false alarms per camera-hour, watts per camera), operator workflow; R1 scope unchanged (W7 rejected). v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.9 (2026-10-16): P3 dashboard API additions (D62): alert `t_stored` + `onset_to_alert_ms`, metrics per-camera `people`/`now` + `latency` block, `POST /api/ui/latency` (browser-measured store→card), upload as raw body with `?name=`. v1.8 (2026-10-16): category probabilities by a prefix-tree walk over the value tokens (D60); confident-normal gate calls stop at the category + fast-drop width guard `fast_drop_max_narrow` + horizontal-trigger re-arm (`horizontal_recheck_s`) (D61). v1.7 (2026-10-16): chat sentence-level grounding: a `summary` sentence with no valid `[#id]` is dropped, not just the bad ID (D57). v1.6 (2026-10-16 01:15 IST): judge-review package (D42–D56): baseline load control + observation-based close, 16:9 letterboxed tiles, prompt exclusions, detector cross-check moved to R1, one pixel coordinate system + person-only gates, honest latency definitions, operator metrics (false alarms per camera-hour, watts per camera), operator workflow; R1 scope unchanged (W7 rejected). v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -321,7 +321,8 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 |---|---|---|
 | GET | `/api/cameras` | `[{id, name, source_type, status, fps, has_door_zone}]` |
 | POST | `/api/cameras` | add a source `{name, source}` → camera *(F)* |
-| POST | `/api/cameras/upload` | multipart video → new camera `{id, name, status}` (FR-5) |
+| POST | `/api/cameras/upload?name=` | raw file body (no multipart dependency) → new camera `{id, name, status}` (FR-5). Bare file name only, .mp4/.mov/.avi/.mkv, ≤ 500 MB, streamed to `data/uploads/` as it arrives; 400 bad name/empty, 413 oversize (D62) |
+| POST | `/api/ui/latency` | `{event_id, ms}`: the browser's measured store→card time; accepted only from a browser on the server machine (clock comparison), others ignored (D62) |
 | DELETE | `/api/cameras/{id}` | remove a camera (R1, needed for FR-5) |
 | GET | `/stream/{camera_id}` | MJPEG live view with overlays |
 | GET | `/api/events?camera=&category=&from=&to=&status=&q=&limit=` | `[Event]` |
@@ -342,14 +343,17 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
   "vlm": { "model": "qwen3.5:4b", "p50_ms": 1100, "p95_ms": 1900, "alert_p95_ms": 950, "queue_depth": 0,
            "calls_total": 412, "gate_yield_pct": 31.0, "cache_hit_tokens": 212, "preemptions": 4, "errors": 0,
            "gpu_duty_pct": 48.0, "baselines_skipped": 230, "vetoes": 3 },
+  "latency": { "onset_to_alert_ms": {"last": 2400, "p50": 2400, "p95": 2400, "n": 1},
+               "store_to_card_ms": {"last": 8, "p50": 22, "p95": 41, "n": 9} },
   "system": { "mem_used_pct": 61, "uptime_s": 3600 } }
 ```
+v1.9 (D62): each camera also carries `people` (persons in the newest detector frame) and `now: {text, ts, source: model|detector}` (FR-16: the newest observation's summary, or between summaries the detector template "N people, no incident"). `alert_p95_ms` = model time-to-alert p95 (newest frame captured → category, D50). `latency.onset_to_alert_ms` counts only alerts on a labelled clip (`bench/labels.csv`) played once whose category matches the label. `latency.store_to_card_ms` comes from `POST /api/ui/latency`.
 
 ### 9.2 SSE message types
 | `type` | `data` |
 |---|---|
 | `event_open` / `event_update` / `event_close` | Event |
-| `alert` | `{event_id, camera_id, category, severity, confidence, rating, top3: [[category, c], …], trigger_to_alert_ms}`, sent the moment the first category token arrives and the open rule passes |
+| `alert` | `{event_id, camera_id, category, severity, confidence, rating, top3: [[category, c], …], trigger_to_alert_ms, t_stored, onset_to_alert_ms}`, sent the moment the first category token arrives and the open rule passes. `t_stored` = server time the event row was written; `onset_to_alert_ms` is null unless a labelled clip played once (v1.9, D62) |
 | `observation` | Observation (drives the live "now" line) |
 | `trace` | `{camera_id, trigger, stages: [{name, ms}], mosaic_url, hints, raw_json}` (drives the Workflow view) |
 | `metrics` | §9.1, every 1 s |
