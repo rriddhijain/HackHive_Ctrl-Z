@@ -1,7 +1,9 @@
 """Gate rules: cheap detector heuristics that wake the VLM early (SPEC §5a step 3, §6.6).
 
 Motion rules only so far (person_down, fighting); crowd, tailgating, loitering and scene_change join in P2.
-A track history is a list of (t_capture, x1, y1, x2, y2), oldest first, in pixels of the 640 px frame.
+A track history is a list of (t_capture, x1, y1, x2, y2), oldest first, in pixels of the 640 px frame
+(the one coordinate system used everywhere, see app/detect.py). Only PERSON tracks are gated: the caller passes
+Detector.person_hists(), never raw tracks that include bags.
 All times come from t_capture differences, never frame counts, so a detector running below 10 FPS keeps
 the same thresholds. Speeds are in box heights per second, so they don't depend on distance from the camera.
 """

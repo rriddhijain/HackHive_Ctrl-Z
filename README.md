@@ -14,7 +14,14 @@ Honeywell hackathon, Problem Statement 3: live video → incident detection + su
 
 ## Setup (once the code lands)
 ```bash
-uv sync              # Python 3.12 environment
-ollama pull qwen3.5:4b
-./run_demo.sh        # starts everything, opens the dashboard
+uv sync                      # Python 3.12 environment
+ollama pull qwen3.5:4b-mlx   # demo model (D28); qwen3.5:2b is the fallback
+./run_demo.sh                # starts everything, opens the dashboard
 ```
+
+**Demo machine (M5, D47):** same Ollama version as the build Mac; copy `~/.ollama/models` from the build Mac (no internet needed); `uv sync`; grant camera permission; check Continuity Camera with the iPhone 15 (it must use the M5's Apple ID); run once with Wi-Fi off.
+
+**Live fall camera:** the iPhone, mounted ~2 m high and angled down so the floor is in view. The laptop's webcam can't see the floor.
+
+## Current status
+P0 (model lock) and P1 (cameras + YOLO tracking) are built; SPEC is at v1.6 (judge-review package D42–D56). P2 onwards follows [PLAN.md](PLAN.md).

@@ -2,7 +2,9 @@
 cameras:
   - { id: cam1, name: "Front Desk (webcam)", source: 0 }
   - { id: cam2, name: "Lobby (recorded)", source: "data/demo/sample_bus.mp4" }
-  # - { id: cam3, name: "Lobby Door (iPhone)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }
+  # Live fall camera (D47): iPhone 15 via Continuity (USB), mounted ~2 m high and angled down so the floor is in view.
+  # Add door_zone only if a door is in its view (tailgating needs it, E-7). Index from scripts/list_cameras.py.
+  # - { id: cam3, name: "Floor & Door (iPhone)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }
   # - { id: cam4, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
 
 detector:
@@ -27,9 +29,12 @@ vlm:
   max_tokens: 80
   mosaic_frames: 4
   mosaic_span_s: 2.0
-  tile_px: 224
+  tile: [288, 160]               # 16:9 tiles, each frame letterboxed (fit + grey pad, never stretched) -> 576x320 grid (D44)
   baseline_interval_s: 3
   empty_interval_s: 10
+  baseline_skip: { mad: 6, max_skip_s: 15 }   # skip a baseline if the scene hasn't changed since this camera's last call (D42)
+  summary_every_n: 3             # confident-normal baselines stop at the category; every Nth writes a summary (D42)
+  p1_crop: { enabled: false, max_box_frac: 0.4, expand: 1.75 }   # FR-9c, final, on only if the dev A/B wins (D45)
   trigger_max_age_s: 4
   timeout_s: 6
   relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 }
@@ -44,7 +49,11 @@ gate:
   tailgate_window_s: 2.5
   loiter_s: 30
   down_ratio: 1.2
-  down_hold_s: 1.0
+  down_hold_s: 0.5               # D34
+  drop_frac: 0.4
+  drop_window_s: 0.5
+  fight_speed: 1.0               # body heights per second
+  min_track_age_s: 0.5
   scene_change_frac: 0.25
 
 events:
@@ -54,10 +63,14 @@ events:
   window_n: 3
   close_c: 0.40
   close_after_s: 8
+  close_after_obs: 2             # AND this many consecutive non-supporting observations of the camera (D43)
   corroborate_boost: 1.15
-  contradict_factor: 0.5
+  contradict_factor: 0.5        # E-7 detector veto; person counts = max over the 4 s buffer (D46)
   calibration_T: 1.0
   rating: { high: 0.80, medium: 0.60 }
+
+classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, built only if dev macro F1 < 0.70 (D48)
+detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only
 
 replay:
   store_events_on_replay: true

@@ -9,6 +9,9 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - Open-weight models only, run locally; no cloud APIs, no API keys, no CDNs; must work offline.
 - Stdlib and already-installed deps first. No abstraction with one implementation.
 - Every timestamp is epoch seconds (`time.time()`); IST only at display/parse time.
+- One coordinate system: pixels of the 640 px-wide frame for boxes, track histories, zones, gates, hints and crops. Zones are fractions only in `config.yaml` (D54).
+- Gates take person tracks only (`Detector.person_hists()`). Images for the VLM are letterboxed, never stretched (D44).
+- Latency is quoted as onset-to-alert (what a judge times), never the model-only number alone (D50).
 - Every module has a runnable self-check: `uv run python -m app.<module>`.
 - Never commit videos, weights or `data/` (gitignored).
 

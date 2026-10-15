@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.6 (2026-10-16 01:15 IST): judge-review package (D42–D56): baseline load control + observation-based close, 16:9 letterboxed tiles, prompt exclusions, detector cross-check moved to R1, one pixel coordinate system + person-only gates, honest latency definitions, operator metrics (false alarms per camera-hour, watts per camera), operator workflow; R1 scope unchanged (W7 rejected). v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -16,13 +16,14 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 
 | Criterion | Our answer | Requirements |
 |---|---|---|
-| Summarisation | Per-window summaries, per-event summaries, live "now" line per camera, digests | FR-9, FR-16, FR-17 |
-| Incident classification | 8 categories + normal, multi-frame VLM + detector hints + event merging | FR-7–FR-12 |
-| Chatbot interface | Filters → SQL → grounded answer citing real event IDs with thumbnails | FR-18, FR-19 |
-| Approach & workflow demo | Live Workflow view: every stage with its timing | FR-15 |
-| **Latency (major)** | Gating, small mosaics, streaming early alert, prompt caching | FR-8, FR-9, NFR-1 |
-| **Accuracy (major)** | Mosaic + hints + cross-check + merging + uncertainty re-look, measured on a held-out test set | FR-9–FR-12, FR-20, NFR-2 |
-| Implementation | Clean modules, one-command launch, honest benchmark report | FR-21, FR-22 |
+| Summarisation | Per-window summaries, per-event summaries, live "now" line per camera, shift-handover digests | FR-9, FR-16, FR-17 |
+| Incident classification | 7 incident categories + normal, multi-frame VLM with definitions and "not this" exclusions + detector hints + detector cross-check + event merging | FR-7–FR-12 |
+| Chatbot interface | Filters + keyword search → SQL/FTS → grounded answer citing real event IDs with thumbnails | FR-18, FR-19 |
+| Approach & workflow demo | Live Workflow view: every stage with its timing; alert cards show the probability bar and trigger → alert time | FR-14, FR-15 |
+| **Latency (major)** | Gating, change-gated baselines (GPU kept below saturation), small 16:9 mosaics, streaming early alert, prompt caching; onset-to-alert measured the way a judge would (stopwatch / 240 fps video) | FR-8, FR-9, NFR-1 |
+| **Accuracy (major)** | Mosaic + hints + exclusions + cross-check + merging + uncertainty re-look; macro F1 **and** incident-vs-normal recall/precision **and** false alarms per camera-hour, on a held-out test set | FR-9–FR-12, FR-20, NFR-2 |
+| Operator fit (Honeywell) | False alarms per camera-hour, ack / mark-false-alarm workflow, shift-handover digest, watts per camera, fully on-prem | FR-14, FR-17, FR-20, FR-25 |
+| Implementation | Clean modules, one coordinate system, one-command launch, honest benchmark report | FR-21, FR-22 |
 
 ## 3. Functional requirements
 
@@ -35,42 +36,44 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-3 | Ingest an **HTTP/RTSP stream URL** (Pixel "IP Webcam", RTSP cameras); auto-reconnect. **Built last in R1, dropped first at the 02:00 go/no-go; optional in the demo** (venue networking) | R1 (last) |
 | FR-4 | Re-stream video files as RTSP via MediaMTX (simulated IP cameras) | F |
 | FR-5 | **Upload a video in the UI → it becomes a new camera** (approved, D26). Drag-and-drop or file picker; mp4/mov/avi/mkv, ≤ 500 MB; plays once at real-time speed; removable. **Built last in R1, dropped first at the 02:00 go/no-go** (D32) | R1 (last) |
-| FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone) | R1 |
+| FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone). **One coordinate system:** every box, track history and zone is in pixels of the 640 px-wide frame (source aspect kept); zones are normalised only in `config.yaml` and converted once per frame size (D54) | R1 ✅ |
 | FR-6a | **Pose A/B (P2):** compare `yolo26n-pose` (17 body keypoints per person) against plain `yolo26n` on the same clips. Pose gives torso angle for `person_down` and wrist speed for `fighting`, which should be more reliable than box shape. Adopt it only if it improves gate precision/recall at similar CPU cost (≤ 1.3× per-frame time); non-person objects (bags, knives) then need the plain model too, so the cost of running both is part of the comparison (D39) | R1 (test) |
-| FR-7 | Gate rules: `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person) | R1: person_down, crowd, scene_change · F: all |
-| FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s | R1 |
-| FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. **Preemption:** a ① arriving while ③/④ runs **cancels** that call (closes the stream; Ollama stops it) and starts at once; a running ② chat call is cancelled and auto-retried right after. A running ① is never cancelled, but if another ① is waiting, the running one **stops its summary after ~15 words** and the rest is completed later at ④. A ③ baseline whose category is `normal` with c ≥ 0.80 stops after a ~12-word summary. 1 Ollama slot (D30) | R1 |
+| FR-7 | Gate rules, on **person tracks only** (bags and knives are tracked for hints and the live view, never gated, D54): `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person). `tailgating` (§6.6) is built only if a door camera is used (D55); without one, the E-7 door-zone veto alone keeps tailgating from firing | R1: person_down, fighting, crowd, scene_change · F: all |
+| FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s. **Change-gated baselines (D42):** a baseline is skipped when the scene hasn't changed since that camera's last model call (§5a step 4); at least one call every `max_skip_s` (15 s); never skipped while the camera has an open event. Target: average GPU duty ≤ 60 % with 3 cameras (NFR-4) | R1 |
+| FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. **Preemption:** a ① arriving while ③/④ runs **cancels** that call (closes the stream; Ollama stops it) and starts at once; a running ② chat call is cancelled and auto-retried right after. A running ① is never cancelled, but if another ① is waiting, the running one **stops its summary after ~15 words** and the rest is completed later at ④. **A ③ baseline whose category is `normal` with c ≥ 0.80 stops at the category token** (no summary), except every `summary_every_n`-th (3rd) baseline per camera, which writes a ~12-word summary (D42). 1 Ollama slot (D30) | R1 |
 | FR-8b | Chat avoids the model where possible: a rule-based parser handles camera/category/time first; the model is called only if the rules can't parse the question, or for "summarise" answers. Count/list/latest answers are templates (no model call) | R1 |
 | FR-8c | Each chat answer is a snapshot stamped "as of HH:MM:SS"; incidents that open while the user is chatting appear in the feed live, and the chat shows a "N new incidents since your question" chip | F |
-| FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3) with token log-probabilities; **the category and its confidence are known from the first category token**, so the alert decision happens there | R1 |
-| FR-9b | **Trained classifier next to the VLM (P6, accuracy upgrade, D40):** every mosaic also goes through a frozen image encoder (SigLIP2-base, ~400 MB, download approved for P6) and a small classifier (logistic regression / MLP) trained on our labelled dev/train clips (~15 ms per call). Its probabilities are fused with the VLM's (§6.5). The VLM still writes all summaries. Trained only on train/dev clips, never on the test set. Switch: `classifier.enabled` | F |
+| FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3) with token log-probabilities; **the category and its confidence are known from the first category token**, so the alert decision happens there. **Tiles are 16:9, 288×160 px, each frame letterboxed** (scaled to fit, grey padding, never stretched or cropped) → a 576×320 mosaic, ~180 image tokens (D44). The system prompt carries every §6.1 definition **and its "not this" exclusions** (D49) | R1 |
+| FR-9c | **Track-crop tile for gate-triggered calls (D45):** for a ① call whose trigger box is < 40 % of the frame height, tiles 1–3 stay full frames over time (motion + context) and tile 4 becomes a 16:9 crop of the trigger tracks' union box × 1.75 from the newest frame (detail). Adopted only if the dev A/B improves ①-call accuracy. Switch: `vlm.p1_crop.enabled` | F (A/B) |
+| FR-9b | **Trained classifier next to the VLM (P6, accuracy upgrade, D40, D48):** every mosaic also goes through a frozen image encoder (SigLIP2-base, ~400 MB, download approved for P6) and a small classifier (logistic regression / MLP) (~15 ms per call). Its probabilities are fused with the VLM's (§6.5). The VLM still writes all summaries. **Built only if dev macro F1 is still < 0.70 after the prompt and cross-check fixes** (time-box 2 h). **Data split:** the classifier trains on a separate **train** split only; the fusion weight `w` and temperature `T` are fitted on **dev**; the **test** set is never touched. Switch: `classifier.enabled` | F (conditional) |
 | FR-9a | **Confidence score from log-probabilities** (§6.5): a probability for every category on every observation, calibrated on the dev set, shown in the UI as a % and a High/Medium/Low rating. The model never writes its own confidence | R1 (raw) · F (calibrated) |
-| FR-10 | Cross-check the VLM label against detector evidence (e.g. "fighting" needs ≥ 2 people) | F |
+| FR-10 | Cross-check the VLM label against detector evidence before the alert (E-7): person counts are the **maximum over the 4 s buffer**, not the current frame; no veto for `crowd_incident` (the nano detector undercounts dense crowds). Every veto is logged (camera, category, p before/after) so the report can show false alarms removed vs real incidents lost (D46) | **R1** |
 | FR-11 | Event manager: merge windows into events with open/update/close (hysteresis, §6.4) | R1 |
 | FR-12 | Uncertainty re-look: top probability in 0.4–0.7 **or** top-1 minus top-2 < 0.2 → same model re-checks with more frames, only when the queue is idle | F |
 | FR-13 | SQLite store (observations + events + FTS5 search) + key frames on disk | R1 |
-| FR-14 | Dashboard: camera grid, incident feed (thumbnail, badge, confidence % + High/Medium/Low rating, summary, ack), sound alert + toast for critical, metrics strip | R1 |
+| FR-14 | Dashboard: camera grid, incident feed (thumbnail, badge, confidence % + High/Medium/Low rating, **top-3 category probability bar**, **"trigger → alert N ms"**, summary, ack), sound alert + toast for critical, metrics strip (incl. **GPU duty %**, baselines skipped, vetoes) (D52) | R1 |
 | FR-15 | **Workflow view**: live pipeline diagram with per-stage ms, the current mosaic, hints and raw VLM JSON | R1 |
-| FR-16 | Live "what's happening now" summary line per camera | R1 |
-| FR-17 | Digest: "summarise the last N minutes on camX" | F |
-| FR-18 | Chat: filters by camera/category/time; list/count/latest/summary intents; grounded answers with clickable event cards | R1 (basic) · F (full) |
+| FR-16 | Live "what's happening now" summary line per camera: the latest model summary, and between summaries a template from the detector ("3 people, no incident, as of HH:MM:SS") | R1 |
+| FR-17 | Digest: "summarise the last N minutes on camX", framed as an operator **shift-handover report** (all cameras, incidents first, then notable normal activity) | F |
+| FR-18 | Chat: filters by camera/category/time **+ keywords** (leftover content words, e.g. "red jacket", "near the door" → FTS5 over event and observation summaries, D53); list/count/latest/summary intents; grounded answers with clickable event cards | R1 (basic + keywords) · F (full) |
 | FR-19 | Chat follow-ups ("what about cam1?") + "look again" (VLM re-reads a stored key frame) | F |
-| FR-20 | Report tab: accuracy table, confusion matrix, latency table, **gate yield + gate ablation** (time-to-alert with gates vs baseline-only), **field-order ablation** (category first vs last), calibration chart, memory chart | F (preliminary numbers for R1 if ready) |
-| FR-21 | Benchmark harness (accuracy, latency, ablation, chat test) | F |
+| FR-20 | Report tab: accuracy table (macro F1 **+ incident-vs-normal recall/precision**, comparable to binary fight/no-fight claims), confusion matrix, latency table (**onset-to-alert per category**, model time-to-alert, full summary, §12), **false alarms per camera-hour** on ≥ 30 min of normal footage, **veto log** (false alarms removed vs real incidents lost), **gate yield + gate ablation**, **field-order ablation**, calibration chart, memory chart, **GPU duty and watts per camera** (`powermetrics`) (D51) | F (preliminary numbers for R1 if ready) |
+| FR-21 | Benchmark harness (accuracy, latency, ablation, chat test). Labels in `bench/labels.csv`: `clip, label, split (train/dev/test), onset_s` (incident start time in the clip, for onset-to-alert) | F |
 | FR-22 | One-command launcher (`./run_demo.sh`): models → warm-up → app → browser | R1 |
 | FR-23 | Seeded history (real pipeline output on real clips, timestamps shifted, `seeded=1`) so the chat has data | R1 |
 | FR-24 | Voice question (local Whisper), face blur, PDF export, timeline, YOLO-pose, embeddings | S |
+| FR-25 | **Operator workflow (D52):** "Mark false alarm" on an alert card → status `dismissed`, `dismiss_reason: operator`; the report shows operator-marked false alarms per camera-hour; dismissed events become labelled examples for tuning | F |
 
 ## 4. Non-functional requirements
 
 | ID | Requirement | Target |
 |---|---|---|
-| NFR-1 | **Latency** | YOLO ≤ 40 ms/frame · VLM call p50 ≤ 1.5 s, p95 ≤ 2.5 s · **time-to-alert p95 ≤ 2.0 s** (one camera, empty queue; P0 measured 1.74/2.00 s in the model alone) · time-to-full-summary p95 ≤ 4 s · keep-up 100 % |
-| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · calibration error (ECE) ≤ 0.10 (reported-only if the fallback in E-1a is active) · chat filters ≥ 90 %, answers 100 % grounded |
+| NFR-1 | **Latency** (definitions in §12; targets set from P0 measurements, D50; every number re-measured on the M5) | YOLO ≤ 40 ms/frame · **VLM full call** p50 ≤ 3.7 s, p95 ≤ 4.1 s (P0 measured 3.68/4.09 s with the older, longer output; expected lower without the `confidence` field) · **model time-to-alert** p95 ≤ 2.0 s (P0: 1.74/2.00 s) · **onset-to-alert** p95 ≤ 3.0 s for gate-triggered categories (`person_down`, `fighting`), reported per category for the rest · time-to-full-summary p95 ≤ 4.5 s · all measured **under normal demo load** (3 cameras, baseline load control on), not on an empty queue · keep-up 100 % |
+| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 over the 8 labels on the held-out test set · **incident-vs-normal recall ≥ 0.85 and precision ≥ 0.85** (reported next to macro F1) · **false alarms ≤ 1 per camera-hour** on ≥ 30 min of normal footage · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · calibration error (ECE) ≤ 0.10 (reported-only if the fallback in E-1a is active) · chat filters ≥ 90 %, answers 100 % grounded |
 | NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: 1st camera ≤ 2.5 s, **2nd camera ≤ 4.5 s** p95, reported as measured (calls run one at a time on this GPU, P0/D30; the running call's summary is cut short when another incident waits); chat answer ≤ 5 s. Measured by a stress test |
-| NFR-3 | **Gates earn their keep** | **Gate ablation:** time-to-alert p95 with gates on is clearly lower than baseline-only (target ≥ 40 % lower; without gates an incident waits for the next 3 s tick) · **Gate yield** (% of model calls that were gate-triggered) reported. *(Replaces "calls saved vs every frame", which the 3 s timer alone satisfies, D31)* |
-| NFR-4 | Resources | Peak memory ≤ 75 % of RAM; no swap thrash; 3–4 cameras on the M4 |
-| NFR-5 | Stability | 30-min soak test, 3 cameras: no crash, no latency drift |
+| NFR-3 | **Gates earn their keep** | **Gate ablation:** onset-to-alert p95 with gates on is clearly lower than baseline-only (target ≥ 40 % lower; without gates an incident waits for the next 3 s tick) · **Gate yield** (% of model calls that were gate-triggered) reported. *(Replaces "calls saved vs every frame", which the 3 s timer alone satisfies, D31)* |
+| NFR-4 | Resources | Peak memory ≤ 75 % of RAM; no swap thrash; 3 cameras on the **M5**; **average GPU duty ≤ 60 %** with 3 cameras (without change-gated baselines, 3 cameras × a ~2.3 s call every 3 s would ask for ~2.3× the GPU, D42); **watts per camera** reported (`powermetrics`) |
+| NFR-5 | Stability | **Before Round 1:** 10-min heat run on the M5, 3 cameras, model time-to-alert logged over time, no upward drift > 25 % (fanless). **Final:** 30-min soak test, 3 cameras: no crash, no latency drift |
 | NFR-6 | Local & open | Every model open-weight and local; works with Wi-Fi off; no CDN in the frontend |
 | NFR-7 | Honesty | Every number in the deck comes from a committed benchmark run |
 
@@ -80,10 +83,10 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 Sources (file loop / webcam / iPhone-Continuity / IP-Webcam URL / RTSP)
   └─ Capture thread per camera ── keeps ONLY the latest frame
        └─ Detector thread per camera: YOLO + ByteTrack (own model instance per camera) → ring buffer (last 4 s)
-            ├─ Gate rules ──trigger──┐
-            └─ Baseline timer ───────┴─► Scheduler (priority queue, drop stale)
-                                           └─ VLM worker: mosaic + hints → local VLM server (streaming JSON)
-                                                ├─ category parsed → EARLY ALERT (SSE)
+            ├─ Gate rules (person tracks) ──trigger──┐
+            └─ Baseline timer (change-gated) ────────┴─► Scheduler (priority queue, drop stale)
+                                           └─ VLM worker: 16:9 letterboxed mosaic + hints → local VLM server (streaming JSON)
+                                                ├─ category parsed → cross-check (veto) → EARLY ALERT (SSE)
                                                 └─ full JSON → cross-check → Event manager
                                                      └─ SQLite + FTS5 + key frames ─► FastAPI ─► SSE ─► React dashboard
 Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor → Python time parsing → SQL → template / grounded LLM answer
@@ -93,9 +96,9 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 |---|---|
 | Language/runtime | Python 3.12 (via uv) |
 | Detection/tracking | Ultralytics **YOLO26-nano on CPU** + ByteTrack (D34). CPU keeps the GPU free for the VLM; GPU YOLO is also not thread-safe (Metal abort) and needs a lock |
-| VLM | **`qwen3.5:4b-mlx`, 2×2 mosaic of 224 px tiles** (P0, D28) via Ollama's MLX engine; fallback `qwen3.5:2b`. Final pick confirmed by the accuracy A/B on real clips (P2) |
+| VLM | **`qwen3.5:4b-mlx`, 2×2 mosaic of 16:9 letterboxed 288×160 tiles** (P0 D28, tile shape D44) via Ollama's MLX engine; fallback `qwen3.5:2b`. Final pick by the P2 A/B on real dev clips with the real prompt: keep the 4B unless the 2B is within 2 clips **and** raises no more false alarms on normal + look-alike clips (D55) |
 | Pose model (A/B) | `yolo26n-pose` on CPU, tested in P2 against plain `yolo26n` (FR-6a, D39) |
-| Accuracy booster (P6) | Frozen **SigLIP2-base** image encoder + small trained classifier, fused with VLM probabilities (FR-9b, D40) |
+| Accuracy booster (P6, conditional) | Frozen **SigLIP2-base** image encoder + small trained classifier, fused with VLM probabilities; built only if dev macro F1 < 0.70 after the cheaper fixes (FR-9b, D40, D48) |
 | VLM server | **Ollama** (OpenAI-compatible, streaming, JSON-schema output) |
 | Chat LLM | The same VLM (D8/Q12) |
 | Backend | FastAPI + uvicorn, one process; pipeline in background threads |
@@ -110,24 +113,24 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | # | Step | Where | What exactly happens | Time budget |
 |---|---|---|---|---|
 | 1 | **Capture** | `ingest.py`, 1 thread/camera | Reads frames at the source's rate (webcam 30 FPS; files played at their native FPS against the wall clock). **Overwrites a single "latest frame" slot**, stamped `t_capture = time.time()`. No queue | — |
-| 2 | **Detect** | `detect.py`, 1 thread/camera | Every 100 ms (10 FPS) takes the latest slot *if it's newer than the last one processed* (otherwise waits). YOLO + ByteTrack (own model instance per camera). Appends `(t_capture, frame resized to 640 px wide, tracks)` to the camera's **ring buffer (last 4 s ≈ 40 entries)**, updates per-track features (aspect ratio, speed in box heights/s, dwell, door-zone entries); all durations from `t_capture` differences, never frame counts, encodes the annotated JPEG for the live view | ≤ 40 ms |
-| 3 | **Gate** | `gate.py`, same thread | Runs every rule on the buffer (~1 ms) → zero or more Triggers (§7.4); rules in §6.6. `scene_change` = mean absolute difference between the current and the 0.5 s-old frame (both 160 px grey), **ignoring person boxes**, above `scene_change_frac` | ~1 ms |
-| 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made. A **P3** request holds only `{camera_id, created_at}`. A **P1** request **freezes its 4 mosaic frames at trigger time** (the incident moment, ~100 KB) plus the hints; up to **3 waiting P1s per camera** (oldest dropped only beyond that) | — |
-| 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **P3/P4:** the mosaic is built now from the freshest 4 buffer frames at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter). **P1:** uses its frozen trigger-time frames, so a delayed P1 still analyses the incident moment. **P1s are never downgraded**; one that waited > 4 s is flagged `delayed` | queue wait 0–1.5 s under contention |
-| 6 | **VLM call** | `vlm.py` | **Ollama native `POST /api/chat`** (verified to return `logprobs`/`top_logprobs` *with* JSON-schema decoding active; the alternatives are already restricted to legal tokens) with `stream: true`, `format` = JSON schema (§7.3), `temperature 0`, `num_predict 80`, `think: false`, `keep_alive: -1`. **Prompt order fixed for prefix caching:** identical system prompt (all static text, incl. the task instruction) → image → hints (per-frame, dynamic); `num_ctx: 4096` on every vision and chat call (D38); `prompt_eval_cached_count` is logged per call and shown in the Workflow view. Tokens are parsed incrementally | measured in the latency test |
-| 7 | **Early decision** | `events.py` | As soon as the **first token of the category value** arrives (`t_category`, ~8 tokens): its log-probabilities give the probability of every category (§6.5) → cross-check (§12a E-7) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately**, with the summary shown as "…" | **time-to-alert target ≤ 2.0 s p95** |
-| 8 | **Summary stream** | `events.py` → SSE | Summary tokens are pushed as `event_update` at most every 200 ms, so the card text types itself live | — |
+| 2 | **Detect** | `detect.py`, 1 thread/camera | Every 100 ms (10 FPS) takes the latest slot *if it's newer than the last one processed* (otherwise waits). YOLO + ByteTrack (own model instance per camera). Appends `(t_capture, frame resized to 640 px wide (aspect kept), tracks)` to the camera's **ring buffer (last 4 s ≈ 40 entries)**, updates per-track history (boxes **in pixels of that frame**, the one coordinate system, D54), dwell and door/watch-zone entries (zones converted from config fractions to pixels once per frame size); all durations from `t_capture` differences, never frame counts, encodes the annotated JPEG for the live view | ≤ 40 ms |
+| 3 | **Gate** | `gate.py`, same thread | Runs every rule on the **person tracks only** (`Detector.person_hists()`; bags/knives never gated, D54) (~1 ms) → zero or more Triggers (§7.4); rules in §6.6. `scene_change` = mean absolute difference between the current and the 0.5 s-old frame (both 160 px grey), **ignoring person boxes**, above `scene_change_frac` | ~1 ms |
+| 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made, **unless change-gated (D42):** the camera has no open event, its newest frame (160 px grey) differs from the frame of **its last model call** by a mean absolute difference < `baseline_skip.mad` (0–255 scale), the person count is the same, no person track appeared or left, and < `baseline_skip.max_skip_s` (15 s) has passed since its last call → the baseline is skipped (counted in `baselines_skipped`) and the previous observation stands. Comparing against the last call's frame, not the previous frame, lets slow changes (smoke building up) accumulate until they trigger a call. A **P3** request holds only `{camera_id, created_at}`. A **P1** request **freezes its 4 mosaic frames at trigger time** (the incident moment, ~100 KB) plus the hints; up to **3 waiting P1s per camera** (oldest dropped only beyond that) | — |
+| 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **Tiles:** every frame is **letterboxed into a 288×160 tile** (scaled to fit, grey padding; never stretched, never cropped; works for 16:9, 4:3 and portrait phones alike) → 576×320 mosaic (D44). **P3/P4:** the mosaic is built now from the freshest 4 buffer frames at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter). **P1:** uses its frozen trigger-time frames, so a delayed P1 still analyses the incident moment. **P1s are never downgraded**; one that waited > 4 s is flagged `delayed` | queue wait 0–1.5 s under contention |
+| 6 | **VLM call** | `vlm.py` | **Ollama native `POST /api/chat`** (verified to return `logprobs`/`top_logprobs` *with* JSON-schema decoding active; the alternatives are already restricted to legal tokens) with `stream: true`, `format` = JSON schema (§7.3), `temperature 0`, `num_predict 80`, `think: false`, `keep_alive: -1`. **Prompt order fixed for prefix caching:** identical system prompt (all static text, incl. the task instruction and every §6.1 definition + "not this" exclusion, D49) → image → hints (per-frame, dynamic); `num_ctx: 4096` on every vision and chat call (D38); `prompt_eval_cached_count` is logged per call and shown in the Workflow view. Tokens are parsed incrementally | measured in the latency test |
+| 7 | **Early decision** | `events.py` | As soon as the **first token of the category value** arrives (`t_category`, ~8 tokens): its log-probabilities give the probability of every category (§6.5) → cross-check (§12a E-7; every veto logged) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately** (with the top-3 probabilities and trigger → alert ms), with the summary shown as "…" | **model time-to-alert ≤ 2.0 s p95** |
+| 8 | **Summary stream** | `events.py` → SSE | Summary tokens are pushed as `event_update` at most every 200 ms, so the card text types itself live. A ③ baseline that is confident `normal` closes the stream at the category token unless it is that camera's every-3rd summary call (FR-8a); the camera's "now" line then shows the detector template (FR-16) | — |
 | 9 | **Persist** | `db.py` | At `t_vlm_done`: write the Observation (always, including `normal`); attach it to the event if one opened or updated; save a 320 px thumbnail; if it's the event's new peak, save the full-resolution newest frame + the mosaic as key frames. SSE `observation` (updates the camera's "now" line) + `trace` (Workflow view) | ≤ 20 ms |
-| 10 | **Close** | `events.py`, 1 s timer | Any open event with no supporting observation for `close_after_s` (8 s) → `closed`, SSE `event_close` | — |
+| 10 | **Close** | `events.py`, 1 s timer | An open event closes when **both** hold: the camera's last `close_after_obs` (2) observations did not support it (c < 0.40 for its category) **and** ≥ `close_after_s` (8 s) have passed since its last supporting observation. A camera that is merely starved of model time (no observations) keeps its events open; a camera that is `reconnecting`/`down` for `close_after_s` closes them (E-13) (D43). → `closed`, SSE `event_close` | — |
 
 ### 5a.2 Life of a chat question
 | # | Step | What exactly happens |
 |---|---|---|
 | 1 | Request | `POST /api/chat {session_id, question}`; `as_of = now` |
-| 2 | **Rule parser** (< 5 ms, no model) | Regex/synonyms: camera ids or names ("camera 2", "cam2", "lobby"), categories + synonyms ("fall" → person_down), intent words ("how many" → count, "last"/"latest" → latest, "summarise" → summary), time phrases. **If the intent is known and at least one filter (or "all") was found → skip the model** |
+| 2 | **Rule parser** (< 5 ms, no model) | Regex/synonyms: camera ids or names ("camera 2", "cam2", "lobby"), categories + synonyms ("fall" → person_down), intent words ("how many" → count, "last"/"latest" → latest, "summarise" → summary), time phrases; **leftover content words become `keywords`** (stop-words removed), e.g. "red jacket", "near the door" (D53). **If the intent is known and at least one filter, keyword (or "all") was found → skip the model** |
 | 3 | Model extraction (only if step 2 can't parse) | Arbiter priority **P2**, text-only, JSON-schema output, `max_tokens 80`, timeout 8 s → on timeout, fall back to the step-2 result and say so in the answer |
 | 4 | Time resolution | Python, IST: "today" = 00:00 IST → now; "yesterday"; "last N min/hours"; "this morning" 06–12, "afternoon" 12–17, "evening" 17–22; "at 3 pm" = 14:45–15:15; "since 3 pm"; "between X and Y". No time phrase → **all time** |
-| 5 | Retrieval | `query_events` / `count_events` (non-dismissed events only). `summary` intent, or 0 events matched → also `query_observations` |
+| 5 | Retrieval | `query_events` / `count_events` (non-dismissed events only); `keywords` → FTS5 match on `events_fts` and `observations_fts` combined with the other filters. `summary` intent, or 0 events matched → also `query_observations` |
 | 6 | Answer | `list`/`count`/`latest`/`detail` → **template, no model**. `summary` → model at P2 with the rows (max 30) and `max_tokens 150`; any cited `[#id]` not in the rows is stripped. 0 rows → "No matching events between … and … (filters: …)" |
 | 7 | Response | `{answer, events, filters, as_of, latency_ms}`. The UI shows "as of HH:MM:SS"; if new events open later, a "N new incidents since this answer" chip appears (FR-8c) |
 
@@ -163,16 +166,18 @@ sequenceDiagram
 
 ### 6.1 Categories
 
-| `category` | Definition (used verbatim in the VLM prompt) | `subtype` values | Severity |
-|---|---|---|---|
-| `fire_smoke` | Visible flames or smoke | `fire`, `smoke` | critical |
-| `fighting` | 2+ people in physical aggression: punching, kicking, shoving, wrestling | null | critical |
-| `person_down` | A person lying or collapsed on the floor (fall, fainting), not sitting or resting on furniture | null | critical |
-| `crowd_incident` | Abnormally dense gathering, or a crowd suddenly running/dispersing | `gathering`, `running` | high |
-| `property_damage` | Damage to property or a hazardous object event, accidental or deliberate: an object/debris falling, a structure collapsing, items knocked over and broken, shattered glass, vandalism | `falling_object`, `collapse`, `breakage`, `vandalism` | high |
-| `suspicious_activity` | Loitering, trespassing/climbing, theft/shoplifting, an abandoned object, a visible weapon | `weapon`, `theft`, `trespass`, `loitering`, `abandoned_object`, `other` | **by subtype** (D35): `weapon`, `theft`, `trespass`, `other` → critical · `loitering`, `abandoned_object` → medium |
-| `tailgating` | A second person follows closely through a door/gate on one opening | null | medium |
-| `normal` | None of the above | null | none |
+Both the definition and the "not this" exclusions go verbatim into the VLM system prompt (D49); bare category names caused the P0 false positives ("tailgating a bus").
+
+| `category` | Definition | Not this (exclusions) | `subtype` values | Severity |
+|---|---|---|---|---|
+| `fire_smoke` | Visible flames or smoke | NOT red/orange lights, sunsets, reflections, steam from cooking or a kettle | `fire`, `smoke` | critical |
+| `fighting` | 2+ people in physical aggression: punching, kicking, shoving, wrestling | NOT hugging, handshakes, high-fives, sports, dancing, people simply standing close | null | critical |
+| `person_down` | A person lying or collapsed on the floor (fall, fainting) | NOT sitting on the floor or a chair, kneeling, bending to pick something up, lying on a bed/sofa/bench | null | critical |
+| `crowd_incident` | Abnormally dense gathering, or a crowd suddenly running/dispersing | NOT a normal queue, a seated audience, people walking through a busy area at normal pace | `gathering`, `running` | high |
+| `property_damage` | Damage to property or a hazardous object event, accidental or deliberate: an object/debris falling, a structure collapsing, items knocked over and broken, shattered glass, vandalism | NOT someone carefully carrying, moving or placing objects; NOT already-broken items with nothing happening | `falling_object`, `collapse`, `breakage`, `vandalism` | high |
+| `suspicious_activity` | Loitering, trespassing/climbing, theft/shoplifting, an abandoned object, a visible weapon | NOT people standing, waiting, talking or using a phone; NOT carrying bags normally; NOT tools used for work | `weapon`, `theft`, `trespass`, `loitering`, `abandoned_object`, `other` | **by subtype** (D35): `weapon`, `theft`, `trespass`, `other` → critical · `loitering`, `abandoned_object` → medium |
+| `tailgating` | A second person follows closely on foot through a door/gate on one opening | NOT vehicles; NOT people near a car or bus; NOT anyone who is not passing through a door or gate | null | medium |
+| `normal` | None of the above | — | null | none |
 
 ### 6.2 Tie-break (most severe wins when several apply)
 `fire_smoke > fighting > person_down > crowd_incident > property_damage > suspicious_activity > tailgating > normal`
@@ -193,7 +198,7 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 
 **Classifier fusion (FR-9b, when enabled).** `p = w · p_vlm + (1 − w) · p_clf`, per category, with `w` fitted on the dev set (default 0.5); calibration and the evidence adjustment below are applied to the fused `p`.
 
-**Evidence adjustment (cross-check, E-7).** `c = clamp(p_cal × f)`, where `f = 1.15` if a gate trigger supports the category, `0.5` if detector evidence contradicts it, `1.0` otherwise.
+**Evidence adjustment (cross-check, E-7, R1).** `c = clamp(p_cal × f)`, where `f = 1.15` if a gate trigger supports the category, `0.5` if detector evidence contradicts it, `1.0` otherwise. Note: 0.5 acts as a **veto** (0.95 → 0.475, below every open threshold), so it is applied only where the detector is reliable (E-7) and every veto is logged (D46).
 
 **Window score.** For each (camera, category): `S = mean of c over the last 3 observations` (every observation carries a probability for *every* category, so this needs no special cases).
 
@@ -201,7 +206,7 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 |---|---|
 | **Open, critical category** | One observation with `c ≥ 0.70` **and** corroborated (supporting gate trigger, or the category is `fire_smoke`), **or** `S ≥ 0.55` over ≥ 2 observations |
 | **Open, high/medium category** | `S ≥ 0.55` over ≥ 2 observations, **or** one observation with `c ≥ 0.85` and corroborated |
-| **Close** | No observation with `c ≥ 0.40` for that category for 8 s |
+| **Close** | The camera's last 2 observations have `c < 0.40` for that category **and** ≥ 8 s since the last supporting one (or the camera is down for 8 s). Starvation alone never closes an event (D43) |
 | **Re-look** (FR-12) | Top `c` in 0.40–0.70, or top-1 − top-2 < 0.20 |
 | **Shown as** | `c` as a %, plus a rating: **High** ≥ 0.80 · **Medium** 0.60–0.80 · **Low** < 0.60 |
 
@@ -209,13 +214,14 @@ An event's `peak_confidence` is the highest `c` it reached. The full `probs` map
 - **Cooldown:** per (camera, category) while an event is open, not per camera.
 
 ### 6.6 Gate rules (motion)
-Shared conventions: **speed = centroid displacement over the last 0.3 s ÷ elapsed time ÷ box height** (body heights per second, so a person far from the camera scores the same as one close up); every duration is measured from `t_capture` differences, so the thresholds hold if the detector falls below 10 FPS; tracks younger than `min_track_age_s` are ignored (a ByteTrack ID switch makes a fresh ID whose first jump looks like a speed spike).
+Shared conventions: rules run on **person tracks only**, with boxes **in pixels of the 640 px frame** (D54; per-axis normalised coordinates would scale every width/height ratio by 0.56 on 16:9 video and undercount sideways speed by 44 %); **speed = centroid displacement over the last 0.3 s ÷ elapsed time ÷ box height** (body heights per second, so a person far from the camera scores the same as one close up); every duration is measured from `t_capture` differences, so the thresholds hold if the detector falls below 10 FPS; tracks younger than `min_track_age_s` are ignored (a ByteTrack ID switch makes a fresh ID whose first jump looks like a speed spike).
 
 | Rule | Fires when (defaults in §10) | Trigger |
 |---|---|---|
 | `person_down`: fast drop | The top of a box moves down by ≥ `drop_frac` (0.4) × its height within `drop_window_s` (0.5 s). Fires *during* the fall instead of after it; sitting or bending can fire it too, which costs one VLM call | `gate:person_down` |
 | `person_down`: horizontal | Box width ≥ `down_ratio` (1.2) × height on every frame for `down_hold_s` (0.5 s). Catches falls the drop rule misses (slow slump, person enters already down) | `gate:person_down` |
 | `fighting` | Two tracked people whose boxes overlap, with either moving at ≥ `fight_speed` (1.0 body heights/s); normal walking is ≈ 0.8 | `gate:fighting` |
+| `tailgating` (F, only if a door camera is used, D55) | Two **different** person tracks enter the door zone (foot point, entering direction) within `tailgate_window_s` (2.5 s), **and** both tracks exist together in at least one frame (so one person whose ID switched isn't counted twice). Demo-grade: reliable at a well-framed door with a high camera, not in general | `gate:tailgating` |
 
 Both `person_down` variants emit the same rule name, so the scheduler's per-camera dedupe (§5a step 4) merges them. Thresholds are tuned on the staged and look-alike clips (sitting, bending, hugging). Implemented in `app/gate.py`.
 
@@ -238,6 +244,7 @@ Both `person_down` variants emit the same rule name, so the scheduler's per-came
               "t_vlm_done": 1760524800.60, "t_db_write": 1760524800.62 }
 }
 ```
+`summary` is `null` for a confident-`normal` baseline that stopped at the category token (FR-8a). A change-gated (skipped) baseline makes no observation at all. `track_ids` and any boxes in hints are in frame pixels (FR-6).
 `trigger` ∈ `baseline` · `gate:person_down` · `gate:fighting` · `gate:crowd` · `gate:tailgating` · `gate:loitering` · `gate:scene_change` · `relook`
 
 ### 7.2 Event (a merged incident)
@@ -248,11 +255,11 @@ Both `person_down` variants emit the same rule name, so the scheduler's per-came
   "start_ts": 1760524810.0, "end_ts": 1760524816.5, "peak_confidence": 0.88,
   "summary": "A second person follows closely through the door behind the first.",
   "keyframe_paths": ["data/keyframes/12_0.jpg", "data/keyframes/12_mosaic.jpg"],
-  "track_ids": [3, 5], "status": "open",
+  "track_ids": [3, 5], "status": "open", "dismiss_reason": null,
   "n_obs": 3, "time_to_alert_ms": 910, "latency_ms": 1420, "seeded": false
 }
 ```
-`status` ∈ `open` · `closed` · `acknowledged` · `dismissed` (a re-look downgraded it; kept for audit, hidden from the feed by default)
+`status` ∈ `open` · `closed` · `acknowledged` · `dismissed` (kept for audit, hidden from the feed by default). `dismiss_reason` ∈ `null` · `relook` (a re-look downgraded it, E-9) · `operator` (marked false alarm, FR-25)
 
 ### 7.3 VLM output (strict JSON, **fields in this order**: `category` first, `summary` last)
 ```json
@@ -260,7 +267,7 @@ Both `person_down` variants emit the same rule name, so the scheduler's per-came
   "summary": "≤ 30 words, objective: who, what, where in frame" }
 ```
 - **No `confidence` field**: confidence comes from log-probabilities (§6.5). This saves ~6 output tokens.
-- `subtype` is constrained in the JSON schema to the allowed list for the chosen category (§6.1), or null.
+- `subtype` is a **flat enum** in the JSON schema (every subtype in §6.1, or null); a subtype that doesn't belong to the chosen category is set to null in Python (D49). A conditional per-category schema is avoided: its support in Ollama's MLX engine is unverified and it could change the first category token's probabilities.
 - Invalid or unparseable output → observation `{"category": "normal", "confidence": 0}`, logged as a VLM error.
 
 ### 7.4 Trigger (gate → scheduler)
@@ -299,7 +306,7 @@ CREATE INDEX idx_obs_cam_ts ON observations(camera_id, ts);
 CREATE TABLE events (
   id INTEGER PRIMARY KEY, camera_id TEXT NOT NULL, category TEXT NOT NULL, subtype TEXT, severity TEXT,
   start_ts REAL NOT NULL, end_ts REAL, peak_confidence REAL, summary TEXT, keyframe_paths TEXT,
-  track_ids TEXT, status TEXT DEFAULT 'open', n_obs INTEGER DEFAULT 1,
+  track_ids TEXT, status TEXT DEFAULT 'open', dismiss_reason TEXT, n_obs INTEGER DEFAULT 1,
   time_to_alert_ms INTEGER, latency_ms INTEGER, seeded INTEGER DEFAULT 0);
 CREATE INDEX idx_evt_cam_ts ON events(camera_id, start_ts);
 
@@ -320,6 +327,7 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 | GET | `/api/events?camera=&category=&from=&to=&status=&q=&limit=` | `[Event]` |
 | GET | `/api/events/{id}` | `Event` + its observations |
 | POST | `/api/events/{id}/ack` | `Event` |
+| POST | `/api/events/{id}/dismiss` | `Event` with `status: dismissed`, `dismiss_reason: operator` (FR-25, F) |
 | GET | `/api/observations?camera=&from=&to=&q=&limit=` | `[Observation]` |
 | GET | `/api/metrics` | §9.1 |
 | GET | `/sse` | server-sent events, §9.2 |
@@ -332,7 +340,8 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 ```json
 { "cameras": { "cam1": { "capture_fps": 30, "det_fps": 10, "yolo_ms_p50": 18, "keep_up": 1.0, "status": "live" } },
   "vlm": { "model": "qwen3.5:4b", "p50_ms": 1100, "p95_ms": 1900, "alert_p95_ms": 950, "queue_depth": 0,
-           "calls_total": 412, "gate_yield_pct": 31.0, "cache_hit_tokens": 212, "preemptions": 4, "errors": 0 },
+           "calls_total": 412, "gate_yield_pct": 31.0, "cache_hit_tokens": 212, "preemptions": 4, "errors": 0,
+           "gpu_duty_pct": 48.0, "baselines_skipped": 230, "vetoes": 3 },
   "system": { "mem_used_pct": 61, "uptime_s": 3600 } }
 ```
 
@@ -340,7 +349,7 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 | `type` | `data` |
 |---|---|
 | `event_open` / `event_update` / `event_close` | Event |
-| `alert` | `{event_id, camera_id, category, severity, confidence, rating}`, sent the moment the first category token arrives and the open rule passes |
+| `alert` | `{event_id, camera_id, category, severity, confidence, rating, top3: [[category, c], …], trigger_to_alert_ms}`, sent the moment the first category token arrives and the open rule passes |
 | `observation` | Observation (drives the live "now" line) |
 | `trace` | `{camera_id, trigger, stages: [{name, ms}], mosaic_url, hints, raw_json}` (drives the Workflow view) |
 | `metrics` | §9.1, every 1 s |
@@ -348,23 +357,26 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 
 ## 10. Configuration (`config.yaml`)
 ```yaml
-cameras:
-  - { id: cam1, name: "Front Desk (webcam)", source: 0 }
-  - { id: cam2, name: "Lobby Door (iPhone)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }
+cameras:   # zones are fractions of the frame here; the detector converts them to frame pixels (FR-6)
+  - { id: cam1, name: "Floor & Door (iPhone, mounted ~2 m)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }  # live fall camera (D47); door_zone only if a door is in view
+  - { id: cam2, name: "Front Desk (webcam)", source: 0 }
   - { id: cam3, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
   - { id: cam4, name: "Warehouse (recorded)", source: "data/demo/warehouse.mp4" }
-detector: { model: models/yolo26n.pt, fps: 10, imgsz: 480, conf: 0.35, device: cpu }
+detector: { model: models/yolo26n.pt, fps: 10, imgsz: 480, conf: 0.35, device: cpu, classes: [0, 24, 26, 28, 43], buffer_s: 4.0, frame_width: 640 }
 vlm:  { base_url: "http://localhost:11434", endpoint: "/api/chat", model: "qwen3.5:4b-mlx", confidence_source: logprobs   # or "model_field" (fallback), stream: true, temperature: 0, logprobs: true, top_logprobs: 10,
-        max_tokens: 80, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 224,
-        baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },
+        max_tokens: 80, mosaic_frames: 4, mosaic_span_s: 2.0, tile: [288, 160],   # 16:9, letterboxed (D44)
+        baseline_interval_s: 3, empty_interval_s: 10, baseline_skip: { mad: 6, max_skip_s: 15 }, summary_every_n: 3,   # D42
+        p1_crop: { enabled: false, max_box_frac: 0.4, expand: 1.75 },   # FR-9c (D45)
+        trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },
         think: false, keep_alive: -1, num_ctx: 4096, parallel_slots: 1 }   # 2 slots measured: no gain on this GPU (D30)
 replay: { store_events_on_replay: true, reset_live_tables_on_start: true }
-classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, switched on in P6 if dev F1 improves
+classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, built only if dev macro F1 < 0.70 (D48)
 detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only
 gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 0.5,
         drop_frac: 0.4, drop_window_s: 0.5, fight_speed: 1.0, min_track_age_s: 0.5, scene_change_frac: 0.25 }
 events: { open_single_critical: 0.70, open_single_other: 0.85, open_window: 0.55, window_n: 3, close_c: 0.40, close_after_s: 8,
-          corroborate_boost: 1.15, contradict_factor: 0.5, calibration_T: 1.0,
+          close_after_obs: 2,   # D43
+          corroborate_boost: 1.15, contradict_factor: 0.5, calibration_T: 1.0,   # contradict = veto, max count over the 4 s buffer (D46)
           rating: { high: 0.80, medium: 0.60 } }
 chat: { base_url: "same-as-vlm", model: "same-as-vlm" }
 ```
@@ -383,7 +395,7 @@ chat: { base_url: "same-as-vlm", model: "same-as-vlm" }
 | `app/chat.py` | filter extraction, time parsing, retrieval, answers | Riddhi |
 | `app/server.py`, `app/pipeline.py`, `app/config.py` | API, SSE, wiring | Aryan |
 | `web/` | React dashboard | Aryan |
-| `bench/` | labels, harness, report | Riddhi (data) · Shivansh (model numbers) |
+| `bench/` | labels (`labels.csv`: clip, label, split, onset_s), harness, report | Riddhi (data) · Shivansh (model numbers) |
 | `scripts/` | launcher, RTSP sim, seeding, data prep | Shivansh |
 | `data/` | videos, key frames, DB (**gitignored**; `data/README.md` has sources) | Riddhi |
 
@@ -391,17 +403,24 @@ Every module has a runnable self-check: `uv run python -m app.<module>`.
 
 ## 12. Measurement definitions
 - **YOLO latency** = `t_detect_done − t_capture`
-- **VLM latency** = `t_vlm_done − t_vlm_start`
-- **Time-to-alert** = `t_category − t_capture` (newest frame in the mosaic → category known → alert sent)
+- **VLM latency (full call)** = `t_vlm_done − t_vlm_start`
+- **Onset-to-alert** (the number a judge times with a stopwatch, D50) = alert SSE sent − incident onset. On clips: onset = `onset_s` from `bench/labels.csv` on the replay clock. Live: a 240 fps phone video showing both the fall and the dashboard toast. Includes the gate's own delay, queue wait and baseline wait. Reported per category
+- **Model time-to-alert** = `t_category − t_capture` (newest frame in the mosaic → category known → alert sent); excludes detection and queue delay, so it is never quoted alone
+- **Trigger → alert** (shown on each alert card) = alert sent − gate trigger time (or baseline request time)
 - **Time-to-full-summary** = `t_vlm_done − t_capture`
 - **End-to-end** = `t_db_write − t_capture`
 - **Keep-up** = frames processed by YOLO ÷ frames sampled for YOLO
 - **Gate yield** = gate-triggered model calls ÷ all model calls
-- **Gate ablation** = time-to-alert p95, gates on vs `scheduler.mode: periodic` (baseline only), same clips
-- **Field-order ablation** = time-to-alert and macro F1 with `category` first vs last in §7.3
+- **Gate ablation** = onset-to-alert p95, gates on vs `scheduler.mode: periodic` (baseline only), same clips
+- **Field-order ablation** = model time-to-alert and macro F1 with `category` first vs last in §7.3
+- **GPU duty** = share of wall time a model call is running, over a 60 s window
+- **Watts per camera** = (package power with N cameras − idle power) ÷ N, from `sudo powermetrics --samplers cpu_power,gpu_power`, 60 s average
 - **Clip prediction** (accuracy runs) = highest-`peak_confidence` non-`normal` event in the clip, else `normal`
 - **Calibration error (ECE)** = mean |accuracy − confidence| over 10 confidence bins, weighted by bin size, on the test set
-- **Macro F1** over all 9 labels (8 categories + normal), on the **held-out test set**, never used for tuning
+- **Macro F1** over all **8 labels** (7 incident categories + `normal`), on the **held-out test set**, never used for tuning
+- **Incident-vs-normal recall / precision** = the same clip predictions collapsed to two classes (any incident vs `normal`)
+- **False alarms per camera-hour** = events opened on ≥ 30 min of footage labelled normal (incl. look-alikes) ÷ camera-hours
+- **Veto log** = per category: vetoes on clips whose label is that category (real incidents lost) vs on other clips (false alarms removed)
 - Latency stats: p50 / p95 / max over ≥ 50 events, first 5 discarded as warm-up
 
 ## 12a. Runtime behaviour & edge cases (resolved, no ambiguity left)
@@ -418,7 +437,7 @@ Each line is a decision. ✋ = decided by Claude; the team can veto.
 
 **Classification & events**
 - **E-6** At most **one open event per (camera, category)**. Different categories can be open on the same camera at once (a fight and a person down are two events). ✋
-- **E-7** Cross-check runs at `t_category`, *before* the alert: `fighting` needs ≥ 2 persons in the last 2 s of tracks; `crowd_incident` needs ≥ 0.6 × `crowd_min` persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone and ≥ 2 entries; `fire_smoke` and `property_damage` need no detector evidence. Contradicting evidence multiplies the category's probability by 0.5; a supporting gate trigger multiplies it by 1.15 (§6.5). ✋
+- **E-7** Cross-check (R1) runs at `t_category`, *before* the alert. Person counts are the **maximum in any frame of the 4 s buffer**, not the current frame (two grappling people often merge into one box; a person lying down is often missed by the detector, but was counted while standing just before). `fighting` needs ≥ 2 persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone on the camera and ≥ 2 person entries into it in the last 4 s; `crowd_incident`, `fire_smoke`, `property_damage` and `suspicious_activity` get no detector veto (the nano detector undercounts dense crowds). Contradicting evidence multiplies the category's probability by 0.5 (a veto); a supporting gate trigger multiplies it by 1.15 (§6.5). Every veto is logged; if the dev run loses more than 1 real fight/fall per 10 clips, the rule is loosened (D46). ✋
 - **E-8** If the label flips during an event (fight → normal → fight within 8 s), it stays one event. Only 8 s without support closes it. ✋
 - **E-9** A re-look (P4) that disagrees with an open event marks it `dismissed` and sends an `event_close`; the UI shows "dismissed after re-check" for 5 s, then hides it. It's the only way an alert is retracted. ✋
 - **E-10** Severity of `suspicious_activity` follows its subtype (D35): `weapon`, `theft`, `trespass`, `other` = critical (sound); `loitering`, `abandoned_object` = **medium (card only, no sound)**. **Loitering zones:** if a camera has a `watch_zone`, loitering counts only for people standing inside it (live demo cameras, set at venue setup); with no zone (dataset clips, uploads) the whole frame counts. Note: dataset clips are 10–30 s, shorter than `loiter_s`, so there loitering is detected by the model's baseline checks, not the dwell trigger. Team
@@ -426,7 +445,7 @@ Each line is a decision. ✋ = decided by Claude; the team can veto.
 
 **Sources**
 - **E-12** Webcam/Continuity indices can change between reboots: `scripts/list_cameras.py` prints index → name → resolution, and the venue setup step sets the indices in `config.yaml`. ✋
-- **E-13** A camera that disconnects → `reconnecting` (backoff 1/2/4 s, max 5 s), its tile shows "reconnecting", its open events close normally after 8 s. ✋
+- **E-13** A camera that disconnects → `reconnecting` (backoff 1/2/4 s, max 5 s), its tile shows "reconnecting", its open events close after 8 s of being down (the observation-count part of the close rule can't apply without observations, D43). ✋
 - **E-14** **Looping video files:** every loop is processed like live footage and its events are stored (it *is* the system working). `./run_demo.sh` resets the live tables at start, so counts reflect the current session; seeded history (`seeded=1`) is re-inserted. Config `store_events_on_replay: false` turns storing off for a camera. ✋
 - **E-15** Phone IP-camera URLs change with the hotspot IP: set at the venue in `config.yaml`, tested by `scripts/list_cameras.py --url <url>`. ✋
 - **E-16** Door zones are set per camera in `config.yaml` (normalised polygon). A UI editor is a stretch goal. ✋
@@ -440,18 +459,28 @@ Each line is a decision. ✋ = decided by Claude; the team can veto.
 - **E-22** All summaries and answers are in English. Times are shown in IST, 24-hour clock. ✋
 - **E-23** The benchmark uses **the same pipeline code** with a virtual clock (accuracy mode) or the real clock (latency mode). No separate "benchmark-only" logic. ✋
 
+**Load control, geometry & coordinates (v1.6)**
+- **E-24** Change-gated baselines (§5a step 4) never skip a camera with an open event (a person lying still produces no motion but must keep being observed), and never skip for longer than 15 s. Skips are counted in `baselines_skipped`, not stored as observations. In accuracy mode (virtual clock) skipping is on, exactly as live (E-23). ✋
+- **E-25** Mosaic tiles letterbox any source shape into 288×160 (16:9 fills it; 4:3 and portrait phones get grey bars). Before relying on it, a one-off check confirms Ollama's MLX engine keeps the 576×320 image as sent: `prompt_eval_count` for a 576×320 vs a 448×448 mosaic (§16). ✋
+- **E-26** One coordinate system: frame pixels of the 640 px-wide frame for boxes, track histories, zones, gate rules, hints and crops; `config.yaml` zones are the only fractions and are converted once per frame size. YOLO letterboxes its own input internally and returns boxes in the frame's pixels, so detection is never distorted (D54). ✋
+- **E-27** The alert card's top-3 probability bar uses the calibrated, evidence-adjusted `c` values (§6.5); a vetoed category shows its reduced value with a "detector disagrees" tag. ✋
+
 ## 13. Acceptance criteria
 
 **Round 1 (Fri 07:00):**
+- [ ] **On the M5:** same Ollama version and models, `uv sync` done, camera permission granted, Continuity Camera works with the iPhone 15 (same Apple ID as the M5), everything runs with Wi-Fi off
 - [ ] `./run_demo.sh` starts everything from cold in < 2 min
-- [ ] 3 cameras live (webcam + 1 phone or recorded + 1 recorded), boxes visible, keep-up 100 %
-- [ ] A staged fall on the webcam → critical alert on screen; time-to-alert shown
+- [ ] 3 cameras live (high-mounted iPhone + webcam or recorded + 1 recorded), boxes visible, keep-up 100 %
+- [ ] A staged fall on the **high-mounted iPhone camera** (floor in view) → critical alert on screen with probability bar and trigger → alert ms; filmed at 240 fps for the onset-to-alert number
+- [ ] Look-alikes on the same camera (sitting on the floor, bending, hugging) → **no alert**
 - [ ] Recorded fight / fire / crowd clips → correct incident cards with summaries
 - [ ] Workflow view shows stage timings and the mosaic in real time
-- [ ] Chat answers "what incidents happened in the last 10 minutes?", "how many falls today?", "show fights on cam4" correctly, citing real events
-- [ ] Metrics strip shows live YOLO ms, VLM p50/p95, time-to-alert
+- [ ] Chat answers "what incidents happened in the last 10 minutes?", "how many falls today?", "show fights on cam4" and a keyword question ("anyone in a red jacket?") correctly, citing real events
+- [ ] Metrics strip shows live YOLO ms, VLM p50/p95, model time-to-alert, GPU duty % (≤ 60 % average with 3 cameras)
+- [ ] 10-min heat run on the M5: model time-to-alert drifts up < 25 %
+- [ ] 4B vs 2B decided on real dev clips (D55); veto log reviewed
 
-**Final (Sat 08:00):** all R1 + F requirements, NFR targets measured and reported, 30-min soak test passed, 3 rehearsals done.
+**Final (Sat 08:00):** all R1 + F requirements; NFR targets measured and reported, incl. onset-to-alert per category, incident recall/precision, false alarms per camera-hour and watts per camera; 30-min soak test passed; 3 rehearsals done.
 
 ## 14. Out of scope
 Face recognition, identity tracking across cameras, cloud deployment, training models from scratch, mobile app.
@@ -472,3 +501,8 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 4. Pose model adopted or not: decided by the P2 A/B (FR-6a).
 5. Classifier fusion weight `w` and whether FR-9b stays on: decided by dev-set macro F1 in P6.
 6. Fire/smoke trigger (a tiny fire detector or colour+flicker check as an extra gate): proposed, not approved. Decide once we know whether fire is in the demo (D41).
+7. Does Ollama's MLX engine keep a 576×320 mosaic as sent? 5-min `prompt_eval_count` check in P2 (E-25). If it squares the image, fall back to 448×252 letterboxed inside a square canvas.
+8. 4B vs 2B: decided in P2 on real dev clips by the D55 rule.
+9. Tailgating gate: built only if a door camera is used in the demo (D55).
+10. Track-crop tile (FR-9c): adopted only if the dev A/B wins (D45).
+11. Does Ollama's MLX engine use the M5's GPU neural accelerators? Answered by the M5 latency run (D47).

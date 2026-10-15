@@ -4,6 +4,11 @@ Each detector has ITS OWN YOLO instance: model.track(persist=True) keeps tracker
 so sharing one instance across cameras would mix their track IDs.
 Produces, per camera: a ring buffer of the last few seconds (t_capture, frame, tracks), per-track features
 for the gate rules, and a pre-encoded annotated JPEG for the live view.
+
+Coordinates: every box, track history and zone in this module is in PIXELS of the resized frame
+(frame_width wide, source aspect kept), the same system gate.py uses. Normalising x and y separately
+would scale width/height ratios by the frame's aspect (0.56 on 16:9) and break the gates.
+Zones are normalised only in config.yaml (SPEC §10) and converted to pixels once per frame size.
 """
 import threading
 import time
@@ -24,7 +29,7 @@ GPU_LOCK = threading.Lock()
 
 
 def in_poly(pt, poly):
-    """Point-in-polygon (ray casting); pt and poly in normalized [0,1] coordinates."""
+    """Point-in-polygon (ray casting); pt and poly in the same coordinate system."""
     x, y = pt; inside = False
     for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1]):
         if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1 + 1e-12) + x1:
@@ -37,7 +42,7 @@ class Track:
 
     def __init__(self, tid, cls, t):
         self.id, self.cls, self.first_seen, self.last_seen = tid, cls, t, t
-        self.hist = deque(maxlen=60)          # (t, x1, y1, x2, y2) in normalized coords, ~6 s at 10 FPS
+        self.hist = deque(maxlen=60)          # (t, x1, y1, x2, y2) in frame pixels, ~6 s at 10 FPS
         self.zone_entries = {}                # zone name -> times this track entered it
         self._in_zone = {}
 
@@ -50,18 +55,6 @@ class Track:
             if now_in and not self._in_zone.get(name):
                 self.zone_entries.setdefault(name, []).append(t)
             self._in_zone[name] = now_in
-
-    def aspect(self):  # width / height of the latest box; > 1 means lying / horizontal
-        _, x1, y1, x2, y2 = self.hist[-1]
-        return (x2 - x1) / max(y2 - y1, 1e-6)
-
-    def speed(self, window=1.0):  # centre displacement per second, in box heights (scale-free)
-        pts = [h for h in self.hist if h[0] >= self.hist[-1][0] - window]
-        if len(pts) < 2:
-            return 0.0
-        (t0, *a), (t1, *b) = pts[0], pts[-1]
-        d = np.hypot((b[0] + b[2] - a[0] - a[2]) / 2, (b[1] + b[3] - a[1] - a[3]) / 2)
-        return d / max(t1 - t0, 1e-6) / max(b[3] - b[1], 1e-6)
 
     def dwell(self):
         return self.last_seen - self.first_seen
@@ -80,7 +73,14 @@ class Detector(threading.Thread):
         self.sampled = self.processed = self.errors = 0
         self._last_idx, self._stop = -1, threading.Event()
         zones = {"door": camera.door_zone, "watch": camera.watch_zone}
-        self.zones = {k: v for k, v in zones.items() if v}
+        self.zones_norm = {k: v for k, v in zones.items() if v}   # as in config.yaml
+        self.zones, self._zone_size = {}, None                       # same zones in frame pixels
+
+    def _zones_px(self, sw, sh):
+        if self._zone_size != (sw, sh):  # once per frame size (a source could change resolution on reconnect)
+            self.zones = {k: [(x * sw, y * sh) for x, y in p] for k, p in self.zones_norm.items()}
+            self._zone_size = (sw, sh)
+        return self.zones
 
     def run(self):
         period, next_t = 1.0 / DET["fps"], time.time()
@@ -120,26 +120,33 @@ class Detector(threading.Thread):
         self.yolo_ms.append((time.perf_counter() - t0) * 1000)
         self.processed += 1
         sh, sw = small.shape[:2]
+        zones = self._zones_px(sw, sh)
         tracks = []
         if r.boxes is not None and r.boxes.id is not None:
-            for (x1, y1, x2, y2), tid, cls, conf in zip(r.boxes.xyxy.tolist(), r.boxes.id.int().tolist(),
-                                                       r.boxes.cls.int().tolist(), r.boxes.conf.tolist()):
-                box = (x1 / sw, y1 / sh, x2 / sw, y2 / sh)
+            # r.boxes.xyxy is already in pixels of `small` (Ultralytics maps its letterboxed input back)
+            for box, tid, cls, conf in zip(r.boxes.xyxy.tolist(), r.boxes.id.int().tolist(),
+                                           r.boxes.cls.int().tolist(), r.boxes.conf.tolist()):
+                box = tuple(box)
                 tr = self.tracks.get(tid) or self.tracks.setdefault(tid, Track(tid, cls, t_capture))
-                tr.update(t_capture, box, self.zones)
+                tr.update(t_capture, box, zones)
                 tracks.append({"id": tid, "cls": NAMES.get(cls, str(cls)), "box": box, "conf": round(conf, 2)})
         for tid in [k for k, v in self.tracks.items() if t_capture - v.last_seen > 5]:
             del self.tracks[tid]  # forget tracks unseen for 5 s
         self.buffer.append((t_capture, small, tracks))
         self.jpeg = cv2.imencode(".jpg", self._annotate(small.copy(), tracks), [cv2.IMWRITE_JPEG_QUALITY, 70])[1].tobytes()
 
+    def person_hists(self):
+        """{track_id: history} of PERSON tracks only: the one input the gate rules take (SPEC §6.6).
+        Bags and knives are tracked for hints and the live view but never gated: a backpack's box overlaps its
+        wearer and its small height turns walking into a 'fighting' speed; a suitcase on the floor looks 'horizontal'."""
+        return {tid: list(tr.hist) for tid, tr in self.tracks.items() if tr.cls == 0}
+
     def _annotate(self, img, tracks):
-        h, w = img.shape[:2]
         for name, poly in self.zones.items():
-            pts = np.array([[int(x * w), int(y * h)] for x, y in poly], np.int32)
-            cv2.polylines(img, [pts], True, BLUE, 2); cv2.putText(img, name, tuple(pts[0]), 0, 0.5, BLUE, 1)
+            pts = np.array(poly, np.int32)
+            cv2.polylines(img, [pts], True, BLUE, 2); cv2.putText(img, name, tuple(int(v) for v in pts[0]), 0, 0.5, BLUE, 1)
         for t in tracks:
-            x1, y1, x2, y2 = int(t["box"][0] * w), int(t["box"][1] * h), int(t["box"][2] * w), int(t["box"][3] * h)
+            x1, y1, x2, y2 = (int(v) for v in t["box"])
             col = GREEN if t["cls"] == "person" else AMBER
             cv2.rectangle(img, (x1, y1), (x2, y2), col, 2)
             cv2.putText(img, f'{t["cls"]} #{t["id"]}', (x1, max(12, y1 - 4)), 0, 0.45, col, 1)
@@ -172,6 +179,18 @@ if __name__ == "__main__":
     assert s["keep_up"] is not None and s["keep_up"] >= 0.95, s
     assert s["yolo_ms_p50"] < 60, s
     assert d.jpeg and d.jpeg[:2] == b"\xff\xd8"
-    tr = d.tracks[persons[0]["id"]]; print("track feats: aspect %.2f speed %.2f dwell %.1fs" % (tr.aspect(), tr.speed(), tr.dwell()))
+    _, frame, last = d.buffer[-1]
+    fh, fw = frame.shape[:2]
+    assert fw == DET["frame_width"] and all(0 <= t["box"][0] < t["box"][2] <= fw + 1 and 0 <= t["box"][1] < t["box"][3] <= fh + 1
+                                           for t in last), "boxes must be in frame pixels"
+    assert d.zones["door"][2] == (0.5 * fw, fh), d.zones  # config's normalised zone, now in the same pixels
+    from app.gate import norm_speed, person_down, DEFAULTS
+    hists = d.person_hists()
+    assert set(hists) == {tid for tid, tr in d.tracks.items() if tr.cls == 0}, "gates must only see person tracks"
+    # A 150x60 px lying box held for 1 s is 'horizontal' (2.5 wide per tall). With per-axis normalised coordinates
+    # on this 16:9 frame it would read 1.4 and only just pass; a 1.5-ratio body would read 0.84 and be missed.
+    lying = [(i / 10, 100, 300, 250, 360) for i in range(11)]
+    assert person_down(lying, DEFAULTS), "horizontal rule must fire on true pixel shapes"
+    tid = persons[0]["id"]; print("track feats: speed %.2f body heights/s, dwell %.1fs" % (norm_speed(hists[tid]), d.tracks[tid].dwell()))
     d.stop(); m.remove("t1")
     print("detect self-check ok")
