@@ -14,6 +14,23 @@
 
 **Pitch:** the whole team together at the end. Claude drafts the deck and demo script from real numbers; the team critiques and rehearses.
 
+## Build phases (Claude does all development, phase by phase)
+
+Each phase ends with a **gate**: Claude pushes the phase with its self-checks passing and posts a short "what to test" note; the named validator tests it and signs off (or files issues). Claude starts the next phase while the validation runs, and fixes that phase's issues as they come in.
+
+| Phase | Builds | Target done | Validated by | Gate (passes when…) |
+|---|---|---|---|---|
+| **P0 Model lock** | Latency + contention test: qwen3.5 4B vs 4B-MLX vs 2B, 1 vs 2 slots, thinking off | Thu 22:15 | Shivansh | Model + slots chosen from measured numbers; logged in DECISIONS |
+| **P1 Eyes** | Repo scaffold, config, capture (file/webcam/URL), YOLO + ByteTrack, ring buffer, annotated live stream, `list_cameras.py` | Thu 23:30 | Abhinav | All 3 live sources + a video show boxes/track IDs at ~10 FPS, keep-up 100 % |
+| **P2 Brain** | Gate rules, scheduler + arbiter (priorities), mosaic + hints, streaming VLM client, early decision, event manager, SQLite | Fri 01:00 | Shivansh (labels/summaries) · Abhinav (triggers) | Demo clips produce the right incidents with sensible summaries; time-to-alert logged |
+| **P3 Face** | FastAPI + SSE, React dashboard: grid, incident feed, alerts, metrics strip, Workflow view, "now" line, upload-a-video | Fri 03:00 | Aryan | Every SPEC §13 dashboard item works in the browser; upload works |
+| **P4 Voice** | Chat v1 (rules + model fallback, templates, grounding), seeded history | Fri 04:00 | Riddhi | Chat test questions answered correctly, no invented events |
+| **P5 Round-1 hardening** | `run_demo.sh`, stress test, fixes, preliminary numbers, deck + demo-script draft | Fri 06:00 | Aryan (cold start, stress) · all (deck critique) | SPEC §13 Round-1 checklist all ✅ → git tag `round1` |
+| **P6 Accuracy** | Cross-check, re-look, benchmark harness, dev-set tuning loop | Fri 14:00 | Shivansh · Riddhi | Dev macro F1 and latency reported; tuning log committed |
+| **P7 Completeness** | Digests, full chat (follow-ups, look-again), RTSP sim, report tab, judge-feedback items | Fri 18:00 | Riddhi (chat) · Abhinav (RTSP) · Aryan (report tab) | All **F** requirements in SPEC §3 done |
+| **P8 Final validation** | Test-set run, soak test, final report | Fri 22:00 (**freeze**) | All | NFR targets measured; soak passed; report committed |
+| **P9 Demo assets** | Final deck, demo script, backup video | Sat 02:00 | All | Team rehearsed it twice and is happy with it |
+
 ## Part 1: Road to Round 1 (Thu 21:30 → Fri 09:00)
 
 | Time | Claude builds | Shivansh | Abhinav | Riddhi | Aryan |
