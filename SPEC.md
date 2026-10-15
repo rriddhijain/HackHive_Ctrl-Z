@@ -327,7 +327,7 @@ chat: { base_url: "same-as-vlm", model: "same-as-vlm" }
 
 ## 11. Repository layout & ownership
 
-| Path | Contents | Tester/owner |
+| Path | Contents (all built by Claude) | Validated by |
 |---|---|---|
 | `app/ingest.py` | capture threads | Abhinav |
 | `app/detect.py` | YOLO + ByteTrack, ring buffer, track features | Abhinav |
@@ -337,7 +337,7 @@ chat: { base_url: "same-as-vlm", model: "same-as-vlm" }
 | `app/events.py` | event manager | Shivansh |
 | `app/db.py` | SQLite + FTS | Riddhi |
 | `app/chat.py` | filter extraction, time parsing, retrieval, answers | Riddhi |
-| `app/server.py`, `app/pipeline.py`, `app/config.py` | API, SSE, wiring | Aryan (UX) / Shivansh |
+| `app/server.py`, `app/pipeline.py`, `app/config.py` | API, SSE, wiring | Aryan |
 | `web/` | React dashboard | Aryan |
 | `bench/` | labels, harness, report | Riddhi (data) · Shivansh (model numbers) |
 | `scripts/` | launcher, RTSP sim, seeding, data prep | Shivansh |

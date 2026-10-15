@@ -1,42 +1,50 @@
-# HackHive Ctrl-Z: Build & Test Plan
+# HackHive Ctrl-Z: Build & Validate Plan
 
-> **Now:** Thu 15 Oct ~19:50 IST · **Round 1 evaluation: Fri 16 Oct 09:00 → demo-ready by 07:00** · **Final deadline: Sat 17 Oct 08:00**
-> Claude builds continuously; the team tests from the moment anything runs. Contract: [SPEC.md](SPEC.md) · Decisions: [DECISIONS.md](DECISIONS.md)
+> **Now:** Thu 15 Oct ~21:30 IST · **Round 1: Fri 16 Oct 09:00 → demo-ready by 07:00** · **Final: Sat 17 Oct 08:00**
+> **Division of labour:** **Claude builds everything** (code, scripts, prompts, benchmarks, report drafts, deck draft). **The team does no development**: they test, inspect, critique, ideate and validate, each owning one area. Contract: [SPEC.md](SPEC.md) · Why: [DECISIONS.md](DECISIONS.md)
 
-## Part 1: Road to Round 1 (Thu 19:50 → Fri 09:00)
+## Validation owners
 
-Target: every **R1** requirement in SPEC §3 and the Round-1 checklist in SPEC §13.
+| Person | Owns (signs off that it works) | Checks in particular |
+|---|---|---|
+| **Shivansh** (Captain) | **Model & accuracy**: VLM choice, prompt, classification, summaries | Wrong categories, bad or hallucinated summaries, confidence that doesn't match reality; reviews the latency-test and benchmark numbers; triages all issues; final say on scope |
+| **Abhinav** | **Vision & cameras**: capture, YOLO tracking, gate rules, live sources | Webcam / iPhone / Pixel streams, false triggers and missed triggers, door zone, lighting and camera angles; films the missing clips (tailgating, property damage, look-alikes) |
+| **Riddhi** | **Data & chat**: datasets, labels, storage, chatbot | Picks and labels the dev/test clips; writes the chat test questions; tries to make the chatbot invent events or misread time/camera; checks stored events match what happened |
+| **Aryan** | **End-to-end reliability & experience**: the system as a whole | Cold start with `./run_demo.sh`; dashboard + Workflow view usability; upload-a-video; stress test (2 incidents + chat, NFR-1a); 30-min soak test; checks every number on screen matches the logs; keeps the Round-1/final acceptance checklists (SPEC §13) |
 
-| Time | Claude | Shivansh (Captain, AI/Model) | Abhinav (Vision & Cameras) | Riddhi (Data & Chat) | Aryan (Product & Pitch) |
+**Pitch:** the whole team together at the end. Claude drafts the deck and demo script from real numbers; the team critiques and rehearses.
+
+## Part 1: Road to Round 1 (Thu 21:30 → Fri 09:00)
+
+| Time | Claude builds | Shivansh | Abhinav | Riddhi | Aryan |
 |---|---|---|---|---|---|
-| **19:50–20:30** | Downloads (after approval); repo scaffold; CLAUDE.md; 10-min latency test of Qwen3.5 4B (GGUF vs MLX) and 2B | Approve downloads; sign SPEC; set Claude Code permissions so builds don't stall | Connect iPhone 15 (Continuity, USB) + Pixel 10 (IP Webcam) to the Mac; confirm video | Download fight/fall/fire/crowd datasets | Read SPEC; draft the Round-1 deck outline |
-| **20:30–00:30** | Ingest → YOLO → gate → scheduler → streaming VLM → events → SQLite → API (pushed module by module) | Test each module as it lands; review the prompt | Film tailgating, property-damage and look-alike clips | Cut **one strong demo clip per category** (by 22:00), then the **dev set** (5 per class) | Deck: problem, approach, architecture, workflow; 15 chat test questions |
-| **00:30–03:00** | Dashboard (grid, feed, alerts, metrics), Workflow view, live "now" line, chat v1, seeded history, `run_demo.sh` | Watch the session; end-to-end test at 02:00 | Live-camera false-trigger testing; file issues | **Sleep 01:00–05:00** | **Sleep 01:00–05:00** |
-| **03:00–05:00** | Fix issues; preliminary dev-set latency + accuracy numbers | Triage issues with Claude | Test the staged fall + tailgating live | (sleeping) | (sleeping) |
-| **05:00–06:00** | Fix P0s only | **Sleep 05:00–07:30** | **Sleep 05:00–07:30** | Run the chat test questions; file issues | Put the preliminary numbers into the deck; full app walkthrough |
-| **06:00–07:00** | **Round-1 freeze**: git tag `round1`; record a backup screen video | (sleeping) | (sleeping) | Rehearse the demo with Aryan ×2 | Rehearse the demo with Riddhi ×2 |
-| **07:00–09:00** | Standby for P0 fixes only | Cold-start test at the venue | Mount cameras, check lighting | Final run-through | **Presents** (most rested) |
+| **21:30–22:15** | Latency + contention test (4B vs 4B-MLX vs 2B; 1 vs 2 slots) → model locked; repo scaffold | Review the numbers, confirm the model; sign SPEC | Connect iPhone 15 (USB) + Pixel 10 (IP Webcam); confirm video on the Mac | Download the datasets (SPEC/DECISIONS Q26) | Sign SPEC; write the Round-1 test script from SPEC §13 |
+| **22:15–00:30** | Capture → YOLO → gate → scheduler/arbiter → streaming VLM → events → SQLite → API | Inspect the prompt and the first raw VLM outputs | Film tailgating / property-damage / look-alike clips | Pick **one strong demo clip per category** (by 23:00), then the **dev set** (5 per class) | Test each module's self-check as it lands; file issues |
+| **00:30–03:00** | Dashboard, Workflow view, "now" line, chat v1, upload-a-video, seeded history, `run_demo.sh` | On watch (keeps the Claude session alive); end-to-end check at 02:00 | Live false-trigger hunting on all cameras | **Sleep 01:00–05:00** | **Sleep 01:00–05:00** |
+| **03:00–05:00** | Fix issues; preliminary dev-set accuracy + latency numbers | Review misclassifications, critique the prompt | Live staged fall + tailgating tests | (sleeping) | (sleeping) |
+| **05:00–06:00** | Fix P0s; draft the Round-1 deck + demo script | **Sleep 05:00–07:30** | **Sleep 05:00–07:30** | Run the chat test questions | Cold-start test + stress test + Round-1 checklist |
+| **06:00–07:00** | **Round-1 freeze** (git tag `round1`), backup screen recording | (sleeping) | (sleeping) | Critique the deck draft | Verify the on-screen numbers vs the logs |
+| **07:00–09:00** | Standby, P0 fixes only | Venue setup | Mount cameras, check lighting | Full run-through | Full run-through |
+| **09:00** | | **Whole team presents together** | | | |
 
-**Round-1 demo (~5 min):** problem (30 s) → architecture + workflow (1 min) → live: staged fall on webcam → alert + summary; recorded fight/fire/crowd clips → incident cards; Workflow view with timings (2 min) → chat: 3 questions (1 min) → early numbers + what comes in the final (30 s).
-
-**Go/no-go at 02:00:** if the end-to-end pipeline isn't working with the dashboard, drop the phone network camera, the Workflow-view polish and chat follow-ups. The core loop (camera → alert → card → chat) must work.
+**Go/no-go at 02:00:** if the core loop (camera → alert → card → chat) isn't solid, Claude drops polish (Workflow-view extras, the phone network camera) to secure it.
 
 ## Part 2: Round 1 → Final (Fri 09:00 → Sat 08:00)
 
-| Time | Focus |
-|---|---|
-| Fri 09:00–10:00 | Debrief: apply judge feedback to SPEC/DECISIONS |
-| Fri 10:00–18:00 | **F** requirements: cross-check, re-look, digests, full chat, RTSP sim, upload-a-video, benchmark harness, report tab. Test set labelled by 14:00 (Riddhi). Accuracy-tuning loop on the dev set |
-| Fri 18:00–22:00 | Final test-set run → report numbers; 30-min soak test; stretch only if green |
-| **Fri 22:00** | **FINAL FEATURE FREEZE**: bug fixes only after this |
-| Fri 22:00–02:00 | Deck with real numbers, demo script, backup video, rehearsals at 23:30 and 01:00 |
-| Sat 02:00–06:30 | Sleep (everyone) |
-| Sat 06:30–08:00 | Cold-start test, final rehearsal, present |
+| Time | Claude builds | Team validates |
+|---|---|---|
+| Fri 09:00–10:00 | Turns judge feedback into SPEC changes | Debrief; the captain approves the changes |
+| Fri 10:00–18:00 | F requirements: cross-check, re-look, digests, full chat, RTSP sim, benchmark harness, report tab; accuracy-tuning loop on the dev set | Riddhi labels the **test set by 14:00**; everyone files issues from their area; test rounds at 12:00, 15:00, 18:00 |
+| Fri 18:00–22:00 | Final test-set run → report; soak test; stretch only if green | Aryan runs soak + stress tests; Shivansh signs off accuracy; Abhinav signs off cameras; Riddhi signs off chat |
+| **Fri 22:00** | **FINAL FEATURE FREEZE**: bug fixes only | |
+| Fri 22:00–02:00 | Final deck + demo script + backup video | Whole team critiques and rehearses (23:30, 01:00) |
+| Sat 02:00–06:30 | Standby | Sleep |
+| Sat 06:30–08:00 | Standby | Cold-start test, final rehearsal, **present together** |
 
-## How testing works
-- Every finding → **GitHub Issue**: what you did → expected → what happened → screenshot/clip. Labels: `bug`, `accuracy`, `latency`, `ui`, `idea`.
+## How validation works
+- Every finding → **GitHub Issue** (or pasted to Claude): what you did → expected → what happened → screenshot/clip. Labels: `bug`, `accuracy`, `latency`, `ui`, `idea`.
 - `P0` breaks the demo (fixed now) · `P1` within 2 h · `P2` backlog.
-- The captain triages ideas; nothing new mid-block without triage.
+- Ideas and critiques are welcome anytime; the captain triages them at each test round.
 - Pull `main` before every test round; `main` is always runnable.
 
 ## Standing rules

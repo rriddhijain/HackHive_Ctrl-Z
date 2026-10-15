@@ -85,7 +85,7 @@ Format: **options** → **⭐ recommendation (why)** → `Decision:` line for yo
   - Captain + R2 AI/Model Lead: **Shivansh** (runs the builder Mac, so model/prompt work stays next to Claude)
   - R1 Vision & Cameras Lead: **Abhinav**
   - R3 Data & Chat Lead: **Riddhi**
-  - R4 Product & Pitch Lead: **Aryan**
+  - R4 End-to-end Reliability & Experience: **Aryan** (changed by D27; the pitch is done by the whole team)
 
 **Q2 🔴 Event timing & judging format.**
 - Start date/time, end date/time, timezone (assumed IST):
@@ -533,6 +533,7 @@ detector: { model: "yolo11s", fps: 10, imgsz: 640, conf: 0.35, device: "mps" }
 | D24 | 2026-10-15 | Docs restructured: README = index, SPEC = what (single source of truth), PLAN = when/who, DECISIONS = why. SPEC v1.1 adds the full dataflow (§5a) and 23 resolved edge cases (§12a) | Captain | — |
 | D25 | 2026-10-15 | Contention rule: one arbiter, P1 incident > P2 chat > P3 baseline > P4 re-look; chat uses rules first, the model only when needed | Captain | SPEC FR-8a/8b, NFR-1a |
 | D26 | 2026-10-15 | FR-5 upload-a-video approved and pulled into Round 1 (small: one endpoint + one UI drop zone; ingest already supports files) | Team | Judges may ask to test their own clip |
+| D27 | 2026-10-15 | Team does no development: Claude builds everything, the team tests/inspects/critiques/validates. Aryan's role → end-to-end reliability & experience QA. The pitch is done by all four together; Claude drafts the deck | Captain | PLAN.md rewritten |
 | D6 | 2026-10-15 | Evaluation criteria: summarisation, incident classification, chatbot interface, approach + workflow demonstration, implementation. **Major: latency and accuracy, which must be best-in-class.** | Organisers | Added the Workflow view, live scene summary and digest to the must-haves; added Q33–Q35 |
 
 ---
