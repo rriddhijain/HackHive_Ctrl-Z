@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -36,12 +36,14 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-4 | Re-stream video files as RTSP via MediaMTX (simulated IP cameras) | F |
 | FR-5 | **Upload a video in the UI → it becomes a new camera** (approved, D26). Drag-and-drop or file picker; mp4/mov/avi/mkv, ≤ 500 MB; plays once at real-time speed; removable. **Built last in R1, dropped first at the 02:00 go/no-go** (D32) | R1 (last) |
 | FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone) | R1 |
+| FR-6a | **Pose A/B (P2):** compare `yolo26n-pose` (17 body keypoints per person) against plain `yolo26n` on the same clips. Pose gives torso angle for `person_down` and wrist speed for `fighting`, which should be more reliable than box shape. Adopt it only if it improves gate precision/recall at similar CPU cost (≤ 1.3× per-frame time); non-person objects (bags, knives) then need the plain model too, so the cost of running both is part of the comparison (D39) | R1 (test) |
 | FR-7 | Gate rules: `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person) | R1: person_down, crowd, scene_change · F: all |
 | FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s | R1 |
 | FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. **Preemption:** a ① arriving while ③/④ runs **cancels** that call (closes the stream; Ollama stops it) and starts at once; a running ② chat call is cancelled and auto-retried right after. A running ① is never cancelled, but if another ① is waiting, the running one **stops its summary after ~15 words** and the rest is completed later at ④. A ③ baseline whose category is `normal` with c ≥ 0.80 stops after a ~12-word summary. 1 Ollama slot (D30) | R1 |
 | FR-8b | Chat avoids the model where possible: a rule-based parser handles camera/category/time first; the model is called only if the rules can't parse the question, or for "summarise" answers. Count/list/latest answers are templates (no model call) | R1 |
 | FR-8c | Each chat answer is a snapshot stamped "as of HH:MM:SS"; incidents that open while the user is chatting appear in the feed live, and the chat shows a "N new incidents since your question" chip | F |
 | FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3) with token log-probabilities; **the category and its confidence are known from the first category token**, so the alert decision happens there | R1 |
+| FR-9b | **Trained classifier next to the VLM (P6, accuracy upgrade, D40):** every mosaic also goes through a frozen image encoder (SigLIP2-base, ~400 MB, download approved for P6) and a small classifier (logistic regression / MLP) trained on our labelled dev/train clips (~15 ms per call). Its probabilities are fused with the VLM's (§6.5). The VLM still writes all summaries. Trained only on train/dev clips, never on the test set. Switch: `classifier.enabled` | F |
 | FR-9a | **Confidence score from log-probabilities** (§6.5): a probability for every category on every observation, calibrated on the dev set, shown in the UI as a % and a High/Medium/Low rating. The model never writes its own confidence | R1 (raw) · F (calibrated) |
 | FR-10 | Cross-check the VLM label against detector evidence (e.g. "fighting" needs ≥ 2 people) | F |
 | FR-11 | Event manager: merge windows into events with open/update/close (hysteresis, §6.4) | R1 |
@@ -91,7 +93,9 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 |---|---|
 | Language/runtime | Python 3.12 (via uv) |
 | Detection/tracking | Ultralytics **YOLO26-nano on CPU** + ByteTrack (D34). CPU keeps the GPU free for the VLM; GPU YOLO is also not thread-safe (Metal abort) and needs a lock |
-| VLM | **Qwen3.5-4B** (fallback **Qwen3.5-2B**, same prompt) via Ollama; GGUF vs MLX build picked by a 10-min latency test (D22) |
+| VLM | **`qwen3.5:4b-mlx`, 2×2 mosaic of 224 px tiles** (P0, D28) via Ollama's MLX engine; fallback `qwen3.5:2b`. Final pick confirmed by the accuracy A/B on real clips (P2) |
+| Pose model (A/B) | `yolo26n-pose` on CPU, tested in P2 against plain `yolo26n` (FR-6a, D39) |
+| Accuracy booster (P6) | Frozen **SigLIP2-base** image encoder + small trained classifier, fused with VLM probabilities (FR-9b, D40) |
 | VLM server | **Ollama** (OpenAI-compatible, streaming, JSON-schema output) |
 | Chat LLM | The same VLM (D8/Q12) |
 | Backend | FastAPI + uvicorn, one process; pipeline in background threads |
@@ -186,6 +190,8 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 **Where the number comes from.** The model writes the category value token by token. At its **first token** we read the top-10 log-probabilities, map each candidate token to the category names it starts (e.g. `fight` → fighting, `s` → suspicious_activity), and renormalise over the 8 categories → `probs = {category: p}`, which sums to 1. Each category name must start with a distinct first token; this is checked at startup, and a colliding name is reworded in the prompt.
 
 **Calibration.** `p_cal = softmax(log p / T)`, with the temperature `T` fitted on the dev set (default 1.0). We report the calibration error (ECE) and a reliability chart in the report.
+
+**Classifier fusion (FR-9b, when enabled).** `p = w · p_vlm + (1 − w) · p_clf`, per category, with `w` fitted on the dev set (default 0.5); calibration and the evidence adjustment below are applied to the fused `p`.
 
 **Evidence adjustment (cross-check, E-7).** `c = clamp(p_cal × f)`, where `f = 1.15` if a gate trigger supports the category, `0.5` if detector evidence contradicts it, `1.0` otherwise.
 
@@ -353,6 +359,8 @@ vlm:  { base_url: "http://localhost:11434", endpoint: "/api/chat", model: "qwen3
         baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },
         think: false, keep_alive: -1, num_ctx: 4096, parallel_slots: 1 }   # 2 slots measured: no gain on this GPU (D30)
 replay: { store_events_on_replay: true, reset_live_tables_on_start: true }
+classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, switched on in P6 if dev F1 improves
+detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only
 gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 0.5,
         drop_frac: 0.4, drop_window_s: 0.5, fight_speed: 1.0, min_track_age_s: 0.5, scene_change_frac: 0.25 }
 events: { open_single_critical: 0.70, open_single_other: 0.85, open_window: 0.55, window_n: 3, close_c: 0.40, close_after_s: 8,
@@ -460,4 +468,7 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 ## 16. Pending decisions (do not block the build)
 1. ~~`suspicious_activity` severity~~: resolved by subtype; loitering and abandoned objects are medium (E-10, D35).
 2. ~~FR-5 video upload~~: resolved, yes, in Round 1 (D26).
-3. GGUF vs MLX build of Qwen3.5-4B, and whether we must drop to the 2B: decided by a 10-min latency test after download.
+3. ~~GGUF vs MLX build~~: resolved, `qwen3.5:4b-mlx` at 224 px tiles (D28); 4B vs 2B re-checked on real clips in P2.
+4. Pose model adopted or not: decided by the P2 A/B (FR-6a).
+5. Classifier fusion weight `w` and whether FR-9b stays on: decided by dev-set macro F1 in P6.
+6. Fire/smoke trigger (a tiny fire detector or colour+flicker check as an extra gate): proposed, not approved. Decide once we know whether fire is in the demo (D41).
