@@ -1,8 +1,10 @@
 """HTTP API + SSE + MJPEG for the dashboard (SPEC §9, §9.1, §9.2); serves the built web/ bundle at "/" (offline).
 
-  uv run python -m app.server                 cameras from config.yaml, http://localhost:8000
-  uv run python -m app.server a.mp4 [...]     one looped camera per clip
+  uv run python -m app.server                 http://localhost:8000; boots in Clips mode with nothing running (P3b)
   uv run python -m app.server --selfcheck     self-check: real pipeline on the sample clip, every endpoint + SSE
+
+Demo modes (P3b): Clips (Act 1) plays ONE playlist clip or upload at a time, once, at real-time speed; Live (Act 2)
+runs devices and stream URLs side by side. Switching stops every source; event/observation history is never cleared.
 
 The pipeline's emit() runs on its threads (the alert inside the streaming VLM call), so it only stamps, encodes and
 hands the message to the event loop; it never blocks the model.
@@ -11,9 +13,11 @@ import asyncio
 import base64
 import json
 import sys
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psutil
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -22,8 +26,10 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 
 from app.config import CFG, ROOT
+from app.ingest import source_type
 from app.pipeline import Pipeline, load_labels, ms, pct
 from app.scheduler import persons
+from scripts.list_cameras import names as device_names
 
 DATA, DIST = ROOT / "data", ROOT / "web" / "dist"
 UPLOAD_EXT, UPLOAD_MAX = {".mp4", ".mov", ".avi", ".mkv"}, 500 * 1024 * 1024   # FR-5
@@ -34,7 +40,8 @@ LOOP: asyncio.AbstractEventLoop = None
 SUBS: set[asyncio.Queue] = set()
 LAST_OBS, MOSAICS, O2A, S2C = {}, {}, [], []      # camera -> newest observation / mosaic jpeg; latency samples (ms)
 LABELS = load_labels()
-NEXT_ID = [0]
+NEXT_ID, MODE = [0], ["clips"]
+SRC_LOCK = threading.Lock()                       # one source change at a time (double clicks, two tabs)
 
 
 def rating(c):
@@ -126,7 +133,7 @@ def metrics():
         cams[cid] = {"capture_fps": round(cam.fps(), 1), "det_fps": s.get("det_fps"), "yolo_ms_p50": s.get("yolo_ms_p50"),
                      "keep_up": s.get("keep_up"), "status": cam.status,
                      "people": len(persons(det.buffer[-1])) if det and det.buffer else 0, "now": now_line(cid, det)}
-    return {"cameras": cams,
+    return {"mode": MODE[0], "cameras": cams,
             "vlm": {"model": CFG["vlm"]["model"], "p50_ms": pct([c["call_ms"] for c in full], .5),
                     "p95_ms": pct([c["call_ms"] for c in full], .95),
                     "alert_p95_ms": pct([c["model_tta_ms"] for c in full], .95),   # model time-to-alert (D50)
@@ -174,15 +181,115 @@ async def sse(request: Request):
         SUBS.discard(q)
 
 
+def notify(kind, data):                           # SSE from a worker thread: asyncio queues aren't thread-safe
+    LOOP.call_soon_threadsafe(send, kind, data)
+
+
+def need(mode):
+    if MODE[0] != mode:
+        raise HTTPException(409, f"switch to {mode} mode first")
+
+
+def stop_all():
+    """Stop every source, then wait (≤ 1.5 s in all) for the capture threads to release their devices."""
+    cams = list(P.cams.values())
+    for cam in cams:
+        P.remove_camera(cam.id)
+        notify("camera_status", {"camera_id": cam.id, "status": "down"})
+    deadline = time.time() + 1.5
+    for cam in cams:
+        cam.join(max(0, deadline - time.time()))
+
+
+def start(c, loop):
+    NEXT_ID[0] += 1                               # ids never reused: history keeps pointing at the right camera
+    cid = f"cam{NEXT_ID[0]}"
+    cam = P.add_camera(c | {"id": cid}, loop=loop)
+    return {"id": cid, "name": c["name"], "status": cam.status}
+
+
+def play_clip(path, name):
+    """Clips mode: one clip at a time (3 busy sources push GPU duty > 90 % and alerts to seconds, P2b), played once."""
+    with SRC_LOCK:
+        need("clips")
+        stop_all()
+        return start({"name": name, "source": path}, loop=False)
+
+
+def clip_list():
+    files = sorted(DATA.glob("demo/*")) + sorted(DATA.glob("dev/*/*"))
+    return [{"path": str(f.relative_to(ROOT)), "name": f.name, "folder": str(f.parent.relative_to(DATA)),
+             "label": LABELS.get(f.name, (None, None))[0], "onset_s": LABELS.get(f.name, (None, None))[1]}
+            for f in files if f.suffix.lower() in UPLOAD_EXT]
+
+
+@app.post("/api/mode")
+def set_mode(body: dict):
+    """Clips | Live. Switching stops and releases every source; history is kept (chat spans both acts)."""
+    if body.get("mode") not in ("clips", "live"):
+        raise HTTPException(400, "mode must be clips or live")
+    t = time.time()
+    with SRC_LOCK:
+        if body["mode"] != MODE[0]:
+            stop_all()
+            MODE[0] = body["mode"]
+    return {"mode": MODE[0], "switch_ms": ms(t, time.time())}
+
+
+@app.get("/api/clips")
+def clips():
+    return clip_list()
+
+
+@app.post("/api/clips/play")
+def play(body: dict):
+    clip = next((c for c in clip_list() if c["path"] == body.get("path")), None)   # playlist files only
+    if not clip:
+        raise HTTPException(400, "not a playlist clip")
+    return play_clip(clip["path"], clip["name"])
+
+
+@app.get("/api/devices")
+def devices():
+    """Camera indices with names (scripts/list_cameras.py), plus the stream URLs set in config.yaml (E-15)."""
+    found = [{"source": i, "name": "iPhone (live)" if "iphone" in n.lower() else n}
+             for i, n in device_names().items()]
+    return found + [{"source": c["source"], "name": c["name"]} for c in CFG["cameras"]
+                    if source_type(c["source"]) == "stream"]
+
+
+@app.post("/api/cameras")
+def add_source(body: dict):
+    """Live mode: a device index or an http/https/rtsp URL. File paths and every other scheme are rejected."""
+    src = body.get("source")
+    url = urlparse(src) if isinstance(src, str) else None
+    if not ((type(src) is int and src >= 0) or (url and url.scheme in ("http", "https", "rtsp") and url.netloc)):
+        raise HTTPException(400, "source must be a device index or an http, https or rtsp URL")
+    with SRC_LOCK:
+        need("live")
+        if any(c.source == src for c in P.cams.values()):
+            raise HTTPException(409, "already running")
+        cfg = next((c for c in CFG["cameras"] if c["source"] == src), {})   # keeps its door/watch zone (E-16)
+        return start({"name": body.get("name") or cfg.get("name") or str(src), "source": src,
+                      "door_zone": cfg.get("door_zone"), "watch_zone": cfg.get("watch_zone")}, loop=True)
+
+
 @app.get("/api/cameras")
 def cameras():
-    return [{"id": cid, "name": c.name, "source_type": c.kind, "status": c.status, "fps": round(c.fps(), 1),
-             "has_door_zone": bool(c.door_zone)} for cid, c in list(P.cams.items())]
+    out = []
+    for cid, c in list(P.cams.items()):
+        label, onset = LABELS.get(Path(str(c.source)).name, (None, None)) if c.kind == "file" else (None, None)
+        out.append({"id": cid, "name": c.name, "source_type": c.kind, "source": c.source, "status": c.status,
+                    "fps": round(c.fps(), 1), "has_door_zone": bool(c.door_zone), "loop": c.loop,
+                    "t_first": c.t_first, "label": label, "onset_s": onset})   # P3b: clip result card
+    return out
 
 
 @app.post("/api/cameras/upload")
 async def upload(request: Request, name: str):
-    """FR-5 (v1.9): raw file body, ?name=; bare file name, mp4/mov/avi/mkv, ≤ 500 MB, written as it arrives."""
+    """FR-5 (v1.9): raw file body, ?name=; bare file name, mp4/mov/avi/mkv, ≤ 500 MB, written as it arrives.
+    P3b: Clips mode only; it replaces the clip that is playing."""
+    need("clips")
     name = Path(name).name
     if not name or Path(name).suffix.lower() not in UPLOAD_EXT:
         raise HTTPException(400, "file must be .mp4, .mov, .avi or .mkv")
@@ -200,18 +307,19 @@ async def upload(request: Request, name: str):
     if not n:
         path.unlink()
         raise HTTPException(400, "empty file")
-    NEXT_ID[0] = max(NEXT_ID[0], *(int(c[3:]) for c in P.cams if c[3:].isdigit())) + 1   # ids never reused
-    cid = f"cam{NEXT_ID[0]}"
-    cam = P.add_camera({"id": cid, "name": name, "source": str(path)}, loop=False)
-    return {"id": cid, "name": name, "status": cam.status}
+    return await asyncio.to_thread(play_clip, str(path), name)
 
 
 @app.delete("/api/cameras/{cid}")
 def remove(cid: str):
-    if cid not in P.cams:
-        raise HTTPException(404)
-    P.remove_camera(cid)
-    send("camera_status", {"camera_id": cid, "status": "down"})
+    """The tile's ■ button: stops the source and releases the device."""
+    with SRC_LOCK:
+        cam = P.cams.get(cid)
+        if not cam:
+            raise HTTPException(404)
+        P.remove_camera(cid)
+        cam.join(1.5)
+    notify("camera_status", {"camera_id": cid, "status": "down"})
     return {"id": cid, "removed": True}
 
 
@@ -302,12 +410,11 @@ if DIST.exists():
     app.mount("/", StaticFiles(directory=DIST, html=True), name="web")
 
 
-def serve(cams, port=8000):
+def serve(port=8000):
     import uvicorn
     global P
-    P = Pipeline(cams, loop=True, emit=emit)
+    P = Pipeline([], emit=emit)                  # P3b: nothing runs at boot; config.yaml cameras are Live presets
     P.start()
-    NEXT_ID[0] = len(cams)
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")   # no auth: never on venue Wi-Fi
     finally:
@@ -315,23 +422,29 @@ def serve(cams, port=8000):
 
 
 def selfcheck():
-    """Real pipeline (sample clip) on a spare port; checks every P3 endpoint, MJPEG, SSE latency and upload rules."""
-    import threading
+    """Real pipeline (sample clip) on a spare port; checks every P3 endpoint, MJPEG, SSE latency and upload rules,
+    plus P3b: empty boot, playlist, one clip at a time, mode switch (history kept), live URL rules, ■ stop."""
     import httpx
     import uvicorn
     global P
     port, clip = 8765, "data/demo/sample_bus.mp4"
-    P = Pipeline([{"id": "cam1", "name": "sample", "source": clip}], loop=True, emit=emit)
+    P = Pipeline([], emit=emit)
     P.start()
-    NEXT_ID[0] = 1
     srv = uvicorn.Server(uvicorn.Config(app, port=port, log_level="warning"))
     threading.Thread(target=srv.run, daemon=True).start()
     while not srv.started:
         time.sleep(0.05)
     u = f"http://127.0.0.1:{port}"
     with httpx.Client(base_url=u, timeout=30) as c:
+        assert c.get("/api/cameras").json() == [] and c.get("/api/metrics").json()["mode"] == "clips"   # nothing at boot
+        pl = c.get("/api/clips").json()
+        assert any(x["path"] == clip and x["label"] == "normal" for x in pl), pl
+        assert c.post("/api/clips/play", json={"path": "/etc/passwd"}).status_code == 400
+        assert c.post("/api/cameras", json={"source": 0}).status_code == 409          # live sources: Live mode only
+        assert c.post("/api/clips/play", json={"path": clip}).json()["id"] == "cam1"
+        time.sleep(1)
         cams = c.get("/api/cameras").json()
-        assert cams and cams[0]["id"] == "cam1" and cams[0]["status"] == "live", cams
+        assert len(cams) == 1 and cams[0]["status"] == "live" and not cams[0]["loop"], cams
         with c.stream("GET", "/stream/cam1") as r:   # one MJPEG frame
             buf = b""
             for chunk in r.iter_bytes():
@@ -369,14 +482,37 @@ def selfcheck():
         assert c.post("/api/ui/latency", json={"event_id": -1, "ms": 12.5}).json()["accepted"]
         assert c.get("/api/metrics").json()["latency"]["store_to_card_ms"]["last"] == 12.5
         assert c.get("/api/events").status_code == 200 and isinstance(c.get("/api/observations").json(), list)
+        assert all(o["thumb_path"] is None for o in c.get("/api/observations").json() if o["category"] == "normal")
         # upload rules (v1.9 conditions): bad extension 400, path stripped, real clip -> new camera, removable
         assert c.post("/api/cameras/upload?name=x.exe", content=b"1").status_code == 400
         r = c.post("/api/cameras/upload?name=../../evil/clip.mp4", content=Path(clip).read_bytes())
         assert r.status_code == 200 and r.json()["name"] == "clip.mp4", r.text
         new = r.json()["id"]
-        assert any((DATA / "uploads").glob("*/clip.mp4")) and new in [x["id"] for x in c.get("/api/cameras").json()]
+        assert any((DATA / "uploads").glob("*/clip.mp4"))
+        assert [x["id"] for x in c.get("/api/cameras").json()] == [new]               # the upload replaced cam1
         assert c.delete(f"/api/cameras/{new}").status_code == 200
         assert new not in [x["id"] for x in c.get("/api/cameras").json()]
+        # P3b modes: switching stops every source, history stays; Live accepts device indices and stream URLs only
+        c.post("/api/clips/play", json={"path": clip})
+        n_obs = len(c.get("/api/observations?limit=500").json())
+        sw = c.post("/api/mode", json={"mode": "live"}).json()
+        assert sw["mode"] == "live" and c.get("/api/cameras").json() == [], sw
+        assert c.post("/api/clips/play", json={"path": clip}).status_code == 409
+        assert c.post("/api/cameras/upload?name=a.mp4", content=b"1").status_code == 409
+        for bad in ("file:///etc/passwd", "/etc/passwd", "data/demo/sample_bus.mp4", "ftp://x/y", "http://", -1, True):
+            assert c.post("/api/cameras", json={"source": bad}).status_code == 400, bad
+        assert isinstance(c.get("/api/devices").json(), list)
+        dead = "rtsp://127.0.0.1:9/none"                                                # no server: stays connecting
+        r = c.post("/api/cameras", json={"source": dead, "name": "dead"})
+        assert r.status_code == 200 and c.post("/api/cameras", json={"source": dead}).status_code == 409, r.text
+        assert c.get("/api/cameras").json()[0]["status"] in ("connecting", "reconnecting")
+        t = time.time()
+        assert c.delete(f"/api/cameras/{r.json()['id']}").status_code == 200 and c.get("/api/cameras").json() == []
+        stop_ms = ms(t, time.time())
+        c.post("/api/cameras", json={"source": dead})
+        back = c.post("/api/mode", json={"mode": "clips"}).json()
+        assert back["mode"] == "clips" and c.get("/api/cameras").json() == []
+        assert len(c.get("/api/observations?limit=500").json()) >= n_obs                # history never cleared
         if DIST.exists():
             assert b'<div id="root">' in c.get("/").content
     srv.should_exit = True
@@ -384,6 +520,7 @@ def selfcheck():
     for f in (DATA / "uploads").glob("*/clip.mp4"):
         f.unlink(); f.parent.rmdir()
     print(f"server self-check ok: emit→SSE {sse_ms:.1f} ms, trace stages {[s['name'] for s in tr['stages']]}, "
+          f"mode switch {sw['switch_ms']} / {back['switch_ms']} ms, ■ stop {stop_ms} ms, "
           f"web bundle {'served' if DIST.exists() else 'NOT BUILT'}")
 
 
@@ -391,5 +528,4 @@ if __name__ == "__main__":
     if "--selfcheck" in sys.argv:
         selfcheck()
     else:
-        clips = sys.argv[1:]
-        serve([{"id": f"cam{i + 1}", "name": Path(c).name, "source": c} for i, c in enumerate(clips)] or CFG["cameras"])
+        serve()

@@ -163,11 +163,12 @@ class Pipeline:
                "people_count": r["people_count"], "trigger": req["trigger"], "track_ids": req["track_ids"],
                "model": V["model"],
                "timing": {"t_capture": ts, "t_gate": req["created"] if not base else None, **r["timing"]}}
-        thumb = DATA / "thumbs" / cam / f"{ts:.2f}.jpg"
-        thumb.parent.mkdir(parents=True, exist_ok=True)
         f = newest[1]
-        cv2.imwrite(str(thumb), cv2.resize(f, (320, round(f.shape[0] * 320 / f.shape[1]))))
-        obs["thumb_path"] = str(thumb.relative_to(ROOT))
+        if r["category"] != "normal":                       # P3b: normal observations store no image
+            thumb = DATA / "thumbs" / cam / f"{ts:.2f}.jpg"
+            thumb.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(thumb), cv2.resize(f, (320, round(f.shape[0] * 320 / f.shape[1]))))
+            obs["thumb_path"] = str(thumb.relative_to(ROOT))
 
         def keyframes(eid):
             k = DATA / "keyframes"

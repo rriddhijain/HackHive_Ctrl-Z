@@ -9,6 +9,9 @@ const media = (p) => "/" + p.replace(/^data\//, "media/");
 const v = (x, unit = "") => (x == null ? "—" : `${x}${unit}`);
 const pc = (c) => (c == null ? "—" : `${Math.round(c * 100)}%`);
 const name = (c) => c?.replaceAll("_", " ");
+const post = (u, body) => fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const STATUS = { connecting: "connecting", live: "live", reconnecting: "reconnecting", down: "down", ended: "finished", stopped: "stopped" };
+const STATUS_COLOR = { live: "text-emerald-400", ended: "text-sky-400", down: "text-red-400" };
 // MJPEG tiles hold one HTTP/1.1 connection each (browser cap: 6 per host): load them via the other loopback name
 const STREAM = `${location.protocol}//${location.hostname === "localhost" ? "127.0.0.1" : location.hostname === "127.0.0.1" ? "localhost" : location.hostname}:${location.port}`;
 
@@ -27,7 +30,7 @@ export default function App() {
   const [m, setM] = useState(null);
   const [traces, setTraces] = useState({});
   const [toasts, setToasts] = useState([]);
-  const [view, setView] = useState("live");
+  const [view, setView] = useState("dashboard");
   const [conn, setConn] = useState(false);
   const [sound, setSound] = useState(false);
 
@@ -44,7 +47,7 @@ export default function App() {
     es.onerror = () => setConn(false);
     let camKeys = "";
     on("metrics", (x) => {
-      const k = Object.keys(x.cameras).join();
+      const k = Object.entries(x.cameras).map(([id, c]) => id + c.status).join();   // ids or a status changed
       if (k !== camKeys) { camKeys = k; loadCams(); }
       setM(x);
     });
@@ -77,13 +80,26 @@ export default function App() {
   };
   const feed = Object.values(events).filter((e) => e.status !== "dismissed").sort((a, b) => b.id - a.id).slice(0, 50);
   const camName = (id) => cams.find((c) => c.id === id)?.name ?? id;
+  const mode = m?.mode;
+  const switchMode = async (k) => {   // stops every source of the other mode; history stays
+    if (k === mode) return;
+    await post("/api/mode", { mode: k });
+    setM((x) => ({ ...x, mode: k }));
+    loadCams();
+  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950 px-4 py-2">
         <div className="mb-1 flex items-center gap-4">
           <h1 className="text-lg font-bold">HackHive</h1>
-          {["live", "workflow"].map((k) => (
+          <div className="flex overflow-hidden rounded border border-zinc-600 text-sm">
+            {["clips", "live"].map((k) => (
+              <button key={k} onClick={() => switchMode(k)}
+                className={`px-3 py-0.5 capitalize ${mode === k ? "bg-sky-500 font-semibold text-black" : "bg-zinc-900 text-zinc-300"}`}>{k}</button>
+            ))}
+          </div>
+          {["dashboard", "workflow"].map((k) => (
             <button key={k} onClick={() => setView(k)}
               className={`rounded px-3 py-0.5 text-sm capitalize ${view === k ? "bg-zinc-100 text-zinc-900" : "bg-zinc-800"}`}>{k}</button>
           ))}
@@ -93,19 +109,21 @@ export default function App() {
             {sound ? "sound on" : "click to arm alert sound"}
           </button>
         </div>
-        <Strip m={m} />
+        <Strip m={m} notice={mode === "live" && cams.length > 2 && "3+ live cameras: alerts may slow"} />
       </header>
 
-      {view === "live" ? (
+      {view === "dashboard" ? (
         <main className="grid gap-4 p-4 lg:grid-cols-[1fr_440px]">
           <section className="grid content-start gap-3 sm:grid-cols-2">
-            {cams.map((c) => <Tile key={c.id} c={c} cm={m?.cameras?.[c.id]} onRemove={loadCams} />)}
-            <Upload onDone={loadCams} />
+            {cams.map((c) => <Tile key={c.id} c={c} cm={m?.cameras?.[c.id]} onRemove={loadCams}
+              evs={Object.values(events).filter((e) => e.camera_id === c.id).sort((a, b) => a.id - b.id)} />)}
+            {mode === "clips" && <><Playlist playing={cams[0]?.source} onPlay={loadCams} /><Upload onDone={loadCams} /></>}
+            {mode === "live" && <AddSource cams={cams} onDone={loadCams} />}
           </section>
           <aside>
             <h2 className="mb-2 text-sm font-semibold text-zinc-400">INCIDENTS</h2>
             <div className="space-y-2">
-              {feed.length ? feed.map((e) => <Card key={e.id} e={e} camName={camName(e.camera_id)} />)
+              {feed.length ? feed.map((e) => <Card key={e.id} e={e} camName={e.camera_name ?? camName(e.camera_id)} />)
                 : <p className="text-sm text-zinc-500">No incidents.</p>}
             </div>
           </aside>
@@ -127,7 +145,7 @@ export default function App() {
   );
 }
 
-function Strip({ m }) {
+function Strip({ m, notice }) {
   const x = m?.vlm ?? {}, o2a = m?.latency?.onset_to_alert_ms ?? {}, s2c = m?.latency?.store_to_card_ms ?? {};
   const items = [
     ["GPU duty (60 s)", v(x.gpu_duty_pct, " %"), "Share of the last 60 s the model was busy. Target ≤ 60 % average with 3 cameras."],
@@ -153,14 +171,14 @@ function Strip({ m }) {
           <b className={`tabular-nums ${k === "store → card" && s2c.p95 > 100 ? "text-red-400" : ""}`}>{val}</b>
         </div>
       ))}
+      {notice && <b className="text-amber-400" title="P2b: 3 busy sources pushed GPU duty above 90 %">⚠ {notice}</b>}
     </div>
   );
 }
 
-function Tile({ c, cm, onRemove }) {
+function Tile({ c, cm, onRemove, evs }) {
   const status = cm?.status ?? c.status;
-  const remove = async () => {
-    if (!confirm(`Remove ${c.id} (${c.name})?`)) return;
+  const remove = async () => {   // one click: stops the source and releases the device
     await fetch(`/api/cameras/${c.id}`, { method: "DELETE" });
     onRemove();
   };
@@ -169,17 +187,98 @@ function Tile({ c, cm, onRemove }) {
       <div className="flex items-center gap-2 px-2 py-1 text-sm">
         <b>{c.id}</b>
         <span className="truncate">{c.name}</span>
-        <span className={`text-xs ${status === "live" ? "text-emerald-400" : "text-amber-400"}`}>{status}</span>
+        <span className={`text-xs ${STATUS_COLOR[status] ?? "text-amber-400"}`}>{STATUS[status] ?? status}</span>
         <span className="ml-auto whitespace-nowrap text-xs text-zinc-400">
           {v(cm?.people)} ppl · YOLO {v(cm?.yolo_ms_p50, " ms")} · keep-up {pc(cm?.keep_up)}
         </span>
-        <button onClick={remove} title="Remove camera" className="text-zinc-500 hover:text-red-400">✕</button>
+        <button onClick={remove} title="Stop and release this source" className="text-zinc-400 hover:text-red-400">■</button>
       </div>
       <img src={`${STREAM}/stream/${c.id}`} alt={c.name} className="aspect-video w-full bg-black object-contain" />
       <div className="px-2 py-1 text-xs">
         <span className="text-zinc-500">now: </span>{cm?.now?.text ?? "—"}
         <span className="text-zinc-500"> · as of {ist(cm?.now?.ts)} ({cm?.now?.source ?? "—"})</span>
       </div>
+      {status === "ended" && <Result c={c} evs={evs.filter((e) => e.status !== "dismissed")} />}
+    </div>
+  );
+}
+
+function Result({ c, evs }) {   // a clip played once has finished: what it found, against the label if there is one
+  const at = (ts) => (ts && c.t_first ? `${(ts - c.t_first).toFixed(1)} s` : "—");
+  const hit = evs.find((e) => e.category === c.label);
+  return (
+    <div className="space-y-1 border-t border-zinc-800 px-2 py-2 text-sm">
+      <div className="text-xs font-semibold text-zinc-400">RESULT{c.label && ` · label: ${name(c.label)}`}</div>
+      {c.onset_s != null && (
+        <div>incident at <b>{c.onset_s} s</b> → {hit ? <>alert at <b>{at(hit.alert?.t_stored ?? hit.start_ts)}</b></> : "no matching alert"}</div>
+      )}
+      {evs.length ? evs.map((e) => (
+        <div key={e.id}>
+          <span className={`rounded px-1.5 text-xs font-bold uppercase ${SEV[e.severity] ?? "bg-zinc-700"}`}>{name(e.category)}</span>
+          {" "}<b>{pc(e.peak_confidence)}</b> · alert at {at(e.alert?.t_stored ?? e.start_ts)} in the clip
+          <div className="text-zinc-300">{e.summary ?? <i className="text-zinc-500">summary pending…</i>}</div>
+        </div>
+      )) : <div className="font-semibold text-emerald-400">No incidents.</div>}
+    </div>
+  );
+}
+
+function Playlist({ playing, onPlay }) {   // Act 1: one click plays a clip once; it replaces the one playing
+  const [clips, setClips] = useState([]);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { fetch("/api/clips").then((r) => r.json()).then(setClips); }, []);
+  const play = async (x) => {
+    const r = await post("/api/clips/play", { path: x.path });
+    setMsg(r.ok ? "" : `rejected: ${(await r.json()).detail}`);
+    onPlay();
+  };
+  return (
+    <div className="rounded bg-zinc-900 p-2">
+      <div className="mb-1 text-xs font-semibold text-zinc-400">DEMO CLIPS · one at a time, played once</div>
+      <div className="space-y-0.5">
+        {clips.map((x) => (
+          <button key={x.path} onClick={() => play(x)}
+            className={`flex w-full items-center gap-2 rounded px-2 py-0.5 text-left text-sm hover:bg-zinc-700 ${playing === x.path ? "bg-zinc-700" : ""}`}>
+            <span>▶</span><span className="truncate">{x.name}</span>
+            <span className="ml-auto whitespace-nowrap text-xs text-zinc-400">
+              {x.folder} · {x.label ? name(x.label) : "unlabelled"}{x.onset_s != null && ` @ ${x.onset_s} s`}
+            </span>
+          </button>
+        ))}
+      </div>
+      {msg && <div className="mt-1 text-xs text-red-400">{msg}</div>}
+    </div>
+  );
+}
+
+function AddSource({ cams, onDone }) {   // Act 2: devices (iPhone via Continuity, webcams) and phone stream URLs
+  const [devs, setDevs] = useState(null);
+  const [url, setUrl] = useState("");
+  const [msg, setMsg] = useState("");
+  useEffect(() => { fetch("/api/devices").then((r) => r.json()).then(setDevs); }, []);
+  const running = new Set(cams.map((c) => c.source));
+  const add = async (source, label) => {
+    const r = await post("/api/cameras", { source, name: label });
+    setMsg(r.ok ? "" : `rejected: ${(await r.json()).detail}`);
+    onDone();
+  };
+  return (
+    <div className="space-y-2 rounded bg-zinc-900 p-2 text-sm">
+      <div className="text-xs font-semibold text-zinc-400">ADD A LIVE SOURCE</div>
+      {devs == null ? <div className="text-xs text-zinc-500">looking for cameras…</div> : (
+        <div className="flex flex-wrap gap-1">
+          {devs.map((d) => (
+            <button key={d.source} disabled={running.has(d.source)} onClick={() => add(d.source, d.name)}
+              className="rounded bg-zinc-700 px-2 py-0.5 hover:bg-zinc-600 disabled:opacity-40">+ {d.name}</button>
+          ))}
+        </div>
+      )}
+      <form className="flex gap-1" onSubmit={(e) => { e.preventDefault(); if (url.trim()) add(url.trim(), null); }}>
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://192.168.43.20:8080/video or rtsp://…"
+          className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-0.5" />
+        <button className="rounded bg-zinc-700 px-2 py-0.5 hover:bg-zinc-600">Add URL</button>
+      </form>
+      {msg && <div className="text-xs text-red-400">{msg}</div>}
     </div>
   );
 }
@@ -200,7 +299,7 @@ function Upload({ onDone }) {
       <input type="file" accept=".mp4,.mov,.avi,.mkv" hidden onChange={(e) => send(e.target.files[0])} />
       <div className="text-sm text-zinc-400">
         Drop a video or click to upload
-        <div className="text-xs text-zinc-500">mp4 · mov · avi · mkv, ≤ 500 MB, plays once as a new camera</div>
+        <div className="text-xs text-zinc-500">mp4 · mov · avi · mkv, ≤ 500 MB, plays once (replaces the clip playing)</div>
         <div className="mt-1 text-xs text-zinc-200">{msg}</div>
       </div>
     </label>

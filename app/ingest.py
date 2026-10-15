@@ -27,12 +27,12 @@ class Camera(threading.Thread):
         self.id, self.name, self.source, self.loop = cam_id, name, source, loop
         self.door_zone, self.watch_zone = door_zone, watch_zone
         self.kind = source_type(source)
-        self.status = "starting"       # live | reconnecting | down | ended | stopped
+        self.status = "connecting"     # connecting | live | reconnecting | down | ended | stopped
         self.reconnects = 0
         self._latest = None            # (frame, t_capture, idx)
         self.t_first = None            # wall time of the first frame = clip time 0 (onset-to-alert on replays, §12)
         self._lock = threading.Lock()
-        self._stop = threading.Event()
+        self._halt = threading.Event()   # not _stop: that is Thread._stop(), join() needs it
         self._ts = deque(maxlen=60)    # capture timestamps, for fps
 
     def _open(self):
@@ -41,22 +41,24 @@ class Camera(threading.Thread):
         if self.kind == "file":
             path = Path(self.source)
             return cv2.VideoCapture(str(path if path.is_absolute() else ROOT / path))
-        return cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
+        return cv2.VideoCapture(self.source, cv2.CAP_FFMPEG,   # a dead URL must not block stop() for ffmpeg's 30 s default
+                                [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
 
     def run(self):
         idx, attempt = 0, 0
-        while not self._stop.is_set():
+        while not self._halt.is_set():
             cap = self._open()
             if not cap.isOpened():
-                self.status = "reconnecting" if self.kind != "file" else "down"
                 if self.kind == "file":
-                    return
-                time.sleep(BACKOFF[min(attempt, len(BACKOFF) - 1)]); attempt += 1; self.reconnects += 1
+                    self.status = "down"; return
+                # still retrying every 5 s, but shown as down once the backoff is used up (P3b tile status)
+                self.status = "down" if attempt >= len(BACKOFF) else "reconnecting" if self.t_first else "connecting"
+                self._halt.wait(BACKOFF[min(attempt, len(BACKOFF) - 1)]); attempt += 1; self.reconnects += 1
                 continue
             attempt, self.status = 0, "live"
             frame_dt = 1.0 / (cap.get(cv2.CAP_PROP_FPS) or 25) if self.kind == "file" else 0
             next_t = time.time()
-            while not self._stop.is_set():
+            while not self._halt.is_set():
                 ok, frame = cap.read()
                 if not ok:
                     break
@@ -73,14 +75,14 @@ class Camera(threading.Thread):
                     self._latest = (frame, t, idx)
                 self._ts.append(t)
             cap.release()
-            if self._stop.is_set():
+            if self._halt.is_set():
                 break
             if self.kind == "file":
                 if not self.loop:
                     self.status = "ended"; return
                 continue  # loop the file
             self.status = "reconnecting"; self.reconnects += 1
-            time.sleep(BACKOFF[0])
+            self._halt.wait(BACKOFF[0])
         self.status = "stopped"
 
     def latest(self):
@@ -92,7 +94,7 @@ class Camera(threading.Thread):
         return (len(ts) - 1) / (ts[-1] - ts[0]) if len(ts) > 1 and ts[-1] > ts[0] else 0.0
 
     def stop(self):
-        self._stop.set()
+        self._halt.set()
 
 
 class CameraManager:
