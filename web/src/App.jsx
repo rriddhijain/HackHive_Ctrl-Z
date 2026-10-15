@@ -33,6 +33,7 @@ export default function App() {
   const [view, setView] = useState("dashboard");
   const [conn, setConn] = useState(false);
   const [sound, setSound] = useState(false);
+  const [openEv, setOpenEv] = useState(null);   // the event card a chat [#id] link opened
 
   const loadCams = () => fetch("/api/cameras").then((r) => r.json()).then(setCams);
   const merge = (id, patch) => setEvents((s) => ({ ...s, [id]: { ...s[id], ...patch } }));
@@ -79,7 +80,7 @@ export default function App() {
     beep();
   };
   const feed = Object.values(events).filter((e) => e.status !== "dismissed").sort((a, b) => b.id - a.id).slice(0, 50);
-  const camName = (id) => cams.find((c) => c.id === id)?.name ?? id;
+  const camName = (id) => cams.find((c) => c.id === id)?.name ?? name(id);
   const mode = m?.mode;
   const switchMode = async (k) => {   // stops every source of the other mode; history stays
     if (k === mode) return;
@@ -121,6 +122,7 @@ export default function App() {
             {mode === "live" && <AddSource cams={cams} onDone={loadCams} />}
           </section>
           <aside>
+            <Chat onOpen={setOpenEv} />
             <h2 className="mb-2 text-sm font-semibold text-zinc-400">INCIDENTS</h2>
             <div className="space-y-2">
               {feed.length ? feed.map((e) => <Card key={e.id} e={e} camName={e.camera_name ?? camName(e.camera_id)} />)
@@ -130,6 +132,15 @@ export default function App() {
         </main>
       ) : (
         <Workflow cams={cams} traces={traces} m={m} />
+      )}
+
+      {openEv && (
+        <div onClick={() => setOpenEv(null)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <div onClick={(x) => x.stopPropagation()} className="w-full max-w-xl" data-event-card={openEv.id}>
+            <Card e={{ ...openEv, ...events[openEv.id] }} camName={openEv.camera_name ?? camName(openEv.camera_id)} />
+            <button onClick={() => setOpenEv(null)} className="mt-1 w-full text-right text-xs text-zinc-400">close</button>
+          </div>
+        </div>
       )}
 
       <div className="fixed bottom-4 right-4 z-50 space-y-2">
@@ -326,6 +337,7 @@ function Card({ e, camName }) {
         <div className="flex items-center gap-2 text-sm">
           <span className={`rounded px-1.5 text-xs font-bold uppercase ${SEV[e.severity] ?? "bg-zinc-700"}`}>{name(e.category)}</span>
           <span className="truncate text-zinc-300">{camName}</span>
+          {e.seeded ? <span className="rounded bg-zinc-700 px-1 text-[10px] uppercase text-zinc-300" title="seeded history (E-19)">history</span> : null}
           <span className="ml-auto text-xs text-zinc-500">{ist(e.start_ts ?? e.alert?.t_stored)} IST</span>
         </div>
         <div className="mt-1 flex flex-wrap gap-x-3 text-xs">
@@ -352,6 +364,51 @@ function Card({ e, camName }) {
       {e.status === "open" && (
         <button onClick={ack} className="self-start rounded bg-zinc-700 px-2 py-0.5 text-xs hover:bg-zinc-600">Ack</button>
       )}
+    </div>
+  );
+}
+
+// Chat (§7.5): every [#id] is a link to that event's card; the line under each answer says how it was made.
+const how = (h) => (!h ? "" : h.mode === "template" ? "template"
+  : `model, ${h.rows} rows, ${h.dropped} sentence${h.dropped === 1 ? "" : "s"} dropped${h.fallback ? " → template list" : ""}`);
+
+function Chat({ onOpen }) {
+  const [q, setQ] = useState("");
+  const [log, setLog] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const ask = async (x) => {
+    x.preventDefault();
+    const question = q.trim();
+    if (!question || busy) return;
+    setBusy(true);
+    try {
+      const r = await post("/api/chat", { session_id: "ui", question });
+      const a = r.ok ? await r.json() : { answer: `error ${r.status}`, events: [] };
+      setLog((l) => [{ question, ...a }, ...l].slice(0, 20));
+      setQ("");
+    } finally { setBusy(false); }
+  };
+  const cite = (a) => a.answer.split(/(\[#\d+\])/).map((s, i) => {
+    const e = /^\[#\d+\]$/.test(s) && a.events.find((ev) => ev.id === +s.slice(2, -1));
+    return e ? <button key={i} onClick={() => onOpen(e)} className="text-sky-400 underline hover:text-sky-300">{s}</button> : s;
+  });
+  return (
+    <div className="mb-4 rounded bg-zinc-900 p-2">
+      <div className="mb-1 text-xs font-semibold text-zinc-400">ASK ABOUT INCIDENTS</div>
+      <form onSubmit={ask} className="flex gap-1">
+        <input value={q} onChange={(x) => setQ(x.target.value)} placeholder="how many fights today? · what happened between 2 and 3 am?"
+          className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-1 text-sm" />
+        <button disabled={busy} className="rounded bg-sky-600 px-3 text-sm font-semibold disabled:opacity-50">{busy ? "…" : "Ask"}</button>
+      </form>
+      <div className="mt-2 max-h-96 space-y-3 overflow-y-auto">
+        {log.map((a, i) => (
+          <div key={log.length - i} className="text-sm" data-answer={log.length - i}>
+            <div className="text-zinc-400">› {a.question}</div>
+            <div className="whitespace-pre-wrap">{cite(a)}</div>
+            <div className="text-[11px] text-zinc-500" data-how>{how(a.how)} · as of {ist(a.as_of)} IST · {a.latency_ms} ms</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

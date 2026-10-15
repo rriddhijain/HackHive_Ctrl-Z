@@ -1,8 +1,8 @@
 """Model arbiter: ONE worker in front of the one Ollama slot, strict priority (SPEC §5a step 5, FR-8a, E-1, E-2).
 
 Priorities: 1 gate-triggered incident (round-robin across cameras) → 2 chat → 3 baseline → 4 re-look.
-Preemption: a P1 arriving while a P3/P4 runs sets that request's `cancel` (the VLM client closes the stream and
-Ollama stops); a running P1 is never cancelled. Also measures GPU duty = share of wall time a call is running (§12).
+Preemption: a P1 arriving while a P2/P3/P4 runs sets that request's `cancel` (the VLM client closes the stream and
+Ollama stops; chat retries its call, FR-8a); a running P1 is never cancelled. Also measures GPU duty = share of wall time a call is running (§12).
 """
 import threading
 import time
@@ -23,7 +23,7 @@ class Arbiter(threading.Thread):
         req["cancel"] = threading.Event()
         with self.cv:
             self.q.append(req)
-            if req["prio"] == 1 and self.running and self.running["prio"] >= 3:
+            if req["prio"] == 1 and self.running and self.running["prio"] >= 2:
                 self.running["cancel"].set()
             self.cv.notify()
         return req
@@ -100,5 +100,8 @@ if __name__ == "__main__":
     assert log == [("base1", "cancelled"), ("p1a", "done"), ("p1c", "done"), ("p1b", "done"), ("base2", "done")], log
     d = a.duty(window=2.0)
     assert 0.55 < d < 0.85, d   # ~1.25 s busy in the last 2 s
+    a.submit({"prio": 2, "cam": "chat", "name": "chat"}); time.sleep(0.05)
+    a.submit({"prio": 1, "cam": "cam1", "name": "p1d"}); time.sleep(0.7)
+    assert log[-2:] == [("chat", "cancelled"), ("p1d", "done")], log   # a P1 cancels a running chat call (FR-8a)
     a.stop()
     print("models (arbiter) self-check ok, duty %.2f" % d)

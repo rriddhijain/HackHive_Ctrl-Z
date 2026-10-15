@@ -12,6 +12,7 @@ hands the message to the event loop; it never blocks the model.
 import asyncio
 import base64
 import json
+import re
 import sys
 import threading
 import time
@@ -25,6 +26,7 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 
+from app import chat as chatbot
 from app.config import CFG, ROOT
 from app.ingest import source_type
 from app.pipeline import Pipeline, load_labels, ms, pct
@@ -356,8 +358,11 @@ def where(**f):
 
 @app.get("/api/events")
 def events(camera: str = None, category: str = None, status: str = None, frm: float = Query(None, alias="from"),
-           to: float = None, limit: int = 50, q: str = None):   # q: keyword search is P4 (FTS5, D53)
+           to: float = None, limit: int = 50, q: str = None):   # q: keyword search (FTS5, D53)
     w, args = where(camera=camera, category=category, status=status, frm=frm, to=to, tcol="start_ts")
+    if q and (words := re.findall(r"[a-z0-9]+", q.lower())):
+        w += (" AND " if w else " WHERE ") + "id IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)"
+        args.append(chatbot.fts_query(words))
     return P.db.rows(f"SELECT * FROM events{w} ORDER BY start_ts DESC LIMIT ?", args + [min(limit, 500)])
 
 
@@ -384,6 +389,15 @@ def ack(eid: int):
 def observations(camera: str = None, frm: float = Query(None, alias="from"), to: float = None, limit: int = 50):
     w, args = where(camera=camera, frm=frm, to=to, tcol="ts")
     return P.db.rows(f"SELECT * FROM observations{w} ORDER BY ts DESC LIMIT ?", args + [min(limit, 500)])
+
+
+@app.post("/api/chat")
+def chat(body: dict):
+    """§7.5 / §5a.2. Sync handler: runs in the threadpool, so a summary waiting on the model never blocks the loop."""
+    q = str(body.get("question") or "").strip()
+    if not q or len(q) > 500:
+        raise HTTPException(400, "question: 1-500 characters")
+    return chatbot.answer(q, P.db, P.arb, dict(P.events.cam_names))
 
 
 @app.get("/api/metrics")
@@ -482,6 +496,9 @@ def selfcheck():
         assert c.post("/api/ui/latency", json={"event_id": -1, "ms": 12.5}).json()["accepted"]
         assert c.get("/api/metrics").json()["latency"]["store_to_card_ms"]["last"] == 12.5
         assert c.get("/api/events").status_code == 200 and isinstance(c.get("/api/observations").json(), list)
+        r = c.post("/api/chat", json={"session_id": "s", "question": "How many incidents today?"}).json()
+        assert r["how"]["mode"] == "template" and r["answer"] and "filters" in r, r                       # P4
+        assert c.post("/api/chat", json={"question": ""}).status_code == 400 and c.get("/api/events?q=zzqx").json() == []
         assert all(o["thumb_path"] is None for o in c.get("/api/observations").json() if o["category"] == "normal")
         # upload rules (v1.9 conditions): bad extension 400, path stripped, real clip -> new camera, removable
         assert c.post("/api/cameras/upload?name=x.exe", content=b"1").status_code == 400

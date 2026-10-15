@@ -92,6 +92,8 @@ class Pipeline:
             self.events.tick(down_since=self.down_since)
 
     def run_call(self, req):
+        if "fn" in req:                                     # P2 chat call (app.chat): runs its own text request
+            return req["fn"](req)
         cam, det = req["cam"], self.dets.get(req["cam"])
         if det is None:                                     # camera removed while the request waited
             return

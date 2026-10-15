@@ -1,5 +1,6 @@
 """SQLite (WAL) store for observations and events (SPEC §8, §5a step 9). JSON-valued columns are stored as JSON text.
-The FTS5 tables are created here (they are part of the §8 schema); keeping them in sync and searching them is P4 (D53)."""
+The FTS5 tables (§8) are external-content tables: triggers keep them in sync, and every open rebuilds them once (rows
+written before the triggers existed). Chat searches them (P4, D53)."""
 import json
 import sqlite3
 import threading
@@ -21,6 +22,22 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_evt_cam_ts ON events(camera_id, start_ts);
 CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(summary, category, content='events', content_rowid='id');
 CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(summary, content='observations', content_rowid='id');
+CREATE TRIGGER IF NOT EXISTS events_ai AFTER INSERT ON events BEGIN
+  INSERT INTO events_fts(rowid, summary, category) VALUES (new.id, new.summary, new.category); END;
+CREATE TRIGGER IF NOT EXISTS events_ad AFTER DELETE ON events BEGIN
+  INSERT INTO events_fts(events_fts, rowid, summary, category) VALUES ('delete', old.id, old.summary, old.category); END;
+CREATE TRIGGER IF NOT EXISTS events_au AFTER UPDATE OF summary, category ON events BEGIN
+  INSERT INTO events_fts(events_fts, rowid, summary, category) VALUES ('delete', old.id, old.summary, old.category);
+  INSERT INTO events_fts(rowid, summary, category) VALUES (new.id, new.summary, new.category); END;
+CREATE TRIGGER IF NOT EXISTS obs_ai AFTER INSERT ON observations BEGIN
+  INSERT INTO observations_fts(rowid, summary) VALUES (new.id, new.summary); END;
+CREATE TRIGGER IF NOT EXISTS obs_ad AFTER DELETE ON observations BEGIN
+  INSERT INTO observations_fts(observations_fts, rowid, summary) VALUES ('delete', old.id, old.summary); END;
+CREATE TRIGGER IF NOT EXISTS obs_au AFTER UPDATE OF summary ON observations BEGIN
+  INSERT INTO observations_fts(observations_fts, rowid, summary) VALUES ('delete', old.id, old.summary);
+  INSERT INTO observations_fts(rowid, summary) VALUES (new.id, new.summary); END;
+INSERT INTO events_fts(events_fts) VALUES ('rebuild');
+INSERT INTO observations_fts(observations_fts) VALUES ('rebuild');
 """
 JSON_COLS = {"probs", "track_ids", "timing", "keyframe_paths"}
 OBS_COLS = ["camera_id", "ts", "category", "subtype", "confidence", "probs", "summary", "people_count", "trigger",
@@ -69,7 +86,8 @@ class DB:
 if __name__ == "__main__":
     import tempfile
     from pathlib import Path
-    db = DB(Path(tempfile.mkdtemp()) / "t.db")
+    tmp = Path(tempfile.mkdtemp()) / "t.db"
+    db = DB(tmp)
     assert db.con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     eid = db.insert("events", {"camera_id": "cam1", "category": "fighting", "severity": "critical", "start_ts": 1.0,
                                "peak_confidence": 0.9, "track_ids": [3, 5], "status": "open"})
@@ -80,6 +98,9 @@ if __name__ == "__main__":
     assert e["track_ids"] == [3, 5] and e["n_obs"] == 2 and e["status"] == "closed" and e["seeded"] == 0, e
     assert o["probs"]["fighting"] == 0.9 and o["event_id"] == eid and o["timing"]["t_capture"] == 1.0, o
     db.insert("events", {"camera_id": "cam9", "category": "normal", "start_ts": 0.0, "seeded": 1})
+    fts = lambda q: [r["rowid"] for r in db.rows("SELECT rowid FROM events_fts WHERE events_fts MATCH ?", (q,))]
+    assert fts("shoving") == [eid] and fts("fighting") == [eid], fts("shoving")   # insert + update kept in sync
     db.reset_live()
     assert [r["camera_id"] for r in db.rows("SELECT camera_id FROM events")] == ["cam9"]
+    assert fts("shoving") == [] and DB(tmp).rows("SELECT count(*) n FROM events_fts")[0]["n"] == 1   # delete + reopen
     print("db self-check ok")

@@ -1,0 +1,31 @@
+question,intent,ids,covers
+Show all events today,list,13 14 15 16 17 18 19 20 21 22 23,list; time
+How many fights were there?,count,7 14 16,count; dismissed #24 excluded
+How many incidents in the last hour?,count,20 21 22 23,count; time
+What was the latest incident?,latest,23,latest
+When was the last fire?,latest,18,latest; category
+Tell me about event 15,detail,15,detail
+Details of #7,detail,7,detail
+Any tailgating in the lobby?,list,2 20,camera name; category
+List falls on the loading dock,list,19,camera name; synonym
+Show events from the parking lot yesterday,list,3 7 10,camera name; time
+What happened between 2 and 3 am?,summary,15 16 17,summary; time
+Summarise the incidents in the lobby today,summary,15 16 20 23,summary; camera name; time
+Show anything in the last 10 minutes,list,22 23,time
+Find the man in the blue jacket,list,15 16,keyword
+Any events involving a forklift?,list,6 14,keyword
+Show smoke in the server room,list,18,camera name; subtype
+How many events on camera 9?,count,none,trap: wrong camera id
+Any fights on the rooftop camera?,list,none,trap: wrong camera name
+What did the man in red do?,summary,none,trap: no such person
+Tell me about event 999,detail,none,trap: no such event
+Were there any fights in the server room?,list,none,trap: only a dismissed event
+Show the delivery van,list,none,keyword: observation only (no event)
+Any loitering since 9 pm yesterday?,list,13,time; subtype
+What happened at 4:20 am?,summary,19,summary; time
+How many incidents last night?,count,11 12 13 14 15 16 17 18 19 20 21 22 23,count; time
+Give me an overview of the parking lot,summary,3 7 10 13 17 21,summary; camera name
+List theft,list,10,subtype
+Show weapons,list,15,subtype synonym
+Which camera had a person down?,list,8 19 23,category phrase
+Any glass broken near the barrier?,list,21,keyword + category
