@@ -34,7 +34,7 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-2 | Ingest the **webcam** (incl. iPhone via Continuity Camera, which appears as a webcam) | R1 |
 | FR-3 | Ingest an **HTTP/RTSP stream URL** (Pixel "IP Webcam", RTSP cameras); auto-reconnect | R1 |
 | FR-4 | Re-stream video files as RTSP via MediaMTX (simulated IP cameras) | F |
-| FR-5 | **Upload a video in the UI → it becomes a new camera** *(proposed, pending approval)* | F |
+| FR-5 | **Upload a video in the UI → it becomes a new camera** (approved, D26). Drag-and-drop or file picker; mp4/mov/avi/mkv, ≤ 500 MB; plays once at real-time speed; removable | R1 |
 | FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone) | R1 |
 | FR-7 | Gate rules: `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person) | R1: person_down, crowd, scene_change · F: all |
 | FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s | R1 |
@@ -274,8 +274,8 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`) are stored as JSON
 |---|---|---|
 | GET | `/api/cameras` | `[{id, name, source_type, status, fps, has_door_zone}]` |
 | POST | `/api/cameras` | add a source `{name, source}` → camera *(F)* |
-| POST | `/api/cameras/upload` | multipart video → new camera *(FR-5, pending)* |
-| DELETE | `/api/cameras/{id}` | remove a camera *(F)* |
+| POST | `/api/cameras/upload` | multipart video → new camera `{id, name, status}` (FR-5) |
+| DELETE | `/api/cameras/{id}` | remove a camera (R1, needed for FR-5) |
 | GET | `/stream/{camera_id}` | MJPEG live view with overlays |
 | GET | `/api/events?camera=&category=&from=&to=&status=&q=&limit=` | `[Event]` |
 | GET | `/api/events/{id}` | `Event` + its observations |
@@ -419,5 +419,5 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 
 ## 16. Pending decisions (do not block the build)
 1. ~~`suspicious_activity` severity~~: resolved, all critical (E-10); subtype recorded so a split can be switched on in config.
-2. FR-5 video upload as a camera: Claude recommends yes (judges may ask to test their own clip). **Team: yes/no?**
+2. ~~FR-5 video upload~~: resolved, yes, in Round 1 (D26).
 3. GGUF vs MLX build of Qwen3.5-4B, and whether we must drop to the 2B: decided by a 10-min latency test after download.
