@@ -35,6 +35,7 @@ vlm:
   relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 }
   think: false
   keep_alive: -1
+  num_ctx: 4096                  # fixed on EVERY call (vision + chat): a changing num_ctx makes Ollama reload the model (D38)
   parallel_slots: 1
 
 gate:
