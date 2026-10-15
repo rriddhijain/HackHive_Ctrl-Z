@@ -90,7 +90,7 @@ Format: **options** → **⭐ recommendation (why)** → `Decision:` line for yo
 - Is there a mid-point review or checkpoint? When?
 - Final judging: live demo? slides? code walkthrough? Q&A? **How many minutes?**
 - What must be submitted: repo link, video, report PDF, deck?
-- `Decision:` Ends **the morning of Sat 17 Oct 2026**; **the clock HAS started** ✅. ⚠️ Still needed: **exact end time**, judging format/length, submission items (the plan's freeze times depend on them).
+- `Decision:` ✅ Ends **Sat 17 Oct 2026, 08:00 IST** (so it started ~Thu 15 Oct 08:00). Judging = **in-person presentation to the judges** (live demo + slides). Still useful to know: presentation length, whether there's Q&A, and whether judges may bring their own videos.
 
 **Q3 🔴 Is building before the hackathon allowed?** (Writing code, or only research/downloads?)
 - A: Code allowed before → Claude builds the whole MVP before day 1 and the 48 h go to testing.
@@ -242,7 +242,7 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
 
 - Add, remove or split anything? (e.g., a separate `weapon` category = critical? `vandalism` separate?)
 - ⭐ Keep these 7. More categories = lower accuracy and more labeling. Subtypes (e.g. "weapon") go inside the summary text.
-- `Decision:` ✅ Approved, **plus an 8th category `property_damage` (proposed; team to confirm)**:
+- `Decision:` ✅ Approved, **plus an 8th category `property_damage` (confirmed by the team, D18)**:
 
 | Category | What counts | Severity | Audible |
 |---|---|---|---|
@@ -254,6 +254,14 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
   - **Detection gap + fix:** falling objects often involve no person, so none of the YOLO gate rules fire, and we'd wait up to 3 s for the baseline check. We add a cheap **"sudden scene change" gate**: a burst of pixel motion in a region with no person in it (plain OpenCV, ~1 ms) triggers the VLM immediately.
   - **Data:** UCF-Crime *Vandalism* clips + self-filmed staged clips (topple a stack of boxes, knock a chair over, drop a box of items, push a bin over; cheap and safe, ~15 clips) + Pexels.
   - **Cost:** +1 class to label (~20 clips) and a small risk to macro F1. Worth it: it matches a facility-management/building-safety use case, and most teams won't have it.
+- **Severity of `suspicious_activity`:** the team chose **critical** (D19). Claude's concern: this category includes loitering and abandoned bags, which happen often and are frequently false alarms. Making all of it critical (with a sound alert) causes alert fatigue, and in the live demo it could keep beeping at harmless scenes. **Claude recommends a split by subtype**: the VLM adds a `subtype` field (only ~3 extra output tokens) and severity follows it:
+
+  | Subtype | Severity |
+  |---|---|
+  | `weapon`, `theft`, `trespass` | **critical** |
+  | `loitering`, `abandoned_object`, `other` | medium |
+
+  Severity affects only alerting and the UI, not classification accuracy. *Team: keep "all critical" or adopt the split?*
 
 **Q17 🟡 How many cameras simultaneously in the demo?**
 - ⭐ 4 on a ≥24 GB Mac, 2–3 on 16 GB. Claude measures the real limit on day 0.
@@ -514,6 +522,10 @@ detector: { model: "yolo11s", fps: 10, imgsz: 640, conf: 0.35, device: "mps" }
 | D15 | 2026-10-15 | The 48 h clock has started; ends the morning of 17 Oct (exact time TBD) | Team | Q2 |
 | D16 | 2026-10-15 | Categories (Q16) + must-have/stretch lists (Q23) approved; `property_damage` proposed as an 8th category with vandalism moved into it, plus a scene-change gate | Team / Claude | team to confirm property_damage |
 | D17 | 2026-10-15 | Cameras: iPhone 15 (Continuity, USB) at the door, Pixel 10 (IP Webcam) as a network camera, webcam for live, recorded videos for incidents | Team | Q9 |
+| D18 | 2026-10-15 | `property_damage` confirmed as the 8th category; vandalism moves into it; scene-change gate added | Team | Q16 |
+| D19 | 2026-10-15 | `suspicious_activity` severity = critical (Claude recommends a subtype split; awaiting team) | Team | Q16 |
+| D20 | 2026-10-15 | Deadline Sat 17 Oct 08:00 IST; judging = in-person presentation (live demo + slides) | Team | Q2/Q29. Schedule in PLAN.md |
+| D21 | 2026-10-15 | No downloads/installs without the captain's explicit confirmation | Captain | — |
 | D6 | 2026-10-15 | Evaluation criteria: summarisation, incident classification, chatbot interface, approach + workflow demonstration, implementation. **Major: latency and accuracy, which must be best-in-class.** | Organisers | Added the Workflow view, live scene summary and digest to the must-haves; added Q33–Q35 |
 
 ---
