@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.2 (2026-10-15 22:20 IST): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.3 (2026-10-15 23:00 IST): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -10,7 +10,7 @@
 
 Honeywell Problem Statement 3: a **fully local** system that ingests live or simulated video, detects and tracks objects, uses an open-source vision-language model (VLM) to **summarise** what's happening, **classifies** incidents into predefined categories with confidence, **stores** each event (timestamp, camera, category, summary, key frame), and lets users **query** the stored events in natural language through a chatbot.
 
-**Constraints (hard):** open-source/open-weight models only, downloaded and run on the machine · no cloud APIs, no API keys · runs on a consumer laptop (demo machine: Apple M4, 16 GB) · must work offline.
+**Constraints (hard):** open-source/open-weight models only, downloaded and run on the machine · no cloud APIs, no API keys · runs on a consumer laptop (**demo machine: the team's Apple M5 MacBook, 16 GB**; development and P0 benchmarks on a MacBook Air M4, 16 GB, and every number in the deck is re-measured on the M5) · must work offline.
 
 ## 2. Evaluation criteria → how we meet them
 
@@ -32,13 +32,13 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 |---|---|---|
 | FR-1 | Ingest **video files** played at real-time speed, looped | R1 |
 | FR-2 | Ingest the **webcam** (incl. iPhone via Continuity Camera, which appears as a webcam) | R1 |
-| FR-3 | Ingest an **HTTP/RTSP stream URL** (Pixel "IP Webcam", RTSP cameras); auto-reconnect | R1 |
+| FR-3 | Ingest an **HTTP/RTSP stream URL** (Pixel "IP Webcam", RTSP cameras); auto-reconnect. **Built last in R1, dropped first at the 02:00 go/no-go; optional in the demo** (venue networking) | R1 (last) |
 | FR-4 | Re-stream video files as RTSP via MediaMTX (simulated IP cameras) | F |
-| FR-5 | **Upload a video in the UI → it becomes a new camera** (approved, D26). Drag-and-drop or file picker; mp4/mov/avi/mkv, ≤ 500 MB; plays once at real-time speed; removable | R1 |
+| FR-5 | **Upload a video in the UI → it becomes a new camera** (approved, D26). Drag-and-drop or file picker; mp4/mov/avi/mkv, ≤ 500 MB; plays once at real-time speed; removable. **Built last in R1, dropped first at the 02:00 go/no-go** (D32) | R1 (last) |
 | FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone) | R1 |
 | FR-7 | Gate rules: `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person) | R1: person_down, crowd, scene_change · F: all |
 | FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s | R1 |
-| FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. A running call is never interrupted; the next free slot goes to the highest priority. Ollama runs with 2 parallel slots if the latency test shows that's faster overall, otherwise 1 | R1 |
+| FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. **Preemption:** a ① arriving while ③/④ runs **cancels** that call (closes the stream; Ollama stops it) and starts at once; a running ② chat call is cancelled and auto-retried right after. A running ① is never cancelled, but if another ① is waiting, the running one **stops its summary after ~15 words** and the rest is completed later at ④. A ③ baseline whose category is `normal` with c ≥ 0.80 stops after a ~12-word summary. 1 Ollama slot (D30) | R1 |
 | FR-8b | Chat avoids the model where possible: a rule-based parser handles camera/category/time first; the model is called only if the rules can't parse the question, or for "summarise" answers. Count/list/latest answers are templates (no model call) | R1 |
 | FR-8c | Each chat answer is a snapshot stamped "as of HH:MM:SS"; incidents that open while the user is chatting appear in the feed live, and the chat shows a "N new incidents since your question" chip | F |
 | FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3) with token log-probabilities; **the category and its confidence are known from the first category token**, so the alert decision happens there | R1 |
@@ -53,7 +53,7 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-17 | Digest: "summarise the last N minutes on camX" | F |
 | FR-18 | Chat: filters by camera/category/time; list/count/latest/summary intents; grounded answers with clickable event cards | R1 (basic) · F (full) |
 | FR-19 | Chat follow-ups ("what about cam1?") + "look again" (VLM re-reads a stored key frame) | F |
-| FR-20 | Report tab: accuracy table, confusion matrix, latency table, gate ablation, memory chart | F (preliminary numbers for R1 if ready) |
+| FR-20 | Report tab: accuracy table, confusion matrix, latency table, **gate yield + gate ablation** (time-to-alert with gates vs baseline-only), **field-order ablation** (category first vs last), calibration chart, memory chart | F (preliminary numbers for R1 if ready) |
 | FR-21 | Benchmark harness (accuracy, latency, ablation, chat test) | F |
 | FR-22 | One-command launcher (`./run_demo.sh`): models → warm-up → app → browser | R1 |
 | FR-23 | Seeded history (real pipeline output on real clips, timestamps shifted, `seeded=1`) so the chat has data | R1 |
@@ -64,9 +64,9 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | ID | Requirement | Target |
 |---|---|---|
 | NFR-1 | **Latency** | YOLO ≤ 40 ms/frame · VLM call p50 ≤ 1.5 s, p95 ≤ 2.5 s · **time-to-alert p95 ≤ 2.0 s** (one camera, empty queue; P0 measured 1.74/2.00 s in the model alone) · time-to-full-summary p95 ≤ 4 s · keep-up 100 % |
-| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · calibration error (ECE) ≤ 0.10 · chat filters ≥ 90 %, answers 100 % grounded |
-| NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: 1st camera ≤ 2.5 s, **2nd camera ≤ 4.0 s** p95 (calls run one at a time on this GPU, P0/D30); chat answer ≤ 5 s. Measured by a stress test |
-| NFR-3 | Efficiency | VLM calls ≥ 90 % fewer than "VLM on every frame" |
+| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · calibration error (ECE) ≤ 0.10 (reported-only if the fallback in E-1a is active) · chat filters ≥ 90 %, answers 100 % grounded |
+| NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: 1st camera ≤ 2.5 s, **2nd camera ≤ 4.5 s** p95, reported as measured (calls run one at a time on this GPU, P0/D30; the running call's summary is cut short when another incident waits); chat answer ≤ 5 s. Measured by a stress test |
+| NFR-3 | **Gates earn their keep** | **Gate ablation:** time-to-alert p95 with gates on is clearly lower than baseline-only (target ≥ 40 % lower; without gates an incident waits for the next 3 s tick) · **Gate yield** (% of model calls that were gate-triggered) reported. *(Replaces "calls saved vs every frame", which the 3 s timer alone satisfies, D31)* |
 | NFR-4 | Resources | Peak memory ≤ 75 % of RAM; no swap thrash; 3–4 cameras on the M4 |
 | NFR-5 | Stability | 30-min soak test, 3 cameras: no crash, no latency drift |
 | NFR-6 | Local & open | Every model open-weight and local; works with Wi-Fi off; no CDN in the frontend |
@@ -106,11 +106,11 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | # | Step | Where | What exactly happens | Time budget |
 |---|---|---|---|---|
 | 1 | **Capture** | `ingest.py`, 1 thread/camera | Reads frames at the source's rate (webcam 30 FPS; files played at their native FPS against the wall clock). **Overwrites a single "latest frame" slot**, stamped `t_capture = time.time()`. No queue | — |
-| 2 | **Detect** | `detect.py`, 1 thread/camera | Every 100 ms (10 FPS) takes the latest slot *if it's newer than the last one processed* (otherwise waits). YOLO + ByteTrack (own model instance per camera). Appends `(t_capture, frame resized to 640 px wide, tracks)` to the camera's **ring buffer (last 4 s ≈ 40 entries)**, updates per-track features (aspect ratio, speed, dwell, door-zone entries), encodes the annotated JPEG for the live view | ≤ 40 ms |
-| 3 | **Gate** | `gate.py`, same thread | Runs every rule on the buffer (~1 ms) → zero or more Triggers (§7.4). `scene_change` = mean absolute difference between the current and the 0.5 s-old frame (both 160 px grey), **ignoring person boxes**, above `scene_change_frac` | ~1 ms |
-| 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made. A request holds only `{camera_id, trigger, created_at}`; **no frames** | — |
-| 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **The mosaic is built now, from the freshest 4 buffer frames** at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter), so frames are never stale. A P1 whose trigger is > 4 s old is downgraded to P3 | queue wait 0–1.5 s under contention |
-| 6 | **VLM call** | `vlm.py` | `POST /v1/chat/completions` with `stream: true`, JSON schema (§7.3), `temperature 0`, `max_tokens 100`, **thinking disabled**, model kept loaded (`keep_alive: -1`). Tokens are parsed incrementally | measured in the latency test |
+| 2 | **Detect** | `detect.py`, 1 thread/camera | Every 100 ms (10 FPS) takes the latest slot *if it's newer than the last one processed* (otherwise waits). YOLO + ByteTrack (own model instance per camera). Appends `(t_capture, frame resized to 640 px wide, tracks)` to the camera's **ring buffer (last 4 s ≈ 40 entries)**, updates per-track features (aspect ratio, speed in box heights/s, dwell, door-zone entries); all durations from `t_capture` differences, never frame counts, encodes the annotated JPEG for the live view | ≤ 40 ms |
+| 3 | **Gate** | `gate.py`, same thread | Runs every rule on the buffer (~1 ms) → zero or more Triggers (§7.4); rules in §6.6. `scene_change` = mean absolute difference between the current and the 0.5 s-old frame (both 160 px grey), **ignoring person boxes**, above `scene_change_frac` | ~1 ms |
+| 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made. A **P3** request holds only `{camera_id, created_at}`. A **P1** request **freezes its 4 mosaic frames at trigger time** (the incident moment, ~100 KB) plus the hints; up to **3 waiting P1s per camera** (oldest dropped only beyond that) | — |
+| 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **P3/P4:** the mosaic is built now from the freshest 4 buffer frames at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter). **P1:** uses its frozen trigger-time frames, so a delayed P1 still analyses the incident moment. **P1s are never downgraded**; one that waited > 4 s is flagged `delayed` | queue wait 0–1.5 s under contention |
+| 6 | **VLM call** | `vlm.py` | **Ollama native `POST /api/chat`** (verified to return `logprobs`/`top_logprobs` *with* JSON-schema decoding active; the alternatives are already restricted to legal tokens) with `stream: true`, `format` = JSON schema (§7.3), `temperature 0`, `num_predict 80`, `think: false`, `keep_alive: -1`. **Prompt order fixed for prefix caching:** identical system prompt → image → hints; `prompt_eval_cached_count` is logged per call and shown in the Workflow view. Tokens are parsed incrementally | measured in the latency test |
 | 7 | **Early decision** | `events.py` | As soon as the **first token of the category value** arrives (`t_category`, ~8 tokens): its log-probabilities give the probability of every category (§6.5) → cross-check (§12a E-7) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately**, with the summary shown as "…" | **time-to-alert target ≤ 2.0 s p95** |
 | 8 | **Summary stream** | `events.py` → SSE | Summary tokens are pushed as `event_update` at most every 200 ms, so the card text types itself live | — |
 | 9 | **Persist** | `db.py` | At `t_vlm_done`: write the Observation (always, including `normal`); attach it to the event if one opened or updated; save a 320 px thumbnail; if it's the event's new peak, save the full-resolution newest frame + the mosaic as key frames. SSE `observation` (updates the camera's "now" line) + `trace` (Workflow view) | ≤ 20 ms |
@@ -201,6 +201,17 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 
 An event's `peak_confidence` is the highest `c` it reached. The full `probs` map is stored on every observation.
 - **Cooldown:** per (camera, category) while an event is open, not per camera.
+
+### 6.6 Gate rules (motion)
+Shared conventions: **speed = centroid displacement over the last 0.3 s ÷ elapsed time ÷ box height** (body heights per second, so a person far from the camera scores the same as one close up); every duration is measured from `t_capture` differences, so the thresholds hold if the detector falls below 10 FPS; tracks younger than `min_track_age_s` are ignored (a ByteTrack ID switch makes a fresh ID whose first jump looks like a speed spike).
+
+| Rule | Fires when (defaults in §10) | Trigger |
+|---|---|---|
+| `person_down`: fast drop | The top of a box moves down by ≥ `drop_frac` (0.4) × its height within `drop_window_s` (0.5 s). Fires *during* the fall instead of after it; sitting or bending can fire it too, which costs one VLM call | `gate:person_down` |
+| `person_down`: horizontal | Box width ≥ `down_ratio` (1.2) × height on every frame for `down_hold_s` (0.5 s). Catches falls the drop rule misses (slow slump, person enters already down) | `gate:person_down` |
+| `fighting` | Two tracked people whose boxes overlap, with either moving at ≥ `fight_speed` (1.0 body heights/s); normal walking is ≈ 0.8 | `gate:fighting` |
+
+Both `person_down` variants emit the same rule name, so the scheduler's per-camera dedupe (§5a step 4) merges them. Thresholds are tuned on the staged and look-alike clips (sitting, bending, hugging). Implemented in `app/gate.py`.
 
 ## 7. Data contracts
 
@@ -315,7 +326,7 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 ```json
 { "cameras": { "cam1": { "capture_fps": 30, "det_fps": 10, "yolo_ms_p50": 18, "keep_up": 1.0, "status": "live" } },
   "vlm": { "model": "qwen3.5:4b", "p50_ms": 1100, "p95_ms": 1900, "alert_p95_ms": 950, "queue_depth": 0,
-           "calls_total": 412, "calls_saved_pct": 96.6, "errors": 0 },
+           "calls_total": 412, "gate_yield_pct": 31.0, "cache_hit_tokens": 212, "preemptions": 4, "errors": 0 },
   "system": { "mem_used_pct": 61, "uptime_s": 3600 } }
 ```
 
@@ -337,13 +348,13 @@ cameras:
   - { id: cam3, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
   - { id: cam4, name: "Warehouse (recorded)", source: "data/demo/warehouse.mp4" }
 detector: { model: yolo11s.pt, fps: 10, imgsz: 640, conf: 0.35, device: mps }
-vlm:  { base_url: "http://localhost:11434/v1", model: "qwen3.5:4b-mlx", stream: true, temperature: 0, logprobs: true, top_logprobs: 10,
+vlm:  { base_url: "http://localhost:11434", endpoint: "/api/chat", model: "qwen3.5:4b-mlx", confidence_source: logprobs   # or "model_field" (fallback), stream: true, temperature: 0, logprobs: true, top_logprobs: 10,
         max_tokens: 80, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 224,
         baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },
         think: false, keep_alive: -1, parallel_slots: 1 }   # 2 slots measured: no gain on this GPU (D30)
 replay: { store_events_on_replay: true, reset_live_tables_on_start: true }
-gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 1.0,
-        scene_change_frac: 0.25 }
+gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 0.5,
+        drop_frac: 0.4, drop_window_s: 0.5, fight_speed: 1.0, min_track_age_s: 0.5, scene_change_frac: 0.25 }
 events: { open_single_critical: 0.70, open_single_other: 0.85, open_window: 0.55, window_n: 3, close_c: 0.40, close_after_s: 8,
           corroborate_boost: 1.15, contradict_factor: 0.5, calibration_T: 1.0,
           rating: { high: 0.80, medium: 0.60 } }
@@ -377,7 +388,9 @@ Every module has a runnable self-check: `uv run python -m app.<module>`.
 - **Time-to-full-summary** = `t_vlm_done − t_capture`
 - **End-to-end** = `t_db_write − t_capture`
 - **Keep-up** = frames processed by YOLO ÷ frames sampled for YOLO
-- **Calls saved** = 1 − (VLM calls ÷ frames sampled for YOLO)
+- **Gate yield** = gate-triggered model calls ÷ all model calls
+- **Gate ablation** = time-to-alert p95, gates on vs `scheduler.mode: periodic` (baseline only), same clips
+- **Field-order ablation** = time-to-alert and macro F1 with `category` first vs last in §7.3
 - **Clip prediction** (accuracy runs) = highest-`peak_confidence` non-`normal` event in the clip, else `normal`
 - **Calibration error (ECE)** = mean |accuracy − confidence| over 10 confidence bins, weighted by bin size, on the test set
 - **Macro F1** over all 9 labels (8 categories + normal), on the **held-out test set**, never used for tuning
@@ -388,7 +401,8 @@ Every module has a runnable self-check: `uv run python -m app.<module>`.
 Each line is a decision. ✋ = decided by Claude; the team can veto.
 
 **Model & contention**
-- **E-1** One model serves vision and chat through one arbiter with priorities P1 incident → P2 chat → P3 baseline → P4 re-look (FR-8a). A running call is never interrupted. ✋
+- **E-1** One model serves vision and chat through one arbiter with priorities P1 incident → P2 chat → P3 baseline → P4 re-look (FR-8a). Preemption rules as in FR-8a. ✋
+- **E-1a** **Confidence fallback:** if log-probabilities are ever unavailable, `confidence_source: model_field` restores a `confidence` field in §7.3 (~6 extra tokens); §6.5's rules are unchanged (they only consume `c`); ECE becomes "reported, not targeted". ✋
 - **E-2** **1 Ollama slot.** 2 slots were tested (P0) and calls still ran one at a time on the M4 GPU, so the arbiter's priority order is what protects incident latency. ✋
 - **E-3** Model stays loaded (`keep_alive: -1`) and gets a warm-up call at startup; a cold load (~5–10 s) must never happen during the demo. ✋
 - **E-4** Qwen3.5 "thinking" mode is **off** for every call (it would add seconds). ✋
