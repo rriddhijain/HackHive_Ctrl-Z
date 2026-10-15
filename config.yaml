@@ -56,6 +56,8 @@ gate:
   horizontal_recheck_s: 30       # after a confident-normal verdict, a still-horizontal track re-triggers only after this (D61)
   fast_drop_max_narrow: 0.20     # fast drop ignored if the box got >20 % narrower (occlusion/walking away, D61); 1.0 = guard off
   fight_speed: 0.6               # body heights per second; 1.0 missed 3 of 6 dev fights (nano misses blurred fighters, D64)
+  fight_min_height_ratio: 0.5    # the pair's boxes within 2x height (same depth): people far apart overlap only in the picture (D72)
+  fight_contact_s: 0.5           # the pair overlapped within this; a shove's fast part comes after the boxes part (D72)
   min_track_age_s: 0.5
   scene_change_frac: 0.25
 

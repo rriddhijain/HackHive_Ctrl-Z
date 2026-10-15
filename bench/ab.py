@@ -4,6 +4,8 @@
   uv run python -m bench.ab --gate     plain yolo26n vs yolo26n-pose for the gates (FR-6a): detector replayed offline
                                        on every clip at 10 FPS in clip time; per clip: which rules fired, when, and the
                                        track values behind the ones that didn't (fight pair speed, overlap, persons seen)
+  uv run python -m bench.ab --gate --check   gate regression check (D72), CPU only, ~2 min; exit 1 on failure.
+                                       Every gate or threshold change must pass it (CLAUDE.md)
   uv run python -m bench.ab --tiles    2x2 mosaic vs person-crop tile 4 (FR-9c) vs the 4 frames as separate images
   uv run python -m bench.ab --run a.mp4 [b.mp4 ...] [--seconds N] [--tag T]   one pipeline run (several clips = several
                                        cameras at once; --seconds loops them): per-camera rows -> ab_run_<tag>.csv
@@ -27,7 +29,7 @@ from ultralytics import YOLO
 
 from app import vlm
 from app.config import CFG, ROOT
-from app.gate import _old_enough, gate, norm_speed
+from app.gate import _old_enough, gate, norm_speed, overlap
 
 V = CFG["vlm"]
 
@@ -40,10 +42,6 @@ def clips():
     from app.pipeline import load_labels
     labels = load_labels()
     return [(p, labels.get(p.name, (p.parent.name, None))[0]) for p in sorted(DEV.glob("*/*")) if p.suffix in (".mp4", ".avi")]
-
-
-def overlap(a, b):
-    return min(a[3], b[3]) > max(a[1], b[1]) and min(a[4], b[4]) > max(a[2], b[2])
 
 
 def replay_gates(path, model_path, cfg=G):
@@ -104,6 +102,83 @@ def test_gate():
             print(rows[-1], flush=True)
     write("gate", rows)
     return rows
+
+
+KNOWN_MISS = {"v026.avi": "D64: nano never detects both fighters, so no gate can fire; only a baseline can catch it"}
+MAX_FALSE_PER_MIN = 2.0   # gate ①s per camera-minute, normal + look-alike clips pooled
+
+
+def check_gates():
+    """--gate --check (D72): the real Detector + Scheduler on every clip in data/dev/ at 10 FPS in clip time, CPU only,
+    every model call answered at once: incident clips as their label, the rest confident normal, so the D61/D64
+    silences act as they do live. Passes when every incident clip's category gate fires from onset − 1 s to onset + 5 s
+    (any time without an onset; so a later look-alike in the clip can't pass for it), as a new ① or merged into one
+    (D72), except KNOWN_MISS, and the normal/look-alike clips together make ≤ MAX_FALSE_PER_MIN ①s per camera-minute."""
+    from types import SimpleNamespace as NS
+    from app.detect import Detector
+    from app.pipeline import load_labels
+    from app.scheduler import Scheduler
+    from app.vlm import GATE_CAT
+
+    class Instant:                                      # the arbiter, every call answered at once
+        cv, running = threading.RLock(), None
+        def __init__(self, on_call): self.on_call = on_call
+        def waiting(self, prio=None, cam=None): return []
+        def duty(self): return 0.0
+        def submit(self, r): self.on_call(r); return r
+
+    onsets = {k: v[1] for k, v in load_labels().items()}
+    fails, n_false, minutes = [], 0, 0.0
+    for path, label in clips():
+        det, fired = Detector(NS(id="chk", door_zone=None, watch_zone=None)), []
+
+        def on_call(r):
+            newest = det.buffer[-1]
+            if r["prio"] == 3:
+                return sched.note_call("chk", newest)
+            fired.append((round(newest[0], 1), r["rule"] + (":" + r["kind"] if r.get("kind") else "")))
+            if label == "normal":                       # confident-normal verdict
+                if r.get("kind") == "horizontal":
+                    sched.silence("chk", r["track_ids"], newest[0])
+                if r["rule"] == "fighting":
+                    sched.silence_pair("chk", r["track_ids"], det.person_hists(), newest[0])
+        sched = Scheduler(Instant(on_call), NS(is_open=lambda cam, cat: False, has_open=lambda cam: False))
+        fires, trigger = [], sched.trigger                 # every gate fire, whether it makes a ① or merges into one
+        sched.trigger = lambda d, tr, now: fires.append((round(now, 1), tr["rule"])) or trigger(d, tr, now)
+        cap = cv2.VideoCapture(str(path))
+        fps, i = cap.get(cv2.CAP_PROP_FPS) or 30, 0
+        step = max(1, round(fps / DET["fps"]))
+        while (got := cap.read())[0]:
+            if i % step == 0:
+                det._process(got[1], i / fps, i)
+                sched.on_frame(det)
+            i += 1
+        dur, on = i / fps, onsets.get(path.name)
+        if label == "normal":
+            n_false += len(fired); minutes += dur / 60
+            verdict = f"{len(fired) / (dur / 60):.1f} ①/min"
+        elif label not in GATE_CAT.values():
+            verdict = "no gate for this category"
+        elif any(GATE_CAT.get(r) == label and (on is None or on - 1 <= t <= on + 5) for t, r in fires):
+            verdict = "fires"
+        elif path.name in KNOWN_MISS:
+            verdict = "KNOWN MISS: " + KNOWN_MISS[path.name]
+        else:
+            verdict = "MISSED"; fails.append(path.name)
+        starts, last = {}, {}                           # gate fire episodes (> 1 s apart), per rule
+        for t, r in fires:
+            if t - last.get(r, -9) > 1.0:
+                starts.setdefault(r, []).append(t)
+            last[r] = t
+        print(f"{path.name:<22} {label:<9} {dur:5.1f} s  onset {on}  {verdict:<12} fires {starts}  ①s {fired[:8]}", flush=True)
+    rate = n_false / minutes if minutes else 0.0
+    print(f"normal + look-alike clips: {n_false} gate ①s in {minutes:.1f} camera-min = {rate:.2f}/min "
+          f"(limit {MAX_FALSE_PER_MIN})")
+    if rate > MAX_FALSE_PER_MIN:
+        fails.append(f"false-trigger rate {rate:.2f}/min")
+    print("gate check", "FAILED: " + ", ".join(fails) if fails else "ok")
+    if fails:
+        raise SystemExit(1)
 
 
 def pct(xs, q):
@@ -271,7 +346,7 @@ def write(test, rows):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    for f in ("model", "gate", "tiles"):
+    for f in ("model", "gate", "tiles", "check"):
         ap.add_argument("--" + f, action="store_true")
     ap.add_argument("--run", nargs="+"); ap.add_argument("--seconds", type=float); ap.add_argument("--tag", default="x")
     ap.add_argument("--duty-target", type=float, help="override vlm.duty_target (e.g. 1.01 = no back-off, the 'before')")
@@ -279,7 +354,7 @@ if __name__ == "__main__":
     if a.duty_target is not None:
         V["duty_target"] = a.duty_target
     if a.gate:
-        test_gate()
+        check_gates() if a.check else test_gate()
     if a.model:
         test_model()
     if a.tiles:

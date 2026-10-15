@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 // Every number shown here comes from the backend (SSE §9.2, /api/*); the UI only formats it.
@@ -12,8 +12,6 @@ const name = (c) => c?.replaceAll("_", " ");
 const post = (u, body) => fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const STATUS = { connecting: "connecting", live: "live", reconnecting: "reconnecting", down: "down", ended: "finished", stopped: "stopped" };
 const STATUS_COLOR = { live: "text-emerald-400", ended: "text-sky-400", down: "text-red-400" };
-// MJPEG tiles hold one HTTP/1.1 connection each (browser cap: 6 per host): load them via the other loopback name
-const STREAM = `${location.protocol}//${location.hostname === "localhost" ? "127.0.0.1" : location.hostname === "127.0.0.1" ? "localhost" : location.hostname}:${location.port}`;
 
 let audio = null;
 function beep() {
@@ -204,7 +202,7 @@ function Tile({ c, cm, onRemove, evs }) {
         </span>
         <button onClick={remove} title="Stop and release this source" className="text-zinc-400 hover:text-red-400">■</button>
       </div>
-      <img src={`${STREAM}/stream/${c.id}`} alt={c.name} className="aspect-video w-full bg-black object-contain" />
+      <Live id={c.id} alt={c.name} />
       <div className="px-2 py-1 text-xs">
         <span className="text-zinc-500">now: </span>{cm?.now?.text ?? "—"}
         <span className="text-zinc-500"> · as of {ist(cm?.now?.ts)} ({cm?.now?.source ?? "—"})</span>
@@ -212,6 +210,34 @@ function Tile({ c, cm, onRemove, evs }) {
       {status === "ended" && <Result c={c} evs={evs.filter((e) => e.status !== "dismissed")} />}
     </div>
   );
+}
+
+// Live view at ~10 fps, double-buffered (D72): each snapshot is fetched whole, checked for the JPEG start/end
+// markers, decoded off-screen, and only then swapped in. A failed or truncated frame is skipped, so the tile keeps
+// the last good one and never paints a half-loaded (grey) frame, which Safari did with the MJPEG stream.
+function Live({ id, alt }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let alive = true, shown = null;
+    const tick = async () => {
+      const t0 = performance.now();
+      let url = null;
+      try {
+        const r = await fetch(`/snapshot/${id}`, { cache: "no-store" });
+        const b = new Uint8Array(await r.arrayBuffer()), n = b.length;
+        if (r.ok && n > 4 && b[0] === 0xff && b[1] === 0xd8 && b[n - 2] === 0xff && b[n - 1] === 0xd9) {
+          url = URL.createObjectURL(new Blob([b], { type: "image/jpeg" }));
+          const im = new Image(); im.src = url; await im.decode();
+          if (alive && ref.current) { ref.current.src = url; if (shown) URL.revokeObjectURL(shown); shown = url; url = null; }
+        }
+      } catch { /* keep the last good frame */ }
+      if (url) URL.revokeObjectURL(url);
+      if (alive) setTimeout(tick, Math.max(0, 100 - (performance.now() - t0)));
+    };
+    tick();
+    return () => { alive = false; if (shown) URL.revokeObjectURL(shown); };
+  }, [id]);
+  return <img ref={ref} alt={alt} className="aspect-video w-full bg-black object-contain" />;
 }
 
 function Result({ c, evs }) {   // a clip played once has finished: what it found, against the label if there is one

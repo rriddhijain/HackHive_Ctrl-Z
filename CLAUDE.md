@@ -13,6 +13,7 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - Gates take person tracks only (`Detector.person_hists()`). Images for the VLM are letterboxed, never stretched (D44).
 - Latency is quoted as onset-to-alert (what a judge times), never the model-only number alone (D50).
 - Every module has a runnable self-check: `uv run python -m app.<module>`.
+- Any gate or threshold change (`app/gate.py`, `app/scheduler.py`, `gate:`/`detector:` in `config.yaml`) must pass `uv run python -m bench.ab --gate --check` (D72). Thresholds are tuned on the dev clips only and judged on the test split (P8).
 - Never commit videos, weights or `data/` (gitignored).
 
 ## Layout
@@ -24,4 +25,5 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `uv run python -m bench.latency_test` model latency + contention test
 - `cd web && npm run build` then `uv run python -m app.server` dashboard at http://localhost:8000: boots in Clips mode with nothing running; Clips | Live toggle (`--selfcheck` for the self-check)
 - `uv run python -m scripts.seed_history` seeded demo history for chat (`--remove` deletes it) · `uv run python -m bench.chat_runner` chat question runner (30 questions, temp DB)
+- `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
 - `uv run python -m app.pipeline <clip> [...]` full pipeline on clips: alerts, per-clip right/wrong, onset-to-alert ms, GPU duty (labels from `bench/labels.csv`)

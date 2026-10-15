@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 import psutil
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from fastapi.staticfiles import StaticFiles
 
@@ -325,19 +325,14 @@ def remove(cid: str):
     return {"id": cid, "removed": True}
 
 
-@app.get("/stream/{cid}")
-async def stream(cid: str):
-    if cid not in P.dets:
+@app.get("/snapshot/{cid}")
+def snapshot(cid: str):
+    """The detector's newest annotated JPEG (boxes, ids, zones). The tile polls it at ~10 fps and swaps a frame in
+    only once it has fully loaded (D72): Safari painted half-received MJPEG frames as grey."""
+    det = P.dets.get(cid)
+    if det is None or det.jpeg is None:
         raise HTTPException(404)
-
-    async def frames():                           # MJPEG of the detector's annotated frame (boxes, ids, zones)
-        last = None
-        while (det := P.dets.get(cid)) is not None:
-            if det.jpeg is not None and det.jpeg is not last:
-                last = det.jpeg
-                yield b"--f\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n%s\r\n" % (len(last), last)  # length: painted at once
-            await asyncio.sleep(0.03)
-    return StreamingResponse(frames(), media_type="multipart/x-mixed-replace; boundary=f")
+    return Response(det.jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/media/mosaics/{cid}.jpg")
@@ -459,13 +454,9 @@ def selfcheck():
         time.sleep(1)
         cams = c.get("/api/cameras").json()
         assert len(cams) == 1 and cams[0]["status"] == "live" and not cams[0]["loop"], cams
-        with c.stream("GET", "/stream/cam1") as r:   # one MJPEG frame
-            buf = b""
-            for chunk in r.iter_bytes():
-                buf += chunk
-                if b"\xff\xd9" in buf:
-                    break
-        assert b"Content-Type: image/jpeg" in buf and b"\xff\xd8" in buf, buf[:80]
+        r = c.get("/snapshot/cam1")                  # one whole annotated JPEG (D72)
+        assert r.headers["content-type"] == "image/jpeg" and r.content[:2] == b"\xff\xd8" and r.content[-2:] == b"\xff\xd9"
+        assert c.get("/snapshot/nope").status_code == 404
         # SSE: metrics arrive; an alert pushed through emit() reaches the client within the budget
         got, t_rx = {}, {}
 

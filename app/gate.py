@@ -22,7 +22,7 @@ def wide(s, cfg):
 
 
 DEFAULTS = {"down_ratio": 1.2, "down_hold_s": 0.5, "drop_frac": 0.4, "drop_window_s": 0.5, "fast_drop_max_narrow": 0.2,
-            "fight_speed": 0.6, "min_track_age_s": 0.5}
+            "fight_speed": 0.6, "fight_min_height_ratio": 0.5, "fight_contact_s": 0.5, "min_track_age_s": 0.5}
 
 
 def _h(s):
@@ -80,8 +80,19 @@ def gap(a, b):
     return math.hypot(a[1] + a[3] - b[1] - b[3], a[2] + a[4] - b[2] - b[4]) / (_h(a) + _h(b))
 
 
+def overlap(a, b):
+    return min(a[3], b[3]) > max(a[1], b[1]) and min(a[4], b[4]) > max(a[2], b[2])
+
+
+def touched(hi, hj, since):
+    """The two tracks' boxes overlapped on some frame at or after `since` (both boxes from that same frame)."""
+    at_j = {s[0]: s for s in hj}
+    return any(s[0] in at_j and overlap(s, at_j[s[0]]) for s in hi if s[0] >= since)
+
+
 def fighting(tracks, cfg, skip=()):
-    """(track ids, speed) for the fastest pair of overlapping boxes moving at >= fight_speed, else None.
+    """(track ids, speed) for the fastest pair of similar-height boxes (same depth) that overlapped within the last
+    fight_contact_s, with either moving at >= fight_speed: a shove's fast part comes just after the boxes part (D72).
     skip: pairs (i, j), i < j, silenced after a confident-normal verdict (D64)."""
     ok = {i: h for i, h in tracks.items() if _old_enough(h, cfg)}
     best = None
@@ -89,8 +100,10 @@ def fighting(tracks, cfg, skip=()):
         if (i, j) in skip:
             continue
         a, b = ok[i][-1], ok[j][-1]
-        if min(a[3], b[3]) <= max(a[1], b[1]) or min(a[4], b[4]) <= max(a[2], b[2]):
-            continue  # boxes don't overlap
+        if min(_h(a), _h(b)) < cfg["fight_min_height_ratio"] * max(_h(a), _h(b)):
+            continue  # overlap only in the picture: one stands much further back (D72)
+        if not touched(ok[i], ok[j], max(a[0], b[0]) - cfg["fight_contact_s"]):
+            continue
         v = max(norm_speed(ok[i]), norm_speed(ok[j]))
         if v >= cfg["fight_speed"] and (best is None or v > best[1]):
             best = [i, j], v
@@ -169,6 +182,15 @@ if __name__ == "__main__":
     assert [x["rule"] for x in tr] == ["fighting"] and tr[0]["track_ids"] == [1, 2], tr
     assert gate("cam1", {1: a, 2: [(ti, 130, 100, 180, 300) for ti in t]}, c) == []
     assert gate("cam1", {1: a, 2: b}, c, skip={(1, 2)}) == []          # silenced pair (D64)
+    far_b = [(s[0], s[1], 100, s[3], 180) for s in b]                    # same lunge, box 0.4 as tall: further back (D72)
+    assert gate("cam1", {1: a, 2: far_b}, c) == []
+    # Shove (D72): boxes touch until 0.7 s, then track 2 is pushed away at 3 body heights/s and they no longer overlap.
+    shove = [(ti, x, 100, x + 50, 300) for ti, x in ((ti, 140 + 600 * max(0.0, ti - 0.7)) for ti in t)]
+    assert [x["rule"] for x in gate("cam1", {1: a, 2: shove}, c)] == ["fighting"]
+    early = [(ti, x, 100, x + 50, 300) for ti, x in ((ti, 140 + 300 * max(0.0, ti - 0.4)) for ti in t)]
+    assert gate("cam1", {1: a, 2: early}, c) == []                      # last contact 0.6 s ago: outside fight_contact_s
+    runner = [(ti, 400 + 300 * ti, 100, 450 + 300 * ti, 300) for ti in t]
+    assert gate("cam1", {1: a, 2: runner}, c) == []                     # fast, but never touched
     assert abs(gap(a[-1], b[-1]) - 0.05) < 1e-9   # centroids 10 px apart, 200 px tall
     # Scene change: lights off (whole frame darkens) fires; a person moving (masked out) doesn't.
     lit, dark = np.full((360, 640, 3), 180, np.uint8), np.full((360, 640, 3), 20, np.uint8)

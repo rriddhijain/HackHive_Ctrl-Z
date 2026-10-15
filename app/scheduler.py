@@ -2,14 +2,16 @@
 
 on_frame(det) runs in each camera's detector thread after every frame:
   - gates (person tracks only, D54) + scene_change -> a P1 request with its 4 mosaic frames FROZEN at trigger time,
-    unless that camera already has a P1 for the same rule queued, an event of the rule's category is open there
-    (cooldown), or the camera's last P1 was < 1 s ago. At most 3 waiting P1s per camera (oldest dropped beyond that).
+    unless an event of the rule's category is open there (cooldown) or the camera's last P1 was < 1 s ago.
+    At most ONE P1 per camera in flight (D72): a trigger while that camera's P1 waits refreshes it to the newest frames
+    (same rule: also its hint and tracks); a trigger while it runs is merged into it (counted, not queued). So false
+    triggers never build a backlog, and a camera's newest moment is what its next call sees.
   - baseline: every 3 s (10 s with nobody in view) if no P1 waits anywhere -> a P3 request, unless change-gated:
     no open event, newest frame vs the frame of the camera's last model call MAD < 6, same person track IDs, < 15 s.
     While measured GPU duty (60 s) is above vlm.duty_target, baselines back off to one per camera per 15 s (D66).
     Gate-triggered P1s are never throttled and the arbiter serves them before any queued baseline.
   - a track whose "horizontal" person_down trigger got a confident-normal verdict (someone on a sofa, a close-up) is
-    silenced until its box stops being wide, the track leaves, or horizontal_recheck_s passes (D61).
+    silenced until its box is clearly upright (D72), the track leaves, or horizontal_recheck_s passes (D61).
   - likewise a fight pair (people walking past each other): silenced until either track leaves, their centroid
     distance changes by > PAIR_REARM body heights, or horizontal_recheck_s passes (D64).
 """
@@ -22,6 +24,13 @@ from app.vlm import GATE_CAT, pick_frames
 
 G, V, D = CFG["gate"], CFG["vlm"], CFG["detector"]
 PAIR_REARM = 0.5   # body heights; a pair that closes in or separates by this much is asked about again (D64)
+# A silenced wide track re-arms only once its box is clearly upright (< 0.8 × down_ratio wide per tall, D72): a seated
+# close-up hovers at ~1.2 and re-armed on every 1.17 frame (14 horizontal ①s/min on 2 webcams, all normal).
+UPRIGHT = 0.8
+
+
+def upright(s):
+    return s[3] - s[1] < UPRIGHT * G["down_ratio"] * (s[4] - s[2])
 
 
 def persons(entry):
@@ -40,7 +49,7 @@ class Scheduler:
         self.skipped = 0
         self.skipped_by = defaultdict(int)  # camera -> baselines skipped (change gate or duty back-off)
         self.skipped_duty = 0
-        self.n_triggers = 0
+        self.n_triggers = self.merged = 0
 
     def evidence(self, det, now):
         """Detector evidence for the cross-check (E-7): person counts = max over the 4 s buffer (D46)."""
@@ -58,8 +67,8 @@ class Scheduler:
         new = buf[-1]
         now = new[0]
         hists = det.person_hists()
-        for k in [k for k in self.quiet if k[0] == cam and (k[1] not in hists or not wide(hists[k[1]][-1], G))]:
-            del self.quiet[k]                                   # re-arm: box no longer wide, or the track left
+        for k in [k for k in self.quiet if k[0] == cam and (k[1] not in hists or upright(hists[k[1]][-1]))]:
+            del self.quiet[k]                                   # re-arm: box clearly upright, or the track left
         for k, (t0, g0) in list(self.quiet_pairs.items()):
             i, j = k[1]
             if k[0] == cam and (i not in hists or j not in hists or now - t0 >= G["horizontal_recheck_s"]
@@ -86,16 +95,21 @@ class Scheduler:
             return                                              # silenced after a confident-normal verdict (D61)
         if rule in GATE_CAT and self.events.is_open(cam, GATE_CAT[rule]):
             return                                              # cooldown per (camera, category)
-        queued = self.arb.waiting(1, cam)
-        if any(r["rule"] == rule for r in queued) or now - self.last_p1.get(cam, 0) < 1.0:
-            return                                              # dedupe; < 1 s since this camera's last P1
-        if len(queued) >= 3:
-            self.arb.drop(min(queued, key=lambda r: r["created"]))
+        req = {"prio": 1, "cam": cam, "rule": rule, "trigger": "gate:" + rule, "frames": pick_frames(det.buffer),
+               "evidence": self.evidence(det, now), "hint": tr["hint"], "track_ids": tr["track_ids"], "kind": tr.get("kind")}
+        with self.arb.cv:                                       # ≤ 1 P1 per camera in flight (D72)
+            waiting = self.arb.waiting(1, cam)
+            if waiting:                                         # refresh it; the arbiter can't pick it meanwhile
+                waiting[0].update(req if waiting[0]["rule"] == rule else {k: req[k] for k in ("frames", "evidence")})
+            run = self.arb.running
+            if waiting or (run and run["prio"] == 1 and run["cam"] == cam):
+                self.merged += 1
+                return
+        if now - self.last_p1.get(cam, 0) < 1.0:
+            return                                              # < 1 s since this camera's last P1
         self.last_p1[cam] = now
         self.n_triggers += 1
-        self.arb.submit({"prio": 1, "cam": cam, "rule": rule, "trigger": "gate:" + rule, "created": time.time(),
-                         "frames": pick_frames(det.buffer), "evidence": self.evidence(det, now),
-                         "hint": tr["hint"], "track_ids": tr["track_ids"], "kind": tr.get("kind")})
+        self.arb.submit(req | {"created": time.time()})
 
     def baseline(self, det, now):
         cam = det.cam.id
@@ -133,10 +147,12 @@ class Scheduler:
 
 
 if __name__ == "__main__":
+    import threading
     import numpy as np
     from types import SimpleNamespace as NS
 
     class FakeArb:
+        cv, running = threading.RLock(), None
         def __init__(self): self.q = []
         def submit(self, r): self.q.append(r); return r
         def waiting(self, prio=None, cam=None): return [r for r in self.q if (prio is None or r["prio"] == prio) and (cam is None or r["cam"] == cam)]
@@ -176,6 +192,14 @@ if __name__ == "__main__":
     step(18.1); step(18.2)
     p1 = arb.waiting(1)
     assert len(p1) == 1 and p1[0]["trigger"] == "gate:person_down" and len(p1[0]["frames"]) == 4, p1
+    # One P1 per camera in flight (D72): while it waits, a new trigger refreshes its frames instead of queueing...
+    det.person_hists = lambda: {1: [(18.3 + 0.1 * i, 100, 100 + (i >= 8) * 100, 200, 300) for i in range(11)]}
+    m0 = s.merged; step(19.4); p1 = arb.waiting(1)
+    assert len(p1) == 1 and p1[0]["frames"][-1][0] == 19.4 and s.merged == m0 + 1, ([f[0] for f in p1[0]["frames"]], s.merged)
+    # ...and while it runs, a trigger is merged into it (nothing new queued).
+    arb.running = p1[0]; arb.q.clear(); step(20.6)
+    assert not arb.waiting(1) and s.merged == m0 + 2, s.merged
+    arb.running = None
     assert p1[0]["evidence"]["triggers"] == {"person_down"} and p1[0]["evidence"]["max_persons"] == 2
     # No baseline while a P1 waits; cooldown while a person_down event is open.
     assert not arb.waiting(3)
@@ -188,6 +212,8 @@ if __name__ == "__main__":
     det.person_hists = lambda: sofa(30); step(31.0)
     assert [r["kind"] for r in arb.q] == ["horizontal"]; arb.q.clear(); s.silence("cam1", [3], 31.0)
     det.person_hists = lambda: sofa(32); step(33.0); assert not arb.waiting(1)
+    det.person_hists = lambda: {3: [(33.1, 100, 150, 335, 350)]}; step(33.1)   # close-up dips to 1.17: still quiet (D72)
+    assert ("cam1", 3) in s.quiet
     det.person_hists = lambda: sofa(31 + G["horizontal_recheck_s"]); step(32.0 + G["horizontal_recheck_s"])
     assert arb.waiting(1), "re-armed after horizontal_recheck_s"
     arb.q.clear(); s.silence("cam1", [3], 70.0)
