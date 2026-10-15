@@ -4,6 +4,29 @@
 > **Division of labour:** **Claude builds everything** (code, scripts, prompts, benchmarks, report drafts, deck draft). **The team does no development**: they test, inspect, critique, ideate and validate, each owning one area. Contract: [SPEC.md](SPEC.md) · Why: [DECISIONS.md](DECISIONS.md)
 > **v1.6 package (D42–D56):** every fix and missed opportunity from the judge review is placed in a phase below. Round-1 scope is unchanged (the proposed cuts, "W7", were rejected, D56).
 
+## Open items (updated Fri 04:10; tick or delete when done)
+
+**Build (Claude, in order)**
+- [ ] **P3c Live-mode fix (next):**
+  - Tiles turn half-grey: fine at first, then after a while in Safari on the M5 with the iPhone + webcam (captain, 04:10). Swap in a frame only once it has fully loaded.
+  - 2 live cameras overloaded with nothing happening: GPU duty 100 %, model time-to-alert p95 24.7 s, VLM errors 11, baselines skipped 0.
+  - Phantom people: the webcam shows "6 ppl" for 1 real person.
+- [ ] **P5 Round-1 hardening:**
+  - `run_demo.sh` removes and re-seeds the seeded chat history at start-up (seeded events are timestamped at seed time).
+  - D71 (`how` field in chat) signed off by the captain.
+  - M5 latency + 10-min heat run, stress test, deck + demo-script draft.
+- [ ] **P7 (after Round 1): ESP32 guard console.** Hardware latency stopwatch, SOS → AI assessment of every camera, annunciate/acknowledge/escalate/shelve, false-alarm hold, fault watchdog; arm/disarm is a stretch. Needs: the board model, buzzer/relay yes/no, and `pyserial` approval (USB) or Wi-Fi + a shared secret.
+- [ ] **P6 (after Round 1):** a Kaggle evaluation runner for public datasets, only if the dev set outgrows the Mac. Calibration and reported numbers stay on the M5.
+- [ ] PLAN P6 row: per-clip error rows + confusion-pair review (sample-level debugging), never averages only.
+
+**Team**
+- [ ] **Riddhi:** `onset_s` for the 6 clips in `bench/labels.csv`; it's still blank. Use the timestamped frame sheets in `data/onset_sheets/`. Re-check the v026 (dark) and w001 (gun) labels.
+- [ ] **Riddhi (after 05:30):** P4 test: try to make chat invent events or misread times/camera names.
+- [ ] **Abhinav:** film ≥ 3 falls, ≥ 3 look-alikes (sit on the floor, bend, hug) and 2–3 normal clips on the iPhone. These unblock the fall-gate check (`fast_drop_max_narrow`), the D55 4B-vs-2B call and the false-alarm numbers.
+- [x] **Abhinav/captain:** iPhone (live) + webcam both stream on the M5 (04:10).
+- [ ] **Aryan:** M5 ready for P5 by 05:00. Wi-Fi-off run (P3 note). Record the staged Act 2 moments as a backup clip for the Act 1 playlist.
+- [ ] **All:** demo in Chrome until P3c lands; Safari shows half-grey tiles.
+
 ## Validation owners
 
 | Person | Owns (signs off that it works) | Checks in particular |
