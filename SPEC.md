@@ -38,6 +38,9 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-6 | YOLO + ByteTrack per camera (~10 FPS); annotated live stream (boxes, track IDs, door zone) | R1 |
 | FR-7 | Gate rules: `person_down`, `fighting`, `crowd`, `tailgating`, `loitering`, `scene_change` (motion burst with no person) | R1: person_down, crowd, scene_change · F: all |
 | FR-8 | VLM scheduler: baseline call every 3 s per camera (10 s if empty) + immediate high-priority call on a gate trigger; ≤ 1 pending request per camera; drop requests older than 2 s | R1 |
+| FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. A running call is never interrupted; the next free slot goes to the highest priority. Ollama runs with 2 parallel slots if the latency test shows that's faster overall, otherwise 1 | R1 |
+| FR-8b | Chat avoids the model where possible: a rule-based parser handles camera/category/time first; the model is called only if the rules can't parse the question, or for "summarise" answers. Count/list/latest answers are templates (no model call) | R1 |
+| FR-8c | Each chat answer is a snapshot stamped "as of HH:MM:SS"; incidents that open while the user is chatting appear in the feed live, and the chat shows a "N new incidents since your question" chip | F |
 | FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3); **alert fires as soon as `category` is parsed** | R1 |
 | FR-10 | Cross-check the VLM label against detector evidence (e.g. "fighting" needs ≥ 2 people) | F |
 | FR-11 | Event manager: merge windows into events with open/update/close (hysteresis, §6.4) | R1 |
@@ -61,6 +64,7 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 |---|---|---|
 | NFR-1 | **Latency** | YOLO ≤ 40 ms/frame · VLM call p50 ≤ 1.5 s, p95 ≤ 2.5 s · **time-to-alert p95 ≤ 2.0 s** · time-to-full-summary p95 ≤ 4 s · keep-up 100 % |
 | NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · chat filters ≥ 90 %, answers 100 % grounded |
+| NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: time-to-alert p95 ≤ 3.0 s for both cameras; chat answer ≤ 5 s. Measured by a stress test |
 | NFR-3 | Efficiency | VLM calls ≥ 90 % fewer than "VLM on every frame" |
 | NFR-4 | Resources | Peak memory ≤ 75 % of RAM; no swap thrash; 3–4 cameras on the M4 |
 | NFR-5 | Stability | 30-min soak test, 3 cameras: no crash, no latency drift |
@@ -90,7 +94,8 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | VLM server | **Ollama** (OpenAI-compatible, streaming, JSON-schema output) |
 | Chat LLM | The same VLM (D8/Q12) |
 | Backend | FastAPI + uvicorn, one process; pipeline in background threads |
-| Storage | SQLite (WAL) + FTS5; JPEGs on disk |
+| Model adapter | `app/models.py`: one thin client for any OpenAI-compatible local server (Ollama now; mlx-vlm/llama.cpp later). Swapping model or backend = a config change |
+| Storage | SQLite (WAL) + FTS5; JPEGs on disk. **Not** Pinecone/Supabase (cloud, API keys → breaks the on-prem rule) or Milvus (needs a multi-container server, built for millions of vectors; our queries are structured filters over thousands of rows). If semantic search is added (S), embeddings live in the same SQLite file (`sqlite-vec`) |
 | Frontend | React + Vite + Tailwind, built locally, served by FastAPI |
 | RTSP sim | MediaMTX + ffmpeg |
 

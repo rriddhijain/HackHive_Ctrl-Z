@@ -1,0 +1,14 @@
+[project]
+name = "hackhive"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "dateparser>=1.4.3",
+    "fastapi>=0.143.2",
+    "httpx>=0.28.1",
+    "numpy>=2.5.4",
+    "opencv-python>=5.0.0.93",
+    "pyyaml>=6.0.3",
+    "ultralytics>=8.4.177",
+    "uvicorn[standard]>=0.54.0",
+]
