@@ -1,0 +1,61 @@
+{
+ "model": "qwen3.5:4b-mlx",
+ "cameras": 3,
+ "wall_s": 60.0,
+ "gpu_duty": 0.389,
+ "calls": {
+  "P1": 2,
+  "P3": 11
+ },
+ "stopped_at_category": 7,
+ "cancelled": 1,
+ "baselines_skipped": 45,
+ "gate_triggers": 2,
+ "vlm_errors": 0,
+ "vetoes": 12,
+ "vetoes_p_ge_0.3": 0,
+ "model_tta_ms": {
+  "p50": 1372,
+  "p95": 1394
+ },
+ "call_ms": {
+  "p50": 1994,
+  "p95": 2858
+ },
+ "queue_ms": {
+  "p50": 33,
+  "p95": 2030
+ },
+ "clips": [
+  {
+   "camera": "cam1",
+   "clip": "static_bus.mp4",
+   "label": null,
+   "prediction": "normal",
+   "right": null,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam2",
+   "clip": "static_zidane.mp4",
+   "label": null,
+   "prediction": "normal",
+   "right": null,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam3",
+   "clip": "static_street.mp4",
+   "label": null,
+   "prediction": "normal",
+   "right": null,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  }
+ ]
+}

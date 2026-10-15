@@ -52,6 +52,8 @@ gate:
   down_hold_s: 0.5               # D34
   drop_frac: 0.4
   drop_window_s: 0.5
+  horizontal_recheck_s: 30       # after a confident-normal verdict, a still-horizontal track re-triggers only after this (D61)
+  fast_drop_max_narrow: 0.20     # fast drop ignored if the box got >20 % narrower (occlusion/walking away, D61); 1.0 = guard off
   fight_speed: 1.0               # body heights per second
   min_track_age_s: 0.5
   scene_change_frac: 0.25

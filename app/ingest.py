@@ -30,6 +30,7 @@ class Camera(threading.Thread):
         self.status = "starting"       # live | reconnecting | down | ended | stopped
         self.reconnects = 0
         self._latest = None            # (frame, t_capture, idx)
+        self.t_first = None            # wall time of the first frame = clip time 0 (onset-to-alert on replays, §12)
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._ts = deque(maxlen=60)    # capture timestamps, for fps
@@ -67,6 +68,7 @@ class Camera(threading.Thread):
                     elif delay < -1:  # fell far behind (e.g. laptop slept): resync, don't fast-forward
                         next_t = time.time()
                 t = time.time(); idx += 1
+                self.t_first = self.t_first or t
                 with self._lock:
                     self._latest = (frame, t, idx)
                 self._ts.append(t)
