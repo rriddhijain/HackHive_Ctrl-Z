@@ -1,0 +1,101 @@
+{
+ "model": "qwen3.5:4b-mlx",
+ "cameras": 7,
+ "wall_s": 40.5,
+ "gpu_duty": 0.975,
+ "calls": {
+  "P1": 0,
+  "P3": 6
+ },
+ "stopped_at_category": 0,
+ "cancelled": 0,
+ "baselines_skipped": 0,
+ "gate_triggers": 0,
+ "vlm_errors": 1,
+ "vetoes": 8,
+ "vetoes_p_ge_0.3": 0,
+ "model_tta_ms": {
+  "p50": 11089,
+  "p95": 29072
+ },
+ "call_ms": {
+  "p50": 5549,
+  "p95": 5781
+ },
+ "queue_ms": {
+  "p50": 11396,
+  "p95": 33891
+ },
+ "clips": [
+  {
+   "camera": "cam1",
+   "clip": "v001.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam2",
+   "clip": "v003.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam3",
+   "clip": "v006.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam4",
+   "clip": "v011.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam5",
+   "clip": "v026.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam6",
+   "clip": "w001_masked.avi",
+   "label": "fighting",
+   "prediction": "normal",
+   "right": false,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  },
+  {
+   "camera": "cam7",
+   "clip": "sample_bus.mp4",
+   "label": "normal",
+   "prediction": "normal",
+   "right": true,
+   "onset_to_alert_ms": null,
+   "events": [],
+   "summary": null
+  }
+ ]
+}
