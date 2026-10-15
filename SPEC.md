@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.0 (2026-10-15 19:45 IST) · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.1 (2026-10-15 21:15 IST): adds §5a step-by-step dataflow and §12a runtime behaviour & edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -99,6 +99,61 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | Frontend | React + Vite + Tailwind, built locally, served by FastAPI |
 | RTSP sim | MediaMTX + ffmpeg |
 
+## 5a. Dataflow, step by step (the exact behaviour; the code must match this)
+
+### 5a.1 Life of a frame → alert
+| # | Step | Where | What exactly happens | Time budget |
+|---|---|---|---|---|
+| 1 | **Capture** | `ingest.py`, 1 thread/camera | Reads frames at the source's rate (webcam 30 FPS; files played at their native FPS against the wall clock). **Overwrites a single "latest frame" slot**, stamped `t_capture = time.time()`. No queue | — |
+| 2 | **Detect** | `detect.py`, 1 thread/camera | Every 100 ms (10 FPS) takes the latest slot *if it's newer than the last one processed* (otherwise waits). YOLO + ByteTrack (own model instance per camera). Appends `(t_capture, frame resized to 640 px wide, tracks)` to the camera's **ring buffer (last 4 s ≈ 40 entries)**, updates per-track features (aspect ratio, speed, dwell, door-zone entries), encodes the annotated JPEG for the live view | ≤ 40 ms |
+| 3 | **Gate** | `gate.py`, same thread | Runs every rule on the buffer (~1 ms) → zero or more Triggers (§7.4). `scene_change` = mean absolute difference between the current and the 0.5 s-old frame (both 160 px grey), **ignoring person boxes**, above `scene_change_frac` | ~1 ms |
+| 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made. A request holds only `{camera_id, trigger, created_at}`; **no frames** | — |
+| 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **The mosaic is built now, from the freshest 4 buffer frames** at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter), so frames are never stale. A P1 whose trigger is > 4 s old is downgraded to P3 | queue wait 0–1.5 s under contention |
+| 6 | **VLM call** | `vlm.py` | `POST /v1/chat/completions` with `stream: true`, JSON schema (§7.3), `temperature 0`, `max_tokens 100`, **thinking disabled**, model kept loaded (`keep_alive: -1`). Tokens are parsed incrementally | measured in the latency test |
+| 7 | **Early decision** | `events.py` | As soon as `category`, `subtype` and `confidence` have streamed (`t_category`, ~15 tokens): cross-check (§12a E-7) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately**, with the summary shown as "…" | **time-to-alert target ≤ 2.0 s p95** |
+| 8 | **Summary stream** | `events.py` → SSE | Summary tokens are pushed as `event_update` at most every 200 ms, so the card text types itself live | — |
+| 9 | **Persist** | `db.py` | At `t_vlm_done`: write the Observation (always, including `normal`); attach it to the event if one opened or updated; save a 320 px thumbnail; if it's the event's new peak, save the full-resolution newest frame + the mosaic as key frames. SSE `observation` (updates the camera's "now" line) + `trace` (Workflow view) | ≤ 20 ms |
+| 10 | **Close** | `events.py`, 1 s timer | Any open event with no supporting observation for `close_after_s` (8 s) → `closed`, SSE `event_close` | — |
+
+### 5a.2 Life of a chat question
+| # | Step | What exactly happens |
+|---|---|---|
+| 1 | Request | `POST /api/chat {session_id, question}`; `as_of = now` |
+| 2 | **Rule parser** (< 5 ms, no model) | Regex/synonyms: camera ids or names ("camera 2", "cam2", "lobby"), categories + synonyms ("fall" → person_down), intent words ("how many" → count, "last"/"latest" → latest, "summarise" → summary), time phrases. **If the intent is known and at least one filter (or "all") was found → skip the model** |
+| 3 | Model extraction (only if step 2 can't parse) | Arbiter priority **P2**, text-only, JSON-schema output, `max_tokens 80`, timeout 8 s → on timeout, fall back to the step-2 result and say so in the answer |
+| 4 | Time resolution | Python, IST: "today" = 00:00 IST → now; "yesterday"; "last N min/hours"; "this morning" 06–12, "afternoon" 12–17, "evening" 17–22; "at 3 pm" = 14:45–15:15; "since 3 pm"; "between X and Y". No time phrase → **all time** |
+| 5 | Retrieval | `query_events` / `count_events` (non-dismissed events only). `summary` intent, or 0 events matched → also `query_observations` |
+| 6 | Answer | `list`/`count`/`latest`/`detail` → **template, no model**. `summary` → model at P2 with the rows (max 30) and `max_tokens 150`; any cited `[#id]` not in the rows is stripped. 0 rows → "No matching events between … and … (filters: …)" |
+| 7 | Response | `{answer, events, filters, as_of, latency_ms}`. The UI shows "as of HH:MM:SS"; if new events open later, a "N new incidents since this answer" chip appears (FR-8c) |
+
+### 5a.3 Sequence diagram
+```mermaid
+sequenceDiagram
+  participant Cam as Camera
+  participant Cap as Capture
+  participant Det as YOLO+ByteTrack
+  participant Gate as Gate
+  participant Sch as Scheduler/Arbiter
+  participant VLM as Qwen3.5 (Ollama)
+  participant Dec as Decision layer
+  participant DB as SQLite
+  participant UI as Dashboard
+  Cam->>Cap: frames (overwrite latest)
+  loop every 100 ms
+    Cap->>Det: latest frame
+    Det->>Gate: tracks + ring buffer
+    Gate-->>Sch: Trigger (optional)
+  end
+  Sch->>VLM: freshest 2x2 mosaic + hints (stream)
+  VLM-->>Dec: category, subtype, confidence (first ~15 tokens)
+  Dec-->>UI: alert + event_open (SSE)
+  VLM-->>UI: summary tokens (event_update)
+  VLM->>DB: full observation + key frames
+  UI->>Sch: chat question (P2, only if rules can't parse)
+  Sch->>DB: SQL with filters
+  DB-->>UI: grounded answer + event cards
+```
+
 ## 6. Categories, severity, rules
 
 ### 6.1 Categories
@@ -121,6 +176,7 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 Critical and high → sound + toast + red pulsing camera border. Medium → feed card only.
 
 ### 6.4 Event lifecycle
+- **Alert = open.** The sound/toast fires exactly when an event opens, never for a single observation that doesn't open one. So critical categories alert on the first confident observation (~1 window), others on the second agreeing one (~3 s later): the speed vs false-alarm trade-off, per severity.
 - **Open:** critical categories on **1** observation with confidence ≥ 0.6; others on **2 of the last 3** with ≥ 0.5, or 1 with ≥ 0.85.
 - **Update:** extend `end_ts`, union `track_ids`, `n_obs += 1`; a new peak confidence replaces the summary and key frames.
 - **Close:** no supporting observation for **8 s**. Closed events never reopen.
@@ -158,7 +214,7 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
   "n_obs": 3, "time_to_alert_ms": 910, "latency_ms": 1420, "seeded": false
 }
 ```
-`status` ∈ `open` · `closed` · `acknowledged`
+`status` ∈ `open` · `closed` · `acknowledged` · `dismissed` (a re-look downgraded it; kept for audit, hidden from the feed by default)
 
 ### 7.3 VLM output (strict JSON, **fields in this order**, so streaming yields `category` first and `summary` last)
 ```json
@@ -260,7 +316,9 @@ cameras:
 detector: { model: yolo11s.pt, fps: 10, imgsz: 640, conf: 0.35, device: mps }
 vlm:  { base_url: "http://localhost:11434/v1", model: "qwen3.5:4b", stream: true, temperature: 0,
         max_tokens: 100, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 336,
-        baseline_interval_s: 3, empty_interval_s: 10, stale_after_s: 2, timeout_s: 6, relook_band: [0.4, 0.7] }
+        baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook_band: [0.4, 0.7],
+        think: false, keep_alive: -1, parallel_slots: 1 }   # parallel_slots set by the stress test (E-2)
+replay: { store_events_on_replay: true, reset_live_tables_on_start: true }
 gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 1.0,
         scene_change_frac: 0.25 }
 events: { open_conf_critical: 0.6, open_conf: 0.5, open_conf_single: 0.85, close_after_s: 8 }
@@ -299,6 +357,41 @@ Every module has a runnable self-check: `uv run python -m app.<module>`.
 - **Macro F1** over all 9 labels (8 categories + normal), on the **held-out test set**, never used for tuning
 - Latency stats: p50 / p95 / max over ≥ 50 events, first 5 discarded as warm-up
 
+## 12a. Runtime behaviour & edge cases (resolved, no ambiguity left)
+
+Each line is a decision. ✋ = decided by Claude; the team can veto.
+
+**Model & contention**
+- **E-1** One model serves vision and chat through one arbiter with priorities P1 incident → P2 chat → P3 baseline → P4 re-look (FR-8a). A running call is never interrupted. ✋
+- **E-2** 1 or 2 parallel Ollama slots: picked by the latency + stress test (NFR-1a). ✋
+- **E-3** Model stays loaded (`keep_alive: -1`) and gets a warm-up call at startup; a cold load (~5–10 s) must never happen during the demo. ✋
+- **E-4** Qwen3.5 "thinking" mode is **off** for every call (it would add seconds). ✋
+- **E-5** A VLM call that errors or exceeds 6 s → logged as `vlm_error`, no observation is stored, and the camera simply gets its next window. Three errors in a row → the VLM status dot turns red; detection and the live view keep running. ✋
+
+**Classification & events**
+- **E-6** At most **one open event per (camera, category)**. Different categories can be open on the same camera at once (a fight and a person down are two events). ✋
+- **E-7** Cross-check runs at `t_category`, *before* the alert: `fighting` needs ≥ 2 persons in the last 2 s of tracks; `crowd_incident` needs ≥ 0.6 × `crowd_min` persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone and ≥ 2 entries (or confidence ≥ 0.8); `fire_smoke` and `property_damage` need no detector evidence. Failing a check halves the confidence (or sets it to `normal` for person_down) before the open rule runs. ✋
+- **E-8** If the label flips during an event (fight → normal → fight within 8 s), it stays one event. Only 8 s without support closes it. ✋
+- **E-9** A re-look (P4) that disagrees with an open event marks it `dismissed` and sends an `event_close`; the UI shows "dismissed after re-check" for 5 s, then hides it. It's the only way an alert is retracted. ✋
+- **E-10** Severity: `suspicious_activity` stays **critical** for every subtype (team decision D19). `subtype` is recorded anyway, so the split can be switched on in config later. Team
+- **E-11** Observation `ts` = `t_capture` of the newest frame in its mosaic.
+
+**Sources**
+- **E-12** Webcam/Continuity indices can change between reboots: `scripts/list_cameras.py` prints index → name → resolution, and the venue setup step sets the indices in `config.yaml`. ✋
+- **E-13** A camera that disconnects → `reconnecting` (backoff 1/2/4 s, max 5 s), its tile shows "reconnecting", its open events close normally after 8 s. ✋
+- **E-14** **Looping video files:** every loop is processed like live footage and its events are stored (it *is* the system working). `./run_demo.sh` resets the live tables at start, so counts reflect the current session; seeded history (`seeded=1`) is re-inserted. Config `store_events_on_replay: false` turns storing off for a camera. ✋
+- **E-15** Phone IP-camera URLs change with the hotspot IP: set at the venue in `config.yaml`, tested by `scripts/list_cameras.py --url <url>`. ✋
+- **E-16** Door zones are set per camera in `config.yaml` (normalised polygon). A UI editor is a stretch goal. ✋
+- **E-17** Uploaded videos (FR-5) become `camN` with the next free number, play once (no loop), and are removable. ✋
+
+**Storage & UI**
+- **E-18** Everything (DB, key frames, thumbnails) stays in `data/`, never committed, never leaves the machine. ✋
+- **E-19** Seeded history is included in chat answers and marked with a "history" tag on its cards; live events are never mixed up with it. ✋
+- **E-20** The sound plays once per event open (not repeated). **Acknowledge** = stop the red border, set `acknowledged`; the event still closes normally. ✋
+- **E-21** The Workflow view shows the latest trace for the selected camera (default: whichever camera fired last). ✋
+- **E-22** All summaries and answers are in English. Times are shown in IST, 24-hour clock. ✋
+- **E-23** The benchmark uses **the same pipeline code** with a virtual clock (accuracy mode) or the real clock (latency mode). No separate "benchmark-only" logic. ✋
+
 ## 13. Acceptance criteria
 
 **Round 1 (Fri 07:00):**
@@ -325,6 +418,6 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 | Aryan | Product & Pitch | |
 
 ## 16. Pending decisions (do not block the build)
-1. `suspicious_activity` severity: all critical (current) vs subtype split (Claude's recommendation). The contract already carries `subtype`, so either works with no schema change.
-2. FR-5 video upload as a camera: Claude recommends yes (judges may ask to test their own clip).
+1. ~~`suspicious_activity` severity~~: resolved, all critical (E-10); subtype recorded so a split can be switched on in config.
+2. FR-5 video upload as a camera: Claude recommends yes (judges may ask to test their own clip). **Team: yes/no?**
 3. GGUF vs MLX build of Qwen3.5-4B, and whether we must drop to the 2B: decided by a 10-min latency test after download.
