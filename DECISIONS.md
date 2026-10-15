@@ -90,7 +90,7 @@ Format: **options** → **⭐ recommendation (why)** → `Decision:` line for yo
 - Is there a mid-point review or checkpoint? When?
 - Final judging: live demo? slides? code walkthrough? Q&A? **How many minutes?**
 - What must be submitted: repo link, video, report PDF, deck?
-- `Decision:` Ends **the morning of Sat 17 Oct 2026** ✅. Still needed: exact end time, whether the 48 h clock has already started, judging format/length, submission items.
+- `Decision:` Ends **the morning of Sat 17 Oct 2026**; **the clock HAS started** ✅. ⚠️ Still needed: **exact end time**, judging format/length, submission items (the plan's freeze times depend on them).
 
 **Q3 🔴 Is building before the hackathon allowed?** (Writing code, or only research/downloads?)
 - A: Code allowed before → Claude builds the whole MVP before day 1 and the 48 h go to testing.
@@ -154,7 +154,11 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
 **Camera placement tips:** mount high (shelf/tripod, ~2 m), angled down like real CCTV; steady; the door fully in frame for tailgating; avoid pointing at a bright window (backlight ruins detection).
 
 - **Demo layout:** cam1 = webcam (live), cam2 = phone at a door (live), cam3–4 = looping recorded incidents (fight, fire, crowd). On 16 GB we run 3–4 cameras; Claude measures the limit.
-- `Decision:` ✅ Videos + webcam + phone. **Still needed: which phones (iPhone/Android) the team has.**
+- `Decision:` ✅ Videos + webcam + phone. Phones available: **Pixel 8, Pixel 10, iPhone 13, iPhone 15**.
+  - **Primary live door camera: iPhone 15 via Continuity Camera over USB.** It needs no network, and macOS treats it as a webcam (the Mac must use the same Apple ID as that iPhone). Only one iPhone can act as a Continuity Camera at a time.
+  - **Network IP camera: Pixel 10 with the "IP Webcam" app** (Pixel 8 as spare). This proves the system ingests real network streams. It needs the phone + Mac on the same hotspot.
+  - **Spare:** iPhone 13 as a hotspot / backup camera.
+  - Is a phone needed at all? Yes, for one reason: the webcam is stuck to the laptop and can't point at a door. Tailgating needs a camera at a door. The network phone is a nice-to-have; if it's flaky at the venue, drop it without regret.
 
 **Q10 🔴 VLM serving runtime on Mac.** (All are local and expose an OpenAI-compatible localhost URL, so swapping is a config change.)
 - A: **Ollama**: easiest, JSON-schema structured output, very stable
@@ -200,7 +204,7 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
 
 **What we report:** time-to-alert (category streamed), time-to-full-summary, % of windows needing a re-look, and accuracy with vs without each trick (ablation), which makes a strong "approach" story for the judges.
 
-- `Decision:` ✅ *Recommended design adopted unless the team objects* (logged as D13). Tricks 1–4 are built by default; trick 5 only if the dev-set numbers call for it.
+- `Decision:` ✅ **Adopted by the team** (D13). Tricks 1–4 are built by default; trick 5 only if the dev-set numbers call for it. **Revisit trigger:** if the benchmark shows the 4B is too slow *and* the 2B misses the accuracy target, Claude brings this back to the team with numbers rather than silently changing the design.
 
 **Q12 🟡 Chat LLM.**
 - A: **Reuse the same VLM** for chat (one model in memory, best for 16 GB)
@@ -238,7 +242,18 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
 
 - Add, remove or split anything? (e.g., a separate `weapon` category = critical? `vandalism` separate?)
 - ⭐ Keep these 7. More categories = lower accuracy and more labeling. Subtypes (e.g. "weapon") go inside the summary text.
-- `Decision:`
+- `Decision:` ✅ Approved, **plus an 8th category `property_damage` (proposed; team to confirm)**:
+
+| Category | What counts | Severity | Audible |
+|---|---|---|---|
+| `property_damage` | Damage to property or a hazardous object event, **accidental or deliberate**: an object or debris falling, a shelf/ceiling/structure collapsing, items knocked over and broken, shattered glass, vandalism | high | yes |
+
+  - **Why this shape and not "collateral damage / anything breaking":** a vague definition makes the model inconsistent, which costs accuracy (a major criterion). "Collateral" also implies damage *caused by another incident*, which we can't reliably tell. So: one tightly defined category, and the summary says the cause ("knocked over during a fight", "fell from a shelf", "deliberately smashed").
+  - **Overlap fix:** *vandalism moves from `suspicious_activity` into `property_damage`.* Otherwise the two categories overlap and confuse each other.
+  - **Tie-break order:** fire_smoke > fighting > person_down > crowd_incident > property_damage > suspicious_activity > tailgating > normal. A fight that breaks a table is logged as `fighting`, with the damage mentioned in the summary.
+  - **Detection gap + fix:** falling objects often involve no person, so none of the YOLO gate rules fire, and we'd wait up to 3 s for the baseline check. We add a cheap **"sudden scene change" gate**: a burst of pixel motion in a region with no person in it (plain OpenCV, ~1 ms) triggers the VLM immediately.
+  - **Data:** UCF-Crime *Vandalism* clips + self-filmed staged clips (topple a stack of boxes, knock a chair over, drop a box of items, push a bin over; cheap and safe, ~15 clips) + Pexels.
+  - **Cost:** +1 class to label (~20 clips) and a small risk to macro F1. Worth it: it matches a facility-management/building-safety use case, and most teams won't have it.
 
 **Q17 🟡 How many cameras simultaneously in the demo?**
 - ⭐ 4 on a ≥24 GB Mac, 2–3 on 16 GB. Claude measures the real limit on day 0.
@@ -276,7 +291,7 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
   - **Live scene summary per camera**: a rolling "what's happening now" line under each camera feed, updated every window.
   - **Periodic digest**: every N minutes, or on request ("summarise the last 10 minutes on cam2"), a short narrative built from the observations.
 - Stretch (in order): ① chat "look again" (VLM re-reads a stored key frame to answer "what was the person wearing?") ② per-camera timeline ③ phone as a real IP camera ④ voice query ⑤ face blur on stored key frames (privacy story) ⑥ incident PDF export ⑦ YOLO-pose ⑧ semantic search with embeddings
-- `Decision:`
+- `Decision:` ✅ Must-have and stretch lists approved as written.
 
 **Q24 🟡 Product name & identity.** (For the UI, slides and repo name. Don't use Honeywell's branding in the product.)
 - Ideas: *Sentinel*, *Vigil*, *WatchLoop*, *Argus*, *OnPrem Eye*
@@ -494,8 +509,11 @@ detector: { model: "yolo11s", fps: 10, imgsz: 640, conf: 0.35, device: "mps" }
 | D10 | 2026-10-15 | Free datasets: RLVS (fights/normal), Le2i + UR Fall + Fall Video (falls), Smoke&Fire + FireSense (fire), UMN (crowd), UCF-Crime official (suspicious), Pexels; tailgating = self-filmed | Captain | Q26 |
 | D11 | 2026-10-15 | Team: Shivansh, Riddhi, Abhinav, Aryan; roles proposed in Q1 | Team | confirm the role split |
 | D12 | 2026-10-15 | Demo machine stays the M4 unless the M5 is ≥ 25 % faster at p95 VLM latency in the H0–3 benchmark | Team | Q7 |
-| D13 | 2026-10-15 | Inference design: single VLM + streaming early alert + prompt caching + uncertainty re-look; learned-classifier booster only if the dev data calls for it. Two-tier rejected | Claude (proposed) | Q35, pending team objection |
+| D13 | 2026-10-15 | Inference design: single VLM + streaming early alert + prompt caching + uncertainty re-look; learned-classifier booster only if the dev data calls for it. Two-tier rejected | Team | Q35, approved |
 | D14 | 2026-10-15 | Sources: pre-recorded videos (looped, optionally via RTSP) + webcam + phone camera | Team | Q9/Q25; tailgating clips still to be filmed |
+| D15 | 2026-10-15 | The 48 h clock has started; ends the morning of 17 Oct (exact time TBD) | Team | Q2 |
+| D16 | 2026-10-15 | Categories (Q16) + must-have/stretch lists (Q23) approved; `property_damage` proposed as an 8th category with vandalism moved into it, plus a scene-change gate | Team / Claude | team to confirm property_damage |
+| D17 | 2026-10-15 | Cameras: iPhone 15 (Continuity, USB) at the door, Pixel 10 (IP Webcam) as a network camera, webcam for live, recorded videos for incidents | Team | Q9 |
 | D6 | 2026-10-15 | Evaluation criteria: summarisation, incident classification, chatbot interface, approach + workflow demonstration, implementation. **Major: latency and accuracy, which must be best-in-class.** | Organisers | Added the Workflow view, live scene summary and digest to the must-haves; added Q33–Q35 |
 
 ---
