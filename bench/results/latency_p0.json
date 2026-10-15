@@ -1,0 +1,98 @@
+[
+ {
+  "model": "qwen3.5:4b",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 2.496,
+   "p95": 2.826
+  },
+  "t_cat": {
+   "p50": 3.514,
+   "p95": 3.876
+  },
+  "total": {
+   "p50": 4.96,
+   "p95": 5.388
+  },
+  "sample": "{\n  \"category\": \"normal\",\n  \"subtype\": \"person_down\",\"confidence\": 0.95,\"people_count\": 4,\"summary\": \"Two men walking calmly near a bus; two coaches shouting on a sports field. No incident detected.\"\n",
+  "contention": {
+   "chat": {
+    "t_cat": 2.403,
+    "total": 2.403
+   },
+   "cam1": {
+    "t_cat": 6.323,
+    "total": 7.576
+   },
+   "cam2": {
+    "t_cat": 11.236,
+    "total": 12.682
+   },
+   "wall": 12.691
+  }
+ },
+ {
+  "model": "qwen3.5:4b-mlx",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 1.985,
+   "p95": 2.248
+  },
+  "t_cat": {
+   "p50": 3.102,
+   "p95": 3.34
+  },
+  "total": {
+   "p50": 4.603,
+   "p95": 5.195
+  },
+  "sample": "{\n\"category\": \"normal\",\n\"subtype\": \"person_down\",\n\"confidence\": 0.85,\n\"people_count\": 4,\n\"summary\": \"Two frames show a bus with people walking nearby; two frames show coaches shouting on a field. No s",
+  "contention": {
+   "chat": {
+    "t_cat": 2.298,
+    "total": 2.298
+   },
+   "cam1": {
+    "t_cat": 5.349,
+    "total": 6.658
+   },
+   "cam2": {
+    "t_cat": 9.715,
+    "total": 11.067
+   },
+   "wall": 11.073
+  }
+ },
+ {
+  "model": "qwen3.5:2b",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 1.378,
+   "p95": 1.438
+  },
+  "t_cat": {
+   "p50": 2.073,
+   "p95": 2.266
+  },
+  "total": {
+   "p50": 2.631,
+   "p95": 2.997
+  },
+  "sample": "{\n  \"category\": \"fighting\",\n  \"subtype\": \"person_down\",\"confidence\": 0.95,\n  \"people_count\": 4,\n  \"summary\": \"Two men argue intensely near a bus.\"\n}",
+  "contention": {
+   "chat": {
+    "t_cat": 1.63,
+    "total": 1.63
+   },
+   "cam2": {
+    "t_cat": 4.038,
+    "total": 4.567
+   },
+   "cam1": {
+    "t_cat": 6.869,
+    "total": 7.626
+   },
+   "wall": 7.633
+  }
+ }
+]

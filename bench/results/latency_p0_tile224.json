@@ -1,0 +1,66 @@
+[
+ {
+  "model": "qwen3.5:2b",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 0.789,
+   "p95": 0.894
+  },
+  "t_cat": {
+   "p50": 1.347,
+   "p95": 1.455
+  },
+  "total": {
+   "p50": 2.437,
+   "p95": 2.612
+  },
+  "sample": "{\n  \"category\": \"tailgating\",\n  \"confidence\": 0.95,\n  \"subtype\": \"bus_tailgating\",\"people_count\": 4,\"summary\": \"Two men in suits tailgate a bus on a city street.\"}",
+  "contention": {
+   "chat": {
+    "t_cat": 1.554,
+    "total": 1.554
+   },
+   "cam1": {
+    "t_cat": 3.118,
+    "total": 4.292
+   },
+   "cam2": {
+    "t_cat": 5.679,
+    "total": 6.628
+   },
+   "wall": 6.631
+  }
+ },
+ {
+  "model": "qwen3.5:4b-mlx",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 1.077,
+   "p95": 1.365
+  },
+  "t_cat": {
+   "p50": 1.74,
+   "p95": 2.004
+  },
+  "total": {
+   "p50": 3.679,
+   "p95": 4.085
+  },
+  "sample": "{\n \"category\": \"normal\",\n \"confidence\": 0.95,\n \"subtype\": \"person_down\"\n,\n \"people_count\": 4\n,\n \"summary\": \"A bus and two men walking near it; a coach pointing at the field. No incident or severe even",
+  "contention": {
+   "chat": {
+    "t_cat": 2.288,
+    "total": 2.288
+   },
+   "cam2": {
+    "t_cat": 4.177,
+    "total": 6.079
+   },
+   "cam1": {
+    "t_cat": 7.949,
+    "total": 9.664
+   },
+   "wall": 9.669
+  }
+ }
+]

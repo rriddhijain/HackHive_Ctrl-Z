@@ -1,0 +1,66 @@
+[
+ {
+  "model": "qwen3.5:2b",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 0.623,
+   "p95": 0.755
+  },
+  "t_cat": {
+   "p50": 1.229,
+   "p95": 1.797
+  },
+  "total": {
+   "p50": 2.305,
+   "p95": 3.594
+  },
+  "sample": "{\n  \"category\": \"tailgating\",\n  \"confidence\": 0.95,\n  \"subtype\": \"bus tailgate\",\"people_count\": 4,\"summary\": \"Four people attempting to enter a bus illegally.\"}",
+  "contention": {
+   "chat": {
+    "t_cat": 1.567,
+    "total": 1.567
+   },
+   "cam2": {
+    "t_cat": 2.866,
+    "total": 3.879
+   },
+   "cam1": {
+    "t_cat": 5.438,
+    "total": 6.577
+   },
+   "wall": 6.58
+  }
+ },
+ {
+  "model": "qwen3.5:4b-mlx",
+  "valid": 1.0,
+  "ttft": {
+   "p50": 0.803,
+   "p95": 1.328
+  },
+  "t_cat": {
+   "p50": 1.603,
+   "p95": 2.19
+  },
+  "total": {
+   "p50": 3.539,
+   "p95": 4.357
+  },
+  "sample": "{\n  \"category\": \"suspicious_activity\",\n  \"confidence\": 0.85\n,\n  \"subtype\": \"tailgating\"\n,\n  \"people_count\": 4\n,\n  \"summary\": \"Two men in suits appear to be tailgating a bus, with one gesturing aggress",
+  "contention": {
+   "chat": {
+    "t_cat": 2.307,
+    "total": 2.307
+   },
+   "cam1": {
+    "t_cat": 3.7,
+    "total": 5.387
+   },
+   "cam2": {
+    "t_cat": 6.914,
+    "total": 8.81
+   },
+   "wall": 8.813
+  }
+ }
+]
