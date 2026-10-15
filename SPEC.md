@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.3 (2026-10-15 23:00 IST): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -166,7 +166,7 @@ sequenceDiagram
 | `person_down` | A person lying or collapsed on the floor (fall, fainting), not sitting or resting on furniture | null | critical |
 | `crowd_incident` | Abnormally dense gathering, or a crowd suddenly running/dispersing | `gathering`, `running` | high |
 | `property_damage` | Damage to property or a hazardous object event, accidental or deliberate: an object/debris falling, a structure collapsing, items knocked over and broken, shattered glass, vandalism | `falling_object`, `collapse`, `breakage`, `vandalism` | high |
-| `suspicious_activity` | Loitering, trespassing/climbing, theft/shoplifting, an abandoned object, a visible weapon | `weapon`, `theft`, `trespass`, `loitering`, `abandoned_object`, `other` | **critical** (D19; subtype split pending §16) |
+| `suspicious_activity` | Loitering, trespassing/climbing, theft/shoplifting, an abandoned object, a visible weapon | `weapon`, `theft`, `trespass`, `loitering`, `abandoned_object`, `other` | **by subtype** (D35): `weapon`, `theft`, `trespass`, `other` → critical · `loitering`, `abandoned_object` → medium |
 | `tailgating` | A second person follows closely through a door/gate on one opening | null | medium |
 | `normal` | None of the above | null | none |
 
@@ -413,7 +413,7 @@ Each line is a decision. ✋ = decided by Claude; the team can veto.
 - **E-7** Cross-check runs at `t_category`, *before* the alert: `fighting` needs ≥ 2 persons in the last 2 s of tracks; `crowd_incident` needs ≥ 0.6 × `crowd_min` persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone and ≥ 2 entries; `fire_smoke` and `property_damage` need no detector evidence. Contradicting evidence multiplies the category's probability by 0.5; a supporting gate trigger multiplies it by 1.15 (§6.5). ✋
 - **E-8** If the label flips during an event (fight → normal → fight within 8 s), it stays one event. Only 8 s without support closes it. ✋
 - **E-9** A re-look (P4) that disagrees with an open event marks it `dismissed` and sends an `event_close`; the UI shows "dismissed after re-check" for 5 s, then hides it. It's the only way an alert is retracted. ✋
-- **E-10** Severity: `suspicious_activity` stays **critical** for every subtype (team decision D19). `subtype` is recorded anyway, so the split can be switched on in config later. Team
+- **E-10** Severity of `suspicious_activity` follows its subtype (D35): `weapon`, `theft`, `trespass`, `other` = critical (sound); `loitering`, `abandoned_object` = **medium (card only, no sound)**. **Loitering zones:** if a camera has a `watch_zone`, loitering counts only for people standing inside it (live demo cameras, set at venue setup); with no zone (dataset clips, uploads) the whole frame counts. Note: dataset clips are 10–30 s, shorter than `loiter_s`, so there loitering is detected by the model's baseline checks, not the dwell trigger. Team
 - **E-11** Observation `ts` = `t_capture` of the newest frame in its mosaic.
 
 **Sources**
@@ -458,6 +458,6 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 | Aryan | Product & Pitch | |
 
 ## 16. Pending decisions (do not block the build)
-1. ~~`suspicious_activity` severity~~: resolved, all critical (E-10); subtype recorded so a split can be switched on in config.
+1. ~~`suspicious_activity` severity~~: resolved by subtype; loitering and abandoned objects are medium (E-10, D35).
 2. ~~FR-5 video upload~~: resolved, yes, in Round 1 (D26).
 3. GGUF vs MLX build of Qwen3.5-4B, and whether we must drop to the 2B: decided by a 10-min latency test after download.
