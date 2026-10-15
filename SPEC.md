@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.1 (2026-10-15 21:15 IST): adds §5a step-by-step dataflow and §12a runtime behaviour & edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.2 (2026-10-15 22:20 IST): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -41,12 +41,13 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 | FR-8a | **One model arbiter for ALL model calls (vision + chat)**, strict priority: ① gate-triggered incident calls (round-robin across cameras) → ② chat → ③ baseline checks → ④ re-looks. Baselines are skipped while any ① is pending. A running call is never interrupted; the next free slot goes to the highest priority. Ollama runs with 2 parallel slots if the latency test shows that's faster overall, otherwise 1 | R1 |
 | FR-8b | Chat avoids the model where possible: a rule-based parser handles camera/category/time first; the model is called only if the rules can't parse the question, or for "summarise" answers. Count/list/latest answers are templates (no model call) | R1 |
 | FR-8c | Each chat answer is a snapshot stamped "as of HH:MM:SS"; incidents that open while the user is chatting appear in the feed live, and the chat shows a "N new incidents since your question" chip | F |
-| FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3); **alert fires as soon as `category` is parsed** | R1 |
+| FR-9 | VLM call: 2×2 mosaic of 4 frames over ~2 s + detector hints → **streamed** JSON (§7.3) with token log-probabilities; **the category and its confidence are known from the first category token**, so the alert decision happens there | R1 |
+| FR-9a | **Confidence score from log-probabilities** (§6.5): a probability for every category on every observation, calibrated on the dev set, shown in the UI as a % and a High/Medium/Low rating. The model never writes its own confidence | R1 (raw) · F (calibrated) |
 | FR-10 | Cross-check the VLM label against detector evidence (e.g. "fighting" needs ≥ 2 people) | F |
 | FR-11 | Event manager: merge windows into events with open/update/close (hysteresis, §6.4) | R1 |
-| FR-12 | Uncertainty re-look: confidence 0.4–0.7 → same model re-checks with more frames, only when the queue is idle | F |
+| FR-12 | Uncertainty re-look: top probability in 0.4–0.7 **or** top-1 minus top-2 < 0.2 → same model re-checks with more frames, only when the queue is idle | F |
 | FR-13 | SQLite store (observations + events + FTS5 search) + key frames on disk | R1 |
-| FR-14 | Dashboard: camera grid, incident feed (thumbnail, badge, confidence, summary, ack), sound alert + toast for critical, metrics strip | R1 |
+| FR-14 | Dashboard: camera grid, incident feed (thumbnail, badge, confidence % + High/Medium/Low rating, summary, ack), sound alert + toast for critical, metrics strip | R1 |
 | FR-15 | **Workflow view**: live pipeline diagram with per-stage ms, the current mosaic, hints and raw VLM JSON | R1 |
 | FR-16 | Live "what's happening now" summary line per camera | R1 |
 | FR-17 | Digest: "summarise the last N minutes on camX" | F |
@@ -62,9 +63,9 @@ Honeywell Problem Statement 3: a **fully local** system that ingests live or sim
 
 | ID | Requirement | Target |
 |---|---|---|
-| NFR-1 | **Latency** | YOLO ≤ 40 ms/frame · VLM call p50 ≤ 1.5 s, p95 ≤ 2.5 s · **time-to-alert p95 ≤ 2.0 s** · time-to-full-summary p95 ≤ 4 s · keep-up 100 % |
-| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · chat filters ≥ 90 %, answers 100 % grounded |
-| NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: time-to-alert p95 ≤ 3.0 s for both cameras; chat answer ≤ 5 s. Measured by a stress test |
+| NFR-1 | **Latency** | YOLO ≤ 40 ms/frame · VLM call p50 ≤ 1.5 s, p95 ≤ 2.5 s · **time-to-alert p95 ≤ 2.0 s** (one camera, empty queue; P0 measured 1.74/2.00 s in the model alone) · time-to-full-summary p95 ≤ 4 s · keep-up 100 % |
+| NFR-2 | **Accuracy** | Macro F1 ≥ 0.75 on the held-out test set · summary quality ≥ 4.0/5 with 0 hallucinated people/objects · calibration error (ECE) ≤ 0.10 · chat filters ≥ 90 %, answers 100 % grounded |
+| NFR-1a | **Contention** | With 2 simultaneous incidents + 1 chat question: 1st camera ≤ 2.5 s, **2nd camera ≤ 4.0 s** p95 (calls run one at a time on this GPU, P0/D30); chat answer ≤ 5 s. Measured by a stress test |
 | NFR-3 | Efficiency | VLM calls ≥ 90 % fewer than "VLM on every frame" |
 | NFR-4 | Resources | Peak memory ≤ 75 % of RAM; no swap thrash; 3–4 cameras on the M4 |
 | NFR-5 | Stability | 30-min soak test, 3 cameras: no crash, no latency drift |
@@ -110,7 +111,7 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | 4 | **Schedule** | `scheduler.py` | A Trigger becomes a **P1 request** unless (a) that camera already has a P1 queued, or (b) an event of the trigger's category is open on that camera (cooldown), or (c) < 1 s since this camera's last P1 call. Otherwise, if ≥ `baseline_interval_s` since this camera's last call **and no P1 is waiting anywhere**, a **P3 baseline request** is made. A request holds only `{camera_id, trigger, created_at}`; **no frames** | — |
 | 5 | **Dispatch** | arbiter (`models.py`) | When a model slot frees: take the highest priority (P1 → P2 chat → P3 → P4 re-look), round-robin across cameras within P1. **The mosaic is built now, from the freshest 4 buffer frames** at offsets −2.0, −1.33, −0.67, 0 s (nearest available; fewer tiles if the buffer is shorter), so frames are never stale. A P1 whose trigger is > 4 s old is downgraded to P3 | queue wait 0–1.5 s under contention |
 | 6 | **VLM call** | `vlm.py` | `POST /v1/chat/completions` with `stream: true`, JSON schema (§7.3), `temperature 0`, `max_tokens 100`, **thinking disabled**, model kept loaded (`keep_alive: -1`). Tokens are parsed incrementally | measured in the latency test |
-| 7 | **Early decision** | `events.py` | As soon as `category`, `subtype` and `confidence` have streamed (`t_category`, ~15 tokens): cross-check (§12a E-7) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately**, with the summary shown as "…" | **time-to-alert target ≤ 2.0 s p95** |
+| 7 | **Early decision** | `events.py` | As soon as the **first token of the category value** arrives (`t_category`, ~8 tokens): its log-probabilities give the probability of every category (§6.5) → cross-check (§12a E-7) → event-manager rules (§6.4). **If an event opens → SSE `alert` + `event_open` immediately**, with the summary shown as "…" | **time-to-alert target ≤ 2.0 s p95** |
 | 8 | **Summary stream** | `events.py` → SSE | Summary tokens are pushed as `event_update` at most every 200 ms, so the card text types itself live | — |
 | 9 | **Persist** | `db.py` | At `t_vlm_done`: write the Observation (always, including `normal`); attach it to the event if one opened or updated; save a 320 px thumbnail; if it's the event's new peak, save the full-resolution newest frame + the mosaic as key frames. SSE `observation` (updates the camera's "now" line) + `trace` (Workflow view) | ≤ 20 ms |
 | 10 | **Close** | `events.py`, 1 s timer | Any open event with no supporting observation for `close_after_s` (8 s) → `closed`, SSE `event_close` | — |
@@ -145,7 +146,7 @@ sequenceDiagram
     Gate-->>Sch: Trigger (optional)
   end
   Sch->>VLM: freshest 2x2 mosaic + hints (stream)
-  VLM-->>Dec: category, subtype, confidence (first ~15 tokens)
+  VLM-->>Dec: category token + log-probabilities (first ~8 tokens)
   Dec-->>UI: alert + event_open (SSE)
   VLM-->>UI: summary tokens (event_update)
   VLM->>DB: full observation + key frames
@@ -177,9 +178,28 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 
 ### 6.4 Event lifecycle
 - **Alert = open.** The sound/toast fires exactly when an event opens, never for a single observation that doesn't open one. So critical categories alert on the first confident observation (~1 window), others on the second agreeing one (~3 s later): the speed vs false-alarm trade-off, per severity.
-- **Open:** critical categories on **1** observation with confidence ≥ 0.6; others on **2 of the last 3** with ≥ 0.5, or 1 with ≥ 0.85.
+- **Open, close and update follow the probability rules in §6.5.**
 - **Update:** extend `end_ts`, union `track_ids`, `n_obs += 1`; a new peak confidence replaces the summary and key frames.
-- **Close:** no supporting observation for **8 s**. Closed events never reopen.
+- **Closed events never reopen**; a new event starts instead.
+
+### 6.5 Confidence score & probability-based rules
+**Where the number comes from.** The model writes the category value token by token. At its **first token** we read the top-10 log-probabilities, map each candidate token to the category names it starts (e.g. `fight` → fighting, `s` → suspicious_activity), and renormalise over the 8 categories → `probs = {category: p}`, which sums to 1. Each category name must start with a distinct first token; this is checked at startup, and a colliding name is reworded in the prompt.
+
+**Calibration.** `p_cal = softmax(log p / T)`, with the temperature `T` fitted on the dev set (default 1.0). We report the calibration error (ECE) and a reliability chart in the report.
+
+**Evidence adjustment (cross-check, E-7).** `c = clamp(p_cal × f)`, where `f = 1.15` if a gate trigger supports the category, `0.5` if detector evidence contradicts it, `1.0` otherwise.
+
+**Window score.** For each (camera, category): `S = mean of c over the last 3 observations` (every observation carries a probability for *every* category, so this needs no special cases).
+
+| Rule | Condition (defaults in config, tuned on the dev set) |
+|---|---|
+| **Open, critical category** | One observation with `c ≥ 0.70` **and** corroborated (supporting gate trigger, or the category is `fire_smoke`), **or** `S ≥ 0.55` over ≥ 2 observations |
+| **Open, high/medium category** | `S ≥ 0.55` over ≥ 2 observations, **or** one observation with `c ≥ 0.85` and corroborated |
+| **Close** | No observation with `c ≥ 0.40` for that category for 8 s |
+| **Re-look** (FR-12) | Top `c` in 0.40–0.70, or top-1 − top-2 < 0.20 |
+| **Shown as** | `c` as a %, plus a rating: **High** ≥ 0.80 · **Medium** 0.60–0.80 · **Low** < 0.60 |
+
+An event's `peak_confidence` is the highest `c` it reached. The full `probs` map is stored on every observation.
 - **Cooldown:** per (camera, category) while an event is open, not per camera.
 
 ## 7. Data contracts
@@ -191,6 +211,7 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 {
   "id": 1, "camera_id": "cam1", "ts": 1760524800.12,
   "category": "normal", "subtype": null, "confidence": 0.91,
+  "probs": {"normal": 0.91, "suspicious_activity": 0.05, "fighting": 0.02, "person_down": 0.01, "crowd_incident": 0.01, "fire_smoke": 0.0, "property_damage": 0.0, "tailgating": 0.0},
   "summary": "Two people walking toward the exit.", "people_count": 2,
   "trigger": "baseline",
   "track_ids": [4, 7], "thumb_path": "data/thumbs/cam1/1760524800.jpg", "event_id": null,
@@ -216,12 +237,14 @@ Critical and high → sound + toast + red pulsing camera border. Medium → feed
 ```
 `status` ∈ `open` · `closed` · `acknowledged` · `dismissed` (a re-look downgraded it; kept for audit, hidden from the feed by default)
 
-### 7.3 VLM output (strict JSON, **fields in this order**, so streaming yields `category` first and `summary` last)
+### 7.3 VLM output (strict JSON, **fields in this order**: `category` first, `summary` last)
 ```json
-{ "category": "fighting", "subtype": null, "confidence": 0.82, "people_count": 3,
+{ "category": "fighting", "subtype": null, "people_count": 3,
   "summary": "≤ 30 words, objective: who, what, where in frame" }
 ```
-Invalid or unparseable output → `{"category": "normal", "confidence": 0}`, logged as a VLM error.
+- **No `confidence` field**: confidence comes from log-probabilities (§6.5). This saves ~6 output tokens.
+- `subtype` is constrained in the JSON schema to the allowed list for the chosen category (§6.1), or null.
+- Invalid or unparseable output → observation `{"category": "normal", "confidence": 0}`, logged as a VLM error.
 
 ### 7.4 Trigger (gate → scheduler)
 ```json
@@ -252,7 +275,7 @@ Response
 ```sql
 CREATE TABLE observations (
   id INTEGER PRIMARY KEY, camera_id TEXT NOT NULL, ts REAL NOT NULL,
-  category TEXT NOT NULL, subtype TEXT, confidence REAL, summary TEXT, people_count INTEGER,
+  category TEXT NOT NULL, subtype TEXT, confidence REAL, probs TEXT, summary TEXT, people_count INTEGER,
   trigger TEXT, track_ids TEXT, thumb_path TEXT, event_id INTEGER, model TEXT, timing TEXT, seeded INTEGER DEFAULT 0);
 CREATE INDEX idx_obs_cam_ts ON observations(camera_id, ts);
 
@@ -266,7 +289,7 @@ CREATE INDEX idx_evt_cam_ts ON events(camera_id, start_ts);
 CREATE VIRTUAL TABLE events_fts USING fts5(summary, category, content='events', content_rowid='id');
 CREATE VIRTUAL TABLE observations_fts USING fts5(summary, content='observations', content_rowid='id');
 ```
-JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`) are stored as JSON text.
+JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are stored as JSON text.
 
 ## 9. HTTP API (FastAPI, `http://localhost:8000`)
 
@@ -300,7 +323,7 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`) are stored as JSON
 | `type` | `data` |
 |---|---|
 | `event_open` / `event_update` / `event_close` | Event |
-| `alert` | `{event_id, camera_id, category, severity, confidence}`, sent the moment `category` is parsed |
+| `alert` | `{event_id, camera_id, category, severity, confidence, rating}`, sent the moment the first category token arrives and the open rule passes |
 | `observation` | Observation (drives the live "now" line) |
 | `trace` | `{camera_id, trigger, stages: [{name, ms}], mosaic_url, hints, raw_json}` (drives the Workflow view) |
 | `metrics` | §9.1, every 1 s |
@@ -314,14 +337,16 @@ cameras:
   - { id: cam3, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
   - { id: cam4, name: "Warehouse (recorded)", source: "data/demo/warehouse.mp4" }
 detector: { model: yolo11s.pt, fps: 10, imgsz: 640, conf: 0.35, device: mps }
-vlm:  { base_url: "http://localhost:11434/v1", model: "qwen3.5:4b", stream: true, temperature: 0,
-        max_tokens: 100, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 336,
-        baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook_band: [0.4, 0.7],
-        think: false, keep_alive: -1, parallel_slots: 1 }   # parallel_slots set by the stress test (E-2)
+vlm:  { base_url: "http://localhost:11434/v1", model: "qwen3.5:4b-mlx", stream: true, temperature: 0, logprobs: true, top_logprobs: 10,
+        max_tokens: 80, mosaic_frames: 4, mosaic_span_s: 2.0, tile_px: 224,
+        baseline_interval_s: 3, empty_interval_s: 10, trigger_max_age_s: 4, timeout_s: 6, relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 },
+        think: false, keep_alive: -1, parallel_slots: 1 }   # 2 slots measured: no gain on this GPU (D30)
 replay: { store_events_on_replay: true, reset_live_tables_on_start: true }
 gate: { crowd_min: 8, crowd_rise: 5, tailgate_window_s: 2.5, loiter_s: 30, down_ratio: 1.2, down_hold_s: 1.0,
         scene_change_frac: 0.25 }
-events: { open_conf_critical: 0.6, open_conf: 0.5, open_conf_single: 0.85, close_after_s: 8 }
+events: { open_single_critical: 0.70, open_single_other: 0.85, open_window: 0.55, window_n: 3, close_c: 0.40, close_after_s: 8,
+          corroborate_boost: 1.15, contradict_factor: 0.5, calibration_T: 1.0,
+          rating: { high: 0.80, medium: 0.60 } }
 chat: { base_url: "same-as-vlm", model: "same-as-vlm" }
 ```
 
@@ -353,7 +378,8 @@ Every module has a runnable self-check: `uv run python -m app.<module>`.
 - **End-to-end** = `t_db_write − t_capture`
 - **Keep-up** = frames processed by YOLO ÷ frames sampled for YOLO
 - **Calls saved** = 1 − (VLM calls ÷ frames sampled for YOLO)
-- **Clip prediction** (accuracy runs) = highest-confidence non-`normal` event in the clip, else `normal`
+- **Clip prediction** (accuracy runs) = highest-`peak_confidence` non-`normal` event in the clip, else `normal`
+- **Calibration error (ECE)** = mean |accuracy − confidence| over 10 confidence bins, weighted by bin size, on the test set
 - **Macro F1** over all 9 labels (8 categories + normal), on the **held-out test set**, never used for tuning
 - Latency stats: p50 / p95 / max over ≥ 50 events, first 5 discarded as warm-up
 
@@ -363,14 +389,14 @@ Each line is a decision. ✋ = decided by Claude; the team can veto.
 
 **Model & contention**
 - **E-1** One model serves vision and chat through one arbiter with priorities P1 incident → P2 chat → P3 baseline → P4 re-look (FR-8a). A running call is never interrupted. ✋
-- **E-2** 1 or 2 parallel Ollama slots: picked by the latency + stress test (NFR-1a). ✋
+- **E-2** **1 Ollama slot.** 2 slots were tested (P0) and calls still ran one at a time on the M4 GPU, so the arbiter's priority order is what protects incident latency. ✋
 - **E-3** Model stays loaded (`keep_alive: -1`) and gets a warm-up call at startup; a cold load (~5–10 s) must never happen during the demo. ✋
 - **E-4** Qwen3.5 "thinking" mode is **off** for every call (it would add seconds). ✋
 - **E-5** A VLM call that errors or exceeds 6 s → logged as `vlm_error`, no observation is stored, and the camera simply gets its next window. Three errors in a row → the VLM status dot turns red; detection and the live view keep running. ✋
 
 **Classification & events**
 - **E-6** At most **one open event per (camera, category)**. Different categories can be open on the same camera at once (a fight and a person down are two events). ✋
-- **E-7** Cross-check runs at `t_category`, *before* the alert: `fighting` needs ≥ 2 persons in the last 2 s of tracks; `crowd_incident` needs ≥ 0.6 × `crowd_min` persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone and ≥ 2 entries (or confidence ≥ 0.8); `fire_smoke` and `property_damage` need no detector evidence. Failing a check halves the confidence (or sets it to `normal` for person_down) before the open rule runs. ✋
+- **E-7** Cross-check runs at `t_category`, *before* the alert: `fighting` needs ≥ 2 persons in the last 2 s of tracks; `crowd_incident` needs ≥ 0.6 × `crowd_min` persons; `person_down` needs ≥ 1 person; `tailgating` needs a door zone and ≥ 2 entries; `fire_smoke` and `property_damage` need no detector evidence. Contradicting evidence multiplies the category's probability by 0.5; a supporting gate trigger multiplies it by 1.15 (§6.5). ✋
 - **E-8** If the label flips during an event (fight → normal → fight within 8 s), it stays one event. Only 8 s without support closes it. ✋
 - **E-9** A re-look (P4) that disagrees with an open event marks it `dismissed` and sends an `event_close`; the UI shows "dismissed after re-check" for 5 s, then hides it. It's the only way an alert is retracted. ✋
 - **E-10** Severity: `suspicious_activity` stays **critical** for every subtype (team decision D19). `subtype` is recorded anyway, so the split can be switched on in config later. Team

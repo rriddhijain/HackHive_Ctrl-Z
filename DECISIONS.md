@@ -208,6 +208,17 @@ We run **three kinds of "camera" at once**; the system treats them all the same 
 
 - `Decision:` ✅ **Adopted by the team** (D13). Tricks 1–4 are built by default; trick 5 only if the dev-set numbers call for it. **Revisit trigger:** if the benchmark shows the 4B is too slow *and* the 2B misses the accuracy target, Claude brings this back to the team with numbers rather than silently changing the design.
 
+**Q36 🟡 Adaptive frame rate / frame selection (team proposal, 2026-10-15)**
+
+*Proposal:* keep the detector at a constant rate (gate thresholds are per unit of time; changing the FPS breaks them and ByteTrack IDs). Optional, in priority order: ① pick the frames that matter at trigger time (the trigger frame, the peak-motion frame, the latest frame) instead of fixed spacing; ② idle mode: drop the detector to 2–3 FPS after a few seconds with no people, back to 10 FPS as soon as someone appears; ③ one follow-up VLM call 1–2 s after a trigger to confirm or upgrade the category (e.g. `suspicious_activity` → `fighting`).
+
+*Claude's verdict (taking D28 into account: one VLM call at a time, ~1.8 s each, so a second camera waits 4–8 s):*
+- **Constant rate: agreed, already in the spec (10 FPS).** One addition: compute speed and hold times from `t_capture` differences, not frame counts, because under load the detector can run slower than 10 FPS.
+- **① Adopt, but anchor on the trigger time.** The mosaic is built at dispatch from the last 2 s, and with 4–8 s queue waits the trigger moment has often already left that window: the VLM sees the aftermath, not the incident. Fix: tiles = [trigger −0.7 s, trigger, peak motion between trigger and now, latest], each labelled with its time offset. Keep the frame references at trigger time; they're numpy arrays, so this costs nothing. Baseline calls keep uniform spacing.
+- **② Skip for now.** The VLM already slows to every 10 s on empty scenes (`empty_interval_s`), and the demo cameras are rarely empty. Revisit only if profiling shows YOLO slowing the VLM down on the shared GPU.
+- **③ Don't adopt.** Every extra call takes the single model slot for ~1.8 s and pushes other cameras' alerts back. Upgrades already happen: cooldown is per (camera, category), so a `fighting` gate still fires while a `suspicious_activity` event is open. The real problem is underneath: D28 found self-reported confidence is always 0.85–0.98, so `open_conf_single: 0.85` opens nearly every non-`normal` observation on the first try, and the 0.4–0.7 re-look band never triggers. Better "second vote" for free: count a matching gate trigger (detector evidence) as the second observation instead of the VLM's confidence.
+- `Decision:` *pending team*
+
 **Q12 🟡 Chat LLM.**
 - A: **Reuse the same VLM** for chat (one model in memory, best for 16 GB)
 - B: Separate text model (Qwen3-4B-Instruct-2507 or Qwen3-1.7B, 4-bit)
@@ -535,6 +546,8 @@ detector: { model: "yolo11s", fps: 10, imgsz: 640, conf: 0.35, device: "mps" }
 | D26 | 2026-10-15 | FR-5 upload-a-video approved and pulled into Round 1 (small: one endpoint + one UI drop zone; ingest already supports files) | Team | Judges may ask to test their own clip |
 | D27 | 2026-10-15 | Team does no development: Claude builds everything, the team tests/inspects/critiques/validates. Aryan's role → end-to-end reliability & experience QA. The pitch is done by all four together; Claude drafts the deck | Captain | PLAN.md rewritten |
 | D28 | 2026-10-15 | **P0 results (M4, unique image per call, streamed JSON, thinking off).** Time until category+confidence (p50/p95): 4B 336px 3.51/3.88 s · 4B-MLX 336px 3.10/3.34 · 2B 336px 2.07/2.27 · **4B-MLX 224px 1.74/2.00** · 2B 224px 1.35/1.46 · 160px tiles hurt answers. Calls run one at a time: with 2 incidents + 1 chat, the 2nd camera waits 4–8 s. The 2B mislabelled a calm street scene as fighting/tailgating at 0.95 confidence; the 4B said normal. → **Provisional: qwen3.5:4b-mlx, 224 px tiles, `confidence` before `subtype`.** Self-reported confidence is meaningless (always 0.85–0.98). Parallel-slot test pending an Ollama restart | Claude | bench/results/latency_p0_*.json |
+| D29 | 2026-10-15 | **Confidence = log-probabilities**, not model-written: per-category probabilities from the first category token, calibrated on the dev set, shown as % + High/Medium/Low. Event rules become probability-based (SPEC §6.5). The model's `confidence` output field is removed. Replaces the evidence-only rule proposal | Captain | Verified: Ollama returns top-k logprobs for qwen3.5:4b-mlx |
+| D30 | 2026-10-15 | Ollama parallel slots: 2 tested after restart, no gain (calls still run one at a time on the M4 GPU) → 1 slot; incidents are protected by the arbiter's priority order. Contention target revised to 2nd camera ≤ 4.0 s | Claude | SPEC E-2, NFR-1a |
 | D6 | 2026-10-15 | Evaluation criteria: summarisation, incident classification, chatbot interface, approach + workflow demonstration, implementation. **Major: latency and accuracy, which must be best-in-class.** | Organisers | Added the Workflow view, live scene summary and digest to the must-haves; added Q33–Q35 |
 
 ---
