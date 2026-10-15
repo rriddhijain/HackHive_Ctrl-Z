@@ -1,0 +1,67 @@
+# Runtime configuration. Contract: SPEC.md §10. Camera sources: int = webcam index, path = video file, URL = http/rtsp stream.
+cameras:
+  - { id: cam1, name: "Front Desk (webcam)", source: 0 }
+  - { id: cam2, name: "Lobby (recorded)", source: "data/demo/sample_bus.mp4" }
+  # - { id: cam3, name: "Lobby Door (iPhone)", source: 1, door_zone: [[0.42,0.20],[0.58,0.20],[0.58,0.95],[0.42,0.95]] }
+  # - { id: cam4, name: "Corridor (Pixel)", source: "http://192.168.43.20:8080/video" }
+
+detector:
+  model: models/yolo26n.pt       # nano on CPU: leaves the GPU to the VLM (D34)
+  fps: 10
+  imgsz: 640
+  conf: 0.35
+  device: cpu                    # mps + VLM: YOLO 119 ms/frame, keep-up 79 %, VLM spikes; cpu: 70 ms, 99 %, VLM unaffected
+  classes: [0, 24, 26, 28, 43]   # person, backpack, handbag, suitcase, knife (COCO)
+  buffer_s: 4.0
+  frame_width: 640               # frames are resized to this width for the buffer, gates and mosaics
+
+vlm:
+  base_url: "http://localhost:11434"
+  endpoint: "/api/chat"
+  model: "qwen3.5:4b-mlx"
+  confidence_source: logprobs    # or "model_field" (fallback, SPEC E-1a)
+  stream: true
+  temperature: 0
+  logprobs: true
+  top_logprobs: 10
+  max_tokens: 80
+  mosaic_frames: 4
+  mosaic_span_s: 2.0
+  tile_px: 224
+  baseline_interval_s: 3
+  empty_interval_s: 10
+  trigger_max_age_s: 4
+  timeout_s: 6
+  relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 }
+  think: false
+  keep_alive: -1
+  parallel_slots: 1
+
+gate:
+  crowd_min: 8
+  crowd_rise: 5
+  tailgate_window_s: 2.5
+  loiter_s: 30
+  down_ratio: 1.2
+  down_hold_s: 1.0
+  scene_change_frac: 0.25
+
+events:
+  open_single_critical: 0.70
+  open_single_other: 0.85
+  open_window: 0.55
+  window_n: 3
+  close_c: 0.40
+  close_after_s: 8
+  corroborate_boost: 1.15
+  contradict_factor: 0.5
+  calibration_T: 1.0
+  rating: { high: 0.80, medium: 0.60 }
+
+replay:
+  store_events_on_replay: true
+  reset_live_tables_on_start: true
+
+chat:
+  base_url: "same-as-vlm"
+  model: "same-as-vlm"
