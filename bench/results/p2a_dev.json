@@ -1,30 +1,30 @@
 {
  "model": "qwen3.5:4b-mlx",
  "cameras": 7,
- "wall_s": 40.5,
- "gpu_duty": 0.975,
+ "wall_s": 29.7,
+ "gpu_duty": 0.962,
  "calls": {
-  "P1": 0,
-  "P3": 6
+  "P1": 1,
+  "P3": 7
  },
  "stopped_at_category": 0,
- "cancelled": 0,
+ "cancelled": 1,
  "baselines_skipped": 0,
- "gate_triggers": 0,
- "vlm_errors": 1,
- "vetoes": 8,
- "vetoes_p_ge_0.3": 0,
+ "gate_triggers": 1,
+ "vlm_errors": 0,
+ "vetoes": 10,
+ "vetoes_p_ge_0.3": 1,
  "model_tta_ms": {
-  "p50": 11089,
-  "p95": 29072
+  "p50": 11693,
+  "p95": 18783
  },
  "call_ms": {
-  "p50": 5549,
-  "p95": 5781
+  "p50": 3673,
+  "p95": 3870
  },
  "queue_ms": {
-  "p50": 11396,
-  "p95": 33891
+  "p50": 15086,
+  "p95": 25164
  },
  "clips": [
   {
@@ -61,11 +61,17 @@
    "camera": "cam4",
    "clip": "v011.avi",
    "label": "fighting",
-   "prediction": "normal",
-   "right": false,
+   "prediction": "fighting",
+   "right": true,
    "onset_to_alert_ms": null,
-   "events": [],
-   "summary": null
+   "events": [
+    [
+     "fighting",
+     0.8,
+     20326
+    ]
+   ],
+   "summary": "Two individuals are physically engaging in a struggle near a table; others observe."
   },
   {
    "camera": "cam5",
