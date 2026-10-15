@@ -1,6 +1,6 @@
 # SPEC.md: System Specification & Universal Contract
 
-> **Version:** v1.6 (2026-10-16 01:15 IST): judge-review package (D42–D56): baseline load control + observation-based close, 16:9 letterboxed tiles, prompt exclusions, detector cross-check moved to R1, one pixel coordinate system + person-only gates, honest latency definitions, operator metrics (false alarms per camera-hour, watts per camera), operator workflow; R1 scope unchanged (W7 rejected). v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
+> **Version:** v1.7 (2026-10-16): chat sentence-level grounding: a `summary` sentence with no valid `[#id]` is dropped, not just the bad ID (D57). v1.6 (2026-10-16 01:15 IST): judge-review package (D42–D56): baseline load control + observation-based close, 16:9 letterboxed tiles, prompt exclusions, detector cross-check moved to R1, one pixel coordinate system + person-only gates, honest latency definitions, operator metrics (false alarms per camera-hour, watts per camera), operator workflow; R1 scope unchanged (W7 rejected). v1.5 (2026-10-16 00:00 IST): pose-model A/B for gates (FR-6a), trained-classifier accuracy upgrade (FR-9b), pipeline-alternatives review (D39–D41). v1.4 (2026-10-15 23:20 IST): loitering/abandoned objects medium + optional watch zones (D35). v1.3 (23:00): demo machine M5; approved 9-item arbiter/metrics package (D31–D32). v1.2 (22:20): confidence from token log-probabilities + probability-based event rules (§6.5); P0 results applied (model, tile size, 1 slot). v1.1 added §5a dataflow and §12a edge cases · **Status:** 🟡 awaiting team sign-off (§15)
 > **This is the single source of truth** for what we build and how the parts talk to each other. Decisions and their reasons live in [DECISIONS.md](DECISIONS.md); the schedule lives in [PLAN.md](PLAN.md).
 > **Change rule:** anything in §6–§11 changes only with the captain's approval, a version bump here and a log entry in DECISIONS.md.
 
@@ -131,7 +131,7 @@ Chat: question → VLM-as-LLM extracts filters (JSON) + rule-based extractor →
 | 3 | Model extraction (only if step 2 can't parse) | Arbiter priority **P2**, text-only, JSON-schema output, `max_tokens 80`, timeout 8 s → on timeout, fall back to the step-2 result and say so in the answer |
 | 4 | Time resolution | Python, IST: "today" = 00:00 IST → now; "yesterday"; "last N min/hours"; "this morning" 06–12, "afternoon" 12–17, "evening" 17–22; "at 3 pm" = 14:45–15:15; "since 3 pm"; "between X and Y". No time phrase → **all time** |
 | 5 | Retrieval | `query_events` / `count_events` (non-dismissed events only); `keywords` → FTS5 match on `events_fts` and `observations_fts` combined with the other filters. `summary` intent, or 0 events matched → also `query_observations` |
-| 6 | Answer | `list`/`count`/`latest`/`detail` → **template, no model**. `summary` → model at P2 with the rows (max 30) and `max_tokens 150`; any cited `[#id]` not in the rows is stripped. 0 rows → "No matching events between … and … (filters: …)" |
+| 6 | Answer | `list`/`count`/`latest`/`detail` → **template, no model**. `summary` → model at P2 with the rows (max 30) and `max_tokens 150`; answer is checked **sentence by sentence**: a cited `[#id]` not in the rows is removed, and any sentence left with no valid `[#id]` is dropped (D57); if nothing survives → the template list of the rows. 0 rows → "No matching events between … and … (filters: …)" |
 | 7 | Response | `{answer, events, filters, as_of, latency_ms}`. The UI shows "as of HH:MM:SS"; if new events open later, a "N new incidents since this answer" chip appears (FR-8c) |
 
 ### 5a.3 Sequence diagram
@@ -293,7 +293,7 @@ Response
 { "answer": "3 tailgating events on Lobby Door (cam2) today: [#12] 10:14, [#15] 11:02, [#19] 13:40.",
   "events": [ /* Event objects */ ], "filters": { /* as above */ }, "latency_ms": 1200 }
 ```
-**Grounding rules:** the answer may cite only event IDs present in `events`. Zero rows → "No matching events" + the filters used. Count/list/latest answers are templated (no LLM text).
+**Grounding rules:** the answer may cite only event IDs present in `events`. Every sentence of a model-written (`summary`) answer must carry at least one valid `[#id]`; sentences without one are dropped before the answer is sent (D57), so every sentence is traceable to a stored event. Zero rows → "No matching events" + the filters used. Count/list/latest answers are templated (no LLM text).
 
 ## 8. Database schema (SQLite, WAL)
 ```sql
