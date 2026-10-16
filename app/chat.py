@@ -52,7 +52,9 @@ seen saw spot spotted catch caught display let lets please can could would shoul
 event events incident incidents alert alerts happen happened happening occur occurred going on camera cameras cam cams
 footage recorded record details detail info information involving involve involved regarding related
 many much count number often latest last recent most newest summary summarise summarize overview recap brief describe
-report time times today yesterday ago since before after between until up out over just also only again more""".split())
+report time times today yesterday ago since before after between until up out over just also only again more
+someone somebody anyone anybody everyone everybody person persons people individual individuals guy guys
+one two three four being got""".split())   # D74: filler words are never required keywords
 GENERIC = {"camera", "cam", "live", "recorded", "webcam", "video", "room", "area", "view", "the", "avi", "mp4", "mov", "mkv"}
 CLK = r"(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?"
 
@@ -171,12 +173,10 @@ def parse(question, names, now):
 
 
 def fts_query(words):
-    """FTS5 query: every keyword must appear (singular or plural), quoted so user text can't inject syntax."""
-    terms = []
-    for w in words:
-        s = w[:-1] if len(w) > 3 and w.endswith("s") else w
-        terms.append(f'("{s}" OR "{s}s")')
-    return " AND ".join(terms)
+    """FTS5 query: every keyword must appear, quoted so user text can't inject syntax. The Porter tokenizer (D74)
+    stems both sides, so push / pushed / pushing and jacket / jackets match. No any-word fallback: "red jacket"
+    must not return the blue-jacket events (a grounded "no match" beats a near miss)."""
+    return " AND ".join(f'"{w}"' for w in words)
 
 
 def retrieve(db, f):

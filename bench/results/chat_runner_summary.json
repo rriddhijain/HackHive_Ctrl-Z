@@ -1,13 +1,13 @@
 {
- "right": 30,
- "n": 30,
+ "right": 44,
+ "n": 44,
  "invented": 0,
  "uncited": 0,
  "template_p50_ms": 0,
- "template_p95_ms": 2,
+ "template_p95_ms": 1,
  "latency_by_intent_ms": {
   "list": {
-   "p50": 1,
+   "p50": 0,
    "max": 2
   },
   "count": {
@@ -23,15 +23,15 @@
    "max": 0
   },
   "summary": {
-   "p50": 3163,
-   "max": 5160
+   "p50": 3116,
+   "max": 6035
   }
  },
  "summary_first_token_ms": [
-  624,
-  697,
-  117,
-  714
+  1263,
+  620,
+  310,
+  752
  ],
  "model_sentences_dropped": 0,
  "template_fallbacks": 0

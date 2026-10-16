@@ -1,0 +1,15 @@
+# uv run python -m bench.ab --gate --check, 16 Oct 2026 05:2x IST, M4, config.yaml duty_target 0.55 (D73), SPEC v1.15 gates (D72)
+p3c_shove_sit_hug.mp4  fighting   29.9 s  onset 5.6  fires        fires {'fighting': [7.6, 23.8]}  ①s [(7.6, 'fighting'), (23.8, 'fighting')]
+v001.avi               fighting    6.4 s  onset None  fires        fires {'fighting': [0.7]}  ①s [(1.0, 'fighting'), (2.0, 'fighting'), (3.0, 'fighting'), (4.0, 'fighting'), (5.0, 'fighting'), (6.4, 'fighting')]
+v003.avi               fighting    3.0 s  onset None  fires        fires {'fighting': [1.2]}  ①s [(1.2, 'fighting'), (2.2, 'fighting')]
+v006.avi               fighting    5.8 s  onset None  fires        fires {'fighting': [1.5, 2.8]}  ①s [(1.5, 'fighting'), (2.8, 'fighting'), (3.8, 'fighting'), (4.8, 'fighting')]
+v011.avi               fighting    8.7 s  onset None  fires        fires {'fighting': [5.6], 'person_down': [8.4]}  ①s [(5.6, 'fighting'), (8.4, 'person_down:drop')]
+v026.avi               fighting    9.7 s  onset None  KNOWN MISS: D64: nano never detects both fighters, so no gate can fire; only a baseline can catch it fires {}  ①s []
+w001_masked.avi        fighting    5.1 s  onset None  fires        fires {'person_down': [1.6], 'fighting': [1.6]}  ①s [(1.6, 'person_down:horizontal')]
+desk_closeup.mp4       normal     30.0 s  onset None  2.0 ①/min    fires {'person_down': [14.2]}  ①s [(14.2, 'person_down:horizontal')]
+floor_sit.mp4          normal     19.9 s  onset None  0.0 ①/min    fires {}  ①s []
+idle_60s.mp4           normal     60.0 s  onset None  1.0 ①/min    fires {'fighting': [31.1]}  ①s [(31.1, 'fighting')]
+sample_bus.mp4         normal     12.0 s  onset None  0.0 ①/min    fires {}  ①s []
+normal + look-alike clips: 2 gate ①s in 2.0 camera-min = 0.98/min (limit 2.0)
+gate check ok
+exit 0

@@ -1,0 +1,24 @@
+{
+ "machine": "M4 (Apple M4, 16 GB)",
+ "when": "2026-10-16 05:48 IST",
+ "ollama_killed_before": true,
+ "cold_start_to_dashboard_s": 10.2,
+ "note": "run_demo.sh: Ollama app start + model load (warm-up call) + re-seed + server + Chrome; clips: v011 then p3c_shove_sit_hug (onset 5.6 s) played once each via the API with Chrome on the dashboard",
+ "store_to_card_ms": {
+  "last": 13.0,
+  "p50": 13.0,
+  "p95": 20.2,
+  "n": 2
+ },
+ "onset_to_alert_ms": {
+  "last": 3141,
+  "p50": 3141,
+  "p95": 3141,
+  "n": 1
+ },
+ "chat_keyframes": {
+  "live_events": 2,
+  "with_keyframes": 2,
+  "keyframe_urls_200": 2
+ }
+}

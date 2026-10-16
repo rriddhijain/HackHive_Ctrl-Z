@@ -33,7 +33,7 @@ vlm:
   baseline_interval_s: 3
   empty_interval_s: 10
   baseline_skip: { mad: 6, max_skip_s: 15 }   # skip a baseline if the scene hasn't changed since this camera's last call (D42)
-  duty_target: 0.60              # baselines back off (one per camera per 15 s) while GPU duty > this; P1s never throttled (D66)
+  duty_target: 0.55              # baselines back off (one per camera per 15 s) while GPU duty > this; P1s never throttled (D66)
   summary_every_n: 3             # confident-normal baselines stop at the category; every Nth writes a summary (D42)
   p1_crop: { enabled: false, max_box_frac: 0.4, expand: 1.75 }   # FR-9c, final, on only if the dev A/B wins (D45)
   trigger_max_age_s: 4

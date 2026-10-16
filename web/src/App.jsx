@@ -431,6 +431,18 @@ function Chat({ onOpen }) {
           <div key={log.length - i} className="text-sm" data-answer={log.length - i}>
             <div className="text-zinc-400">› {a.question}</div>
             <div className="whitespace-pre-wrap">{cite(a)}</div>
+            {a.events?.length > 0 && (   // P5: key frame + IST time per cited event (the brief's "timestamps and key frames")
+              <div className="mt-1 flex gap-2 overflow-x-auto pb-1" data-frames>
+                {a.events.map((e) => (
+                  <button key={e.id} onClick={() => onOpen(e)} title={e.summary ?? ""} className="w-28 shrink-0 text-left">
+                    {e.keyframe_paths?.[0] ? <img src={media(e.keyframe_paths[0])} className="h-16 w-28 rounded object-cover" alt="" />
+                      : <div className="grid h-16 w-28 place-items-center rounded bg-zinc-800 text-[10px] text-zinc-500">{e.seeded ? "history" : "no key frame"}</div>}
+                    <div className="truncate text-[11px] text-zinc-300">[#{e.id}] {ist(e.start_ts)} IST</div>
+                    <div className="truncate text-[11px] text-zinc-500">{name(e.category)} · {e.camera_name}</div>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="text-[11px] text-zinc-500" data-how>{how(a.how)} · as of {ist(a.as_of)} IST · {a.latency_ms} ms</div>
           </div>
         ))}

@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS events (
   track_ids TEXT, status TEXT DEFAULT 'open', dismiss_reason TEXT, n_obs INTEGER DEFAULT 1,
   time_to_alert_ms INTEGER, latency_ms INTEGER, seeded INTEGER DEFAULT 0);
 CREATE INDEX IF NOT EXISTS idx_evt_cam_ts ON events(camera_id, start_ts);
-CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(summary, category, content='events', content_rowid='id');
-CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(summary, content='observations', content_rowid='id');
+CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(summary, category, content='events', content_rowid='id', tokenize='porter unicode61');   -- D74: push = pushed = pushing
+CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(summary, content='observations', content_rowid='id', tokenize='porter unicode61');
 CREATE TRIGGER IF NOT EXISTS events_ai AFTER INSERT ON events BEGIN
   INSERT INTO events_fts(rowid, summary, category) VALUES (new.id, new.summary, new.category); END;
 CREATE TRIGGER IF NOT EXISTS events_ad AFTER DELETE ON events BEGIN
@@ -51,6 +51,9 @@ class DB:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.con = sqlite3.connect(path, check_same_thread=False, isolation_level=None)  # autocommit
         self.con.execute("PRAGMA journal_mode=WAL")
+        old = self.con.execute("SELECT sql FROM sqlite_master WHERE name='events_fts'").fetchone()
+        if old and "porter" not in old[0]:          # a pre-D74 DB: recreate the FTS tables with the stemmer (rebuilt below)
+            self.con.executescript("DROP TABLE events_fts; DROP TABLE observations_fts;")
         self.con.executescript(SCHEMA)
         self.lock = threading.Lock()
 
@@ -100,7 +103,14 @@ if __name__ == "__main__":
     db.insert("events", {"camera_id": "cam9", "category": "normal", "start_ts": 0.0, "seeded": 1})
     fts = lambda q: [r["rowid"] for r in db.rows("SELECT rowid FROM events_fts WHERE events_fts MATCH ?", (q,))]
     assert fts("shoving") == [eid] and fts("fighting") == [eid], fts("shoving")   # insert + update kept in sync
+    assert fts("shoved") == [eid] and fts("shove") == [eid], fts("shoved")          # D74: Porter stemming
     db.reset_live()
     assert [r["camera_id"] for r in db.rows("SELECT camera_id FROM events")] == ["cam9"]
     assert fts("shoving") == [] and DB(tmp).rows("SELECT count(*) n FROM events_fts")[0]["n"] == 1   # delete + reopen
+    old = Path(tempfile.mkdtemp()) / "old.db"       # D74 migration: a DB made before stemming is upgraded on open
+    con = sqlite3.connect(old)
+    con.executescript(SCHEMA.replace(", tokenize='porter unicode61'", "").split("INSERT INTO events_fts(events_fts)")[0])
+    con.execute("INSERT INTO events (camera_id, category, start_ts, summary) VALUES ('cam1', 'fighting', 1.0, 'One is pushed back.')")
+    con.commit(); con.close()
+    assert [r["rowid"] for r in DB(old).rows("SELECT rowid FROM events_fts WHERE events_fts MATCH 'pushing'")] == [1]
     print("db self-check ok")

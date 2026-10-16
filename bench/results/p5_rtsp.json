@@ -1,0 +1,24 @@
+{
+ "camera": "cam1",
+ "source": "rtsp://127.0.0.1:8554/live (scripts/rtsp_sim.sh, v011.avi loop, H.264 1280x720)",
+ "status_live_after_s": 2.6,
+ "first_fighting_alert_after_s": 5.5,
+ "events": [
+  {
+   "id": 77,
+   "category": "fighting",
+   "peak_confidence": 1.0,
+   "time_to_alert_ms": 1281
+  }
+ ],
+ "machine": "M4",
+ "when": "2026-10-16 05:51 IST",
+ "metrics_at_alert": {
+  "status": "live",
+  "keep_up": 0.969,
+  "yolo_ms_p50": 24.6,
+  "people": 0,
+  "capture_fps": 31.5
+ },
+ "note": "Live mode, POST /api/cameras with the rtsp URL; the clip loops so the fight may start anywhere in the loop (alert time from add is an upper bound)"
+}

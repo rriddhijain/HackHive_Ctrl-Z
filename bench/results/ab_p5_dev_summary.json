@@ -1,0 +1,29 @@
+{
+ "v1.14_qwen3.5:4b-mlx": {
+  "n": 11,
+  "right": 10,
+  "macro_f1": 0.641,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 1.0,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   3378,
+   8816
+  ],
+  "trigger_to_alert_p50_p95": [
+   1268,
+   1332
+  ],
+  "errors": {
+   "fighting -> person_down": [
+    "v026.avi (data/ab/v1.14_qwen3.5_4b-mlx/v026.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.746
+ }
+}
