@@ -1,0 +1,1952 @@
+[
+ {
+  "clip": "p3c_shove_sit_hug.mp4",
+  "duration_s": 29.9,
+  "frames": 294,
+  "persons_max": 3,
+  "frames_with_person": 294,
+  "frames_with_2plus": 188,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 2.92,
+  "motion_mad_p90": 7.01,
+  "gate_fires": [
+   {
+    "clip_t": 5.51,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 5.61,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 7.45,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 7.55,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 7.65,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 7.76,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 23.78,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 23.88,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 3.1,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 5.5,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 7.4,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 10.5,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 13.6,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 16.6,
+    "trigger": "baseline",
+    "persons_now": 1,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 19.7,
+    "trigger": "baseline",
+    "persons_now": 1,
+    "max_persons": 1,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 22.8,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 23.8,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 26.8,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 29.9,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   }
+  ],
+  "calls_guarded": 5,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "v001.avi",
+  "duration_s": 6.4,
+  "frames": 65,
+  "persons_max": 7,
+  "frames_with_person": 65,
+  "frames_with_2plus": 59,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 6.25,
+  "motion_mad_p90": 12.19,
+  "gate_fires": [
+   {
+    "clip_t": 0.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 0.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 0.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 1.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 2.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 3.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 4.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 5.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 6.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 6,
+    "max_persons": 6,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 1.0,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 2.0,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 3.0,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 4.0,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 5.0,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 6.3,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 5,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 6,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "v003.avi",
+  "duration_s": 3.0,
+  "frames": 30,
+  "persons_max": 5,
+  "frames_with_person": 30,
+  "frames_with_2plus": 29,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 1.65,
+  "motion_mad_p90": 2.87,
+  "gate_fires": [
+   {
+    "clip_t": 1.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 1.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 2.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 5,
+    "max_persons": 5,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 1.2,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 5,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 2.2,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 5,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 2,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "v006.avi",
+  "duration_s": 5.8,
+  "frames": 59,
+  "persons_max": 8,
+  "frames_with_person": 59,
+  "frames_with_2plus": 59,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 5.96,
+  "motion_mad_p90": 7.7,
+  "gate_fires": [
+   {
+    "clip_t": 1.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 1.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 3.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 5,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 5,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 5,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 6,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 6,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 4.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 5,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 5,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 5.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 7,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 1.5,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 8,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 2.9,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 8,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 3.9,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 8,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 4.9,
+    "trigger": "gate:fighting",
+    "persons_now": 5,
+    "max_persons": 7,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 4,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "v011.avi",
+  "duration_s": 8.7,
+  "frames": 88,
+  "persons_max": 4,
+  "frames_with_person": 64,
+  "frames_with_2plus": 42,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 3.73,
+  "motion_mad_p90": 8.7,
+  "gate_fires": [
+   {
+    "clip_t": 2.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 2.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 3.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 3.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 4.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 5.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 5.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.3,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.4,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.5,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 6.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 1,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 6.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 7.0,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 7.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 0,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 8.4,
+    "rule": "person_down",
+    "kind": "drop",
+    "persons": 3,
+    "outcome": "submitted"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 4,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 2.5,
+    "trigger": "gate:fighting",
+    "persons_now": 4,
+    "max_persons": 4,
+    "person_frames_frac": 0.92,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 3.5,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 4,
+    "person_frames_frac": 0.92,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 4.5,
+    "trigger": "gate:fighting",
+    "persons_now": 0,
+    "max_persons": 4,
+    "person_frames_frac": 0.82,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 5.5,
+    "trigger": "gate:fighting",
+    "persons_now": 2,
+    "max_persons": 4,
+    "person_frames_frac": 0.8,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 6.5,
+    "trigger": "gate:fighting",
+    "persons_now": 0,
+    "max_persons": 3,
+    "person_frames_frac": 0.72,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 8.4,
+    "trigger": "gate:person_down",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 0.55,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 6,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "v026.avi",
+  "duration_s": 9.7,
+  "frames": 97,
+  "persons_max": 1,
+  "frames_with_person": 3,
+  "frames_with_2plus": 0,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 0.61,
+  "motion_mad_p90": 1.8,
+  "gate_fires": [],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 0,
+    "max_persons": 0,
+    "person_frames_frac": 0.0,
+    "pair_contact": false,
+    "guard": "detector_blind"
+   },
+   {
+    "t": 3.0,
+    "trigger": "baseline",
+    "persons_now": 0,
+    "max_persons": 1,
+    "person_frames_frac": 0.1,
+    "pair_contact": false,
+    "guard": "detector_blind"
+   }
+  ],
+  "calls_guarded": 2,
+  "guard_reasons": [
+   "detector_blind"
+  ]
+ },
+ {
+  "clip": "w001_masked.avi",
+  "duration_s": 5.1,
+  "frames": 52,
+  "persons_max": 3,
+  "frames_with_person": 52,
+  "frames_with_2plus": 40,
+  "frames_horizontal": 10,
+  "motion_mad_p50": 5.96,
+  "motion_mad_p90": 9.67,
+  "gate_fires": [
+   {
+    "clip_t": 1.6,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 1.6,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.7,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.7,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.8,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.9,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 1.9,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.0,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.1,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 2.2,
+    "rule": "person_down",
+    "kind": "horizontal",
+    "persons": 2,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 1,
+    "max_persons": 1,
+    "person_frames_frac": 1.0,
+    "pair_contact": false,
+    "guard": null
+   },
+   {
+    "t": 1.6,
+    "trigger": "gate:person_down",
+    "persons_now": 2,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 4.7,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 1,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "floor_sit.mp4",
+  "duration_s": 19.9,
+  "frames": 200,
+  "persons_max": 3,
+  "frames_with_person": 200,
+  "frames_with_2plus": 200,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 1.17,
+  "motion_mad_p90": 2.14,
+  "gate_fires": [
+   {
+    "clip_t": 5.69,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 5.79,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 16.47,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 16.57,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 16.67,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 18.97,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 19.07,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 3.1,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 5.7,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 8.8,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 11.9,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 15.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 16.5,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 19.0,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   }
+  ],
+  "calls_guarded": 4,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "idle_60s.mp4",
+  "duration_s": 60.0,
+  "frames": 600,
+  "persons_max": 4,
+  "frames_with_person": 600,
+  "frames_with_2plus": 600,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 0.65,
+  "motion_mad_p90": 1.34,
+  "gate_fires": [
+   {
+    "clip_t": 30.99,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "submitted"
+   },
+   {
+    "clip_t": 31.09,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 3,
+    "outcome": "too_soon"
+   }
+  ],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 3.1,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 6.2,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 9.3,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 12.4,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 15.5,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 18.6,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 21.7,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 24.8,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 27.9,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 31.0,
+    "trigger": "gate:fighting",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": "interaction"
+   },
+   {
+    "t": 37.8,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 40.9,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 44.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 47.1,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 50.2,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 53.3,
+    "trigger": "baseline",
+    "persons_now": 4,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 56.4,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 59.5,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   }
+  ],
+  "calls_guarded": 1,
+  "guard_reasons": [
+   "interaction"
+  ]
+ },
+ {
+  "clip": "sample_bus.mp4",
+  "duration_s": 12.0,
+  "frames": 150,
+  "persons_max": 4,
+  "frames_with_person": 150,
+  "frames_with_2plus": 150,
+  "frames_horizontal": 0,
+  "motion_mad_p50": 7.78,
+  "motion_mad_p90": 11.51,
+  "gate_fires": [],
+  "calls": [
+   {
+    "t": 0.0,
+    "trigger": "baseline",
+    "persons_now": 4,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 3.0,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 4,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 6.1,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 9.1,
+    "trigger": "baseline",
+    "persons_now": 2,
+    "max_persons": 2,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   }
+  ],
+  "calls_guarded": 0,
+  "guard_reasons": []
+ }
+]

@@ -39,6 +39,8 @@ vlm:
   trigger_max_age_s: 4
   timeout_s: 6
   relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 }
+  relook_span_s: 4.0             # a re-look mosaic covers the whole 4 s buffer (more context than the 2 s window)
+  relook_max_age_s: 6.0          # a P4 re-look still waiting after this is dropped as stale (its hold times out instead)
   think: false
   keep_alive: -1
   num_ctx: 4096                  # fixed on EVERY call (vision + chat): a changing num_ctx makes Ollama reload the model (D38)
@@ -75,6 +77,10 @@ events:
   contradict_factor: 0.5        # E-7 detector veto; person counts = max over the 4 s buffer (D46)
   calibration_T: 1.0
   rating: { high: 0.80, medium: 0.60 }
+  # person_down second look (proposed D83, pending captain): a person_down the detector can't vouch for (people seen in
+  # < blind_frac of the 4 s buffer) or right after a fighting gate (people interacting) is held for a P4 re-look;
+  # unresolved after hold_s it opens anyway (delayed, never lost). enabled: false = v1.21 behaviour.
+  down_guard: { enabled: true, blind_frac: 0.5, hold_s: 4.0 }
 
 classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, built only if dev macro F1 < 0.70 (D48)
 detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only

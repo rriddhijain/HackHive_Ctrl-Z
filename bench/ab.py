@@ -6,7 +6,8 @@
                                        track values behind the ones that didn't (fight pair speed, overlap, persons seen)
   uv run python -m bench.ab --gate --check   gate regression check (D72), CPU only, ~2 min; exit 1 on failure.
                                        Every gate or threshold change must pass it (CLAUDE.md)
-  uv run python -m bench.ab --dev --tag T  every dev clip alone, played once (the headline accuracy/latency pass)
+  uv run python -m bench.ab --dev --tag T  every dev clip alone, played once (the headline accuracy/latency pass);
+                                       add --no-down-guard for the D83 A/B (person_down second look off)
   uv run python -m bench.ab --tiles    2x2 mosaic vs person-crop tile 4 (FR-9c) vs the 4 frames as separate images
   uv run python -m bench.ab --run a.mp4 [b.mp4 ...] [--seconds N] [--tag T]   one pipeline run (several clips = several
                                        cameras at once; --seconds loops them): per-camera rows -> ab_run_<tag>.csv
@@ -196,6 +197,7 @@ def run(paths, seconds=None, tag="run"):
     p = Pipeline(cams, loop=bool(seconds), emit=lambda k, d: None)
     subs, submit = [], p.arb.submit
     p.arb.submit = lambda r: (subs.append((r["cam"], r["trigger"], time.time())), submit(r))[1]
+    off0 = time.time() - time.monotonic()   # wall vs monotonic: a jump means NTP stepped the clock mid-run
     p.start()
     if seconds:
         time.sleep(seconds)
@@ -205,6 +207,7 @@ def run(paths, seconds=None, tag="run"):
         while p.arb.waiting() or p.arb.running:
             time.sleep(0.2)
     t_end = time.time()
+    drift_ms = round(abs((t_end - time.monotonic()) - off0) * 1000, 1)
     p.stop()
     wall = t_end - p.t0
     rows = []
@@ -251,20 +254,46 @@ def run(paths, seconds=None, tag="run"):
            "model_tta_p50": pct([x["model_tta_ms"] for x in full], .5), "call_ms_p50": pct([x["call_ms"] for x in full], .5),
            "gate_triggers": p.sched.n_triggers, "skipped": p.sched.skipped, "vlm_errors": p.vlm_errors,
            "vetoes_logged": len(p.vetoes), "vetoes_p_ge_0.3": sum(v["p_before"] >= 0.3 for v in p.vetoes),
-           "alerts": [(cam, cat, round(e["time_to_alert_ms"])) for cam, cat, _, e in p.alerts]}
+           "alerts": [(cam, cat, round(e["time_to_alert_ms"])) for cam, cat, _, e in p.alerts],
+           "clock_drift_ms": drift_ms, "timing_suspect": drift_ms > 50,   # latencies are wall-clock differences
+           "arbiter": p.arb.stats(), "gate_log": list(p.sched.gate_log)}
+    if drift_ms > 50:
+        print(f"WARNING: wall clock moved {drift_ms} ms against the monotonic clock during this run: latencies suspect")
     return rows, tot
 
 
-def score(rows):
-    """Macro F1 over the labels present (truth or prediction), incident-vs-normal recall/precision, false alarms
-    on normal clips, latency percentiles, errors grouped by confusion pair."""
-    labs = sorted({r["label"] for r in rows} | {r["pred"] for r in rows})
-    f1s = []
-    for L in labs:
-        tp = sum(r["label"] == L and r["pred"] == L for r in rows)
-        fp = sum(r["label"] != L and r["pred"] == L for r in rows)
-        fn = sum(r["label"] == L and r["pred"] != L for r in rows)
-        f1s.append(2 * tp / (2 * tp + fp + fn) if tp + fp + fn else 1.0)
+def label_splits():
+    """bench/labels.csv -> {clip: split}. Every dev/train clip counts as a tuning input (thresholds are tuned on dev)."""
+    lf = ROOT / "bench" / "labels.csv"
+    return {Path(r["clip"]).name: (r.get("split") or "").strip() for r in csv.DictReader(open(lf))} if lf.exists() else {}
+
+
+def onset_stats(rows):
+    """Onset -> alert for right predictions, split (P6b): a clip whose incident starts before the first full mosaic
+    (mosaic_span_s) also times the buffer filling, which never happens on a running camera; the headline is the
+    steady-state group. A negative onset -> alert or onset -> gate means the alert/gate came before the labelled onset:
+    it is NOT aggregated (the onset label or the clip timing is suspect) and is listed under timing_warnings."""
+    warn, steady, mid = [], [], []
+    for r in rows:
+        o2a, on, o2g = r.get("onset_to_alert_ms"), r.get("onset_s"), r.get("onset_to_gate_ms")
+        if o2g is not None and o2g < 0:
+            warn.append(f"{r['clip']}: gate fired {-o2g} ms before the labelled onset (onset label may be late)")
+        if o2a is None or on is None or r["pred"] != r["label"]:
+            continue
+        if o2a < 0:
+            warn.append(f"{r['clip']}: alert {-o2a} ms before the labelled onset: excluded from onset->alert")
+            continue
+        (steady if on >= V["mosaic_span_s"] else mid).append(o2a)
+    return steady, mid, warn
+
+
+def score(rows, split=None, tuned=(), meta=None):
+    """Both metric modes (bench/metrics.py): `macro_f1` stays the historical OBSERVED-label value (0.641 on
+    ab_p5_dev; dashboards read this key), `observed_label_macro_f1` names it explicitly, `fixed` is the 8-label
+    evaluation with zero-support classes and final_metric_valid. Plus incident recall/precision, false alarms on
+    normal clips, latency percentiles, errors grouped by confusion pair."""
+    from bench import metrics
+    obs = metrics.observed(rows)
     inc = lambda x: x != "normal"
     tp = sum(inc(r["label"]) and inc(r["pred"]) for r in rows)
     errs = {}
@@ -273,20 +302,19 @@ def score(rows):
             errs.setdefault(f"{r['label']} -> {r['pred']}", []).append(f"{r['clip']} ({r['keyframe']})")
     lat = [r["start_to_alert_ms"] for r in rows if r["start_to_alert_ms"] is not None and r["pred"] == r["label"]]
     t2a = [r["trigger_to_alert_ms"] for r in rows if r["trigger_to_alert_ms"] is not None and r["pred"] == r["label"]]
-    # Onset -> alert, split: a clip whose incident starts before the first full mosaic (mosaic_span_s) also times the
-    # buffer filling, which never happens on a running camera; the headline is the steady-state group.
-    o2a = [(r["onset_to_alert_ms"], r["onset_s"]) for r in rows if r.get("onset_to_alert_ms") is not None and r["pred"] == r["label"]]
-    steady = [ms for ms, on in o2a if on >= V["mosaic_span_s"]]
-    mid = [ms for ms, on in o2a if on < V["mosaic_span_s"]]
-    return {"n": len(rows), "right": sum(r["label"] == r["pred"] for r in rows), "macro_f1": round(statistics.mean(f1s), 3),
-            "labels_in_f1": labs,
+    steady, mid, warn = onset_stats(rows)
+    return {"n": len(rows), "right": sum(r["label"] == r["pred"] for r in rows),
+            "macro_f1": obs["observed_label_macro_f1"], "labels_in_f1": obs["observed_labels"],
+            "observed_label_macro_f1": obs["observed_label_macro_f1"],
+            "metric_note": "macro_f1 = observed-label dev diagnostic; see fixed.final_metric_valid for the 8-label target",
             "incident_recall": round(tp / max(1, sum(inc(r["label"]) for r in rows)), 3),
             "incident_precision": round(tp / max(1, sum(inc(r["pred"]) for r in rows)), 3) if any(inc(r["pred"]) for r in rows) else None,
             "false_alarms_normal": sum(not inc(r["label"]) and inc(r["pred"]) for r in rows),
             "start_to_alert_p50_p95": (pct(lat, .5), pct(lat, .95)), "trigger_to_alert_p50_p95": (pct(t2a, .5), pct(t2a, .95)),
             "onset_to_alert_p50_p95": (pct(steady, .5), pct(steady, .95)), "onset_to_alert_n": len(steady),
             "onset_to_alert_mid_start_p50_p95": (pct(mid, .5), pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid),
-            "errors": errs}
+            "timing_warnings": warn,
+            "errors": errs, "fixed": metrics.fixed(rows, split, tuned, meta)}
 
 
 def per_clip(variant, rows_all, tots):
@@ -296,17 +324,30 @@ def per_clip(variant, rows_all, tots):
         r, t = run([path], tag=variant.replace(':', '_'))
         rows += [{"variant": variant, **x} for x in r]
         tots.setdefault(variant, []).append(t["gpu_duty"])
+        tots[("drift", variant)] = max(tots.get(("drift", variant)) or 0, t["clock_drift_ms"])
+        gl = ROOT / "data" / "ab" / variant.replace(":", "_") / "gate_log.jsonl"   # data/: gitignored
+        gl.parent.mkdir(parents=True, exist_ok=True)
+        with gl.open("a") as fh:
+            fh.writelines(json.dumps({"clip": path.name, **g}) + "\n" for g in t["gate_log"])
         print(variant, {k: rows[-1][k] for k in ("clip", "label", "pred", "confidence", "top3", "start_to_alert_ms",
                                                   "trigger_to_alert_ms", "gate_fired", "vetoes")}, flush=True)
     rows_all += rows
     return rows
 
 
-def report(test, rows_all, tots):
+def report(test, rows_all, tots, reps=1):
+    from bench import metrics
     write(test, rows_all)
+    splits = label_splits()
+    tuned = {c for c, sp in splits.items() if sp in ("dev", "train")}
     out = {}
     for v in dict.fromkeys(r["variant"] for r in rows_all):
-        out[v] = score([r for r in rows_all if r["variant"] == v]) | {"gpu_duty_mean": round(statistics.mean(tots[v]), 3)}
+        rows = [r for r in rows_all if r["variant"] == v]
+        sp = {splits.get(r["clip"]) or "unlabelled" for r in rows}
+        split = sp.pop() if len(sp) == 1 else "mixed:" + "+".join(sorted(sp))
+        meta = metrics.run_meta(ROOT, ROOT / "config.yaml", f"{test}/{v}", split, V["model"], reps,
+                                {"clips": [r["clip"] for r in rows], "clock_drift_ms": tots.get(("drift", v))})
+        out[v] = score(rows, split, tuned, meta) | {"gpu_duty_mean": round(statistics.mean(tots[v]), 3), "meta": meta}
     (OUT / f"ab_{test}_summary.json").write_text(json.dumps(out, indent=1))
     print(json.dumps(out, indent=1))
     return out
@@ -361,9 +402,12 @@ if __name__ == "__main__":
         ap.add_argument("--" + f, action="store_true")
     ap.add_argument("--run", nargs="+"); ap.add_argument("--seconds", type=float); ap.add_argument("--tag", default="x")
     ap.add_argument("--duty-target", type=float, help="override vlm.duty_target (e.g. 1.01 = no back-off, the 'before')")
+    ap.add_argument("--no-down-guard", action="store_true", help="events.down_guard off (D83 A/B: the v1.21 behaviour)")
     a = ap.parse_args()
     if a.duty_target is not None:
         V["duty_target"] = a.duty_target
+    if a.no_down_guard:
+        CFG["events"].setdefault("down_guard", {})["enabled"] = False
     if a.gate:
         check_gates() if a.check else test_gate()
     if a.model:

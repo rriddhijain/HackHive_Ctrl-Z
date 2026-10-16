@@ -4,6 +4,16 @@ decide() runs at t_category (early decision): it updates the camera's 3-observat
 alert fires before the summary exists. finish() runs at t_vlm_done: summary, subtype, track ids, key frames.
 tick() runs every second: an event closes only after 2 non-supporting observations AND 8 s since its last support,
 or after its camera has been down for 8 s; a camera starved of model time keeps its events open (D43).
+
+person_down second look (events.down_guard, proposed D83): when a person_down observation would open an event but the
+detector evidence says it cannot vouch for the scene (detector_blind: people seen in < blind_frac of the 4 s buffer)
+or that people were interacting (a fighting gate fired in the 4 s buffer), the event is HELD,
+not opened, and the caller asks for a re-look (P4, longer time span, question: fight vs fall vs lying vs unclear).
+The re-look is a second model vote and counts as corroboration for person_down and fighting: it opens person_down,
+opens fighting, or drops the hold only when it is a CONFIDENT normal (c >= 0.80); an unsure second look keeps the
+first vote's person_down. Fail-safe: a hold not resolved within hold_s opens person_down
+anyway (opened_by "hold_timeout"), so a real fall is delayed, never lost. person_down is never relabelled fighting
+without a model vote for fighting.
 """
 import threading
 import time
@@ -24,6 +34,10 @@ class EventManager:
         self.win = defaultdict(lambda: deque(maxlen=E["window_n"]))   # camera -> last 3 observations' c maps
         self.open = {}                                                 # (camera, category) -> event dict
         self.hold = {}                                                 # (camera, category) -> no new event until (FR-25)
+        self.pending = {}                                              # camera -> held person_down (down_guard)
+        self.new_holds = set()                                         # cameras whose hold the caller must re-look
+        self.held_log = deque(maxlen=500)                              # (camera, outcome, ts) for reports
+        self.late_opened = deque()                                     # hold_timeout events, drained by the pipeline
         self.lock = threading.Lock()
 
     def is_open(self, cam, cat):
@@ -32,14 +46,52 @@ class EventManager:
     def has_open(self, cam):
         return any(k[0] == cam for k in self.open)
 
-    def decide(self, cam, c, subtype, triggers, ts, t_ref, t_alert=None):
+    def guarded(self, evidence):
+        """Why a person_down from this evidence needs a second look, or None (down_guard)."""
+        g = E.get("down_guard") or {}
+        if not g.get("enabled") or not evidence:
+            return None
+        if evidence.get("detector_blind"):
+            return "detector_blind"
+        # Interaction = a fighting gate fired in the last 4 s (similar-height boxes in contact, moving fast). Plain box
+        # overlap is NOT enough: people at different depths overlap on screen in almost every call (idle_60s 19/19,
+        # sample_bus 4/4 in bench.diagnose), which would hold every real fall in a busy scene.
+        if "fighting" in (evidence.get("triggers") or ()):
+            return "interaction"
+        return None
+
+    def take_new_hold(self, cam):
+        with self.lock:
+            if cam in self.new_holds:
+                self.new_holds.discard(cam)
+                return dict(self.pending[cam]) if cam in self.pending else None
+        return None
+
+    def _new_event(self, cam, cat, subtype, sev, c_cat, c, ts, t_ref, t_alert, opened_by=None):
+        ev = {"camera_id": cam, "camera_name": self.cam_names.get(cam, cam), "category": cat,
+              "subtype": subtype, "severity": sev, "start_ts": ts, "end_ts": ts,
+              "peak_confidence": c_cat, "summary": None, "keyframe_paths": [], "track_ids": [],
+              "status": "open", "n_obs": 1, "time_to_alert_ms": round((t_alert - t_ref) * 1000),
+              "_last_support": ts, "_nonsupport": 0, "_peak_now": True, "_t_alert": t_alert,
+              "_probs": sorted(c.items(), key=lambda kv: -kv[1])[:3], "opened_by": opened_by}
+        ev["id"] = self.db.insert("events", ev)
+        self.open[(cam, cat)] = ev
+        return ev
+
+    def decide(self, cam, c, subtype, triggers, ts, t_ref, t_alert=None, evidence=None, relook=False):
         """c: evidence-adjusted probabilities of this observation; triggers: categories a gate trigger supports;
         ts: observation time (newest frame's t_capture); t_ref: gate trigger time or baseline request time.
+        evidence: scheduler.evidence() (down_guard); relook: this observation is a P4 second look.
         Returns (opened events, supported events)."""
         t_alert = t_alert or time.time()
         top = max(c, key=c.get)
         opened, supported = [], []
+        why = self.guarded(evidence) if not relook else None
         with self.lock:
+            held = self.pending.pop(cam, None) if relook else None
+            if held:                                        # the second look decides the held person_down
+                self.held_log.append((cam, f"relook:{top}", ts))
+                t_ref = held["t_ref"]
             win = self.win[cam]
             win.append(c)
             for (cm, cat), ev in self.open.items():
@@ -57,19 +109,36 @@ class EventManager:
                     continue
                 sev = severity(cat, subtype if cat == top else None)
                 single = E["open_single_critical"] if sev == "critical" else E["open_single_other"]
-                corroborated = cat in triggers or cat == "fire_smoke"
+                corroborated = cat in triggers or cat == "fire_smoke" or (relook and cat in ("person_down", "fighting"))
                 S = sum(w[cat] for w in win) / len(win)
                 thr = E["open_window_ungated"] if cat in UNGATED else E["open_window"]
+                if held and cat == "person_down" and top != "person_down":
+                    continue                                # the second look outvotes the held window
                 if (c[cat] >= single and corroborated) or (len(win) >= 2 and S >= thr):
-                    ev = {"camera_id": cam, "camera_name": self.cam_names.get(cam, cam), "category": cat,
-                          "subtype": subtype if cat == top else None, "severity": sev, "start_ts": ts, "end_ts": ts,
-                          "peak_confidence": c[cat], "summary": None, "keyframe_paths": [], "track_ids": [],
-                          "status": "open", "n_obs": 1, "time_to_alert_ms": round((t_alert - t_ref) * 1000),
-                          "_last_support": ts, "_nonsupport": 0, "_peak_now": True, "_t_alert": t_alert,
-                          "_probs": sorted(c.items(), key=lambda kv: -kv[1])[:3]}
-                    ev["id"] = self.db.insert("events", ev)
-                    self.open[(cam, cat)] = ev
-                    opened.append(ev)
+                    if cat == "person_down" and why and top == "person_down":
+                        if cam not in self.pending:         # hold it for a second look instead of alerting
+                            self.pending[cam] = {"c": c, "subtype": subtype, "ts": ts, "t_ref": t_ref,
+                                                 "deadline": t_alert + (E.get("down_guard") or {}).get("hold_s", 4.0),
+                                                 "why": why}
+                            self.new_holds.add(cam)
+                            self.held_log.append((cam, "held:" + why, ts))
+                        continue
+                    opened.append(self._new_event(cam, cat, subtype if cat == top else None, sev, c[cat], c, ts,
+                                                  t_ref, t_alert, "relook" if relook else None))
+            if (cam, "person_down") in self.open and cam in self.pending:   # opened unguarded meanwhile: hold is moot
+                self.pending.pop(cam); self.new_holds.discard(cam)
+            if held and not any(e["category"] in ("person_down", "fighting") for e in opened) \
+                    and not any((cam, k) in self.open for k in ("person_down", "fighting")):
+                # Below the open threshold, but two model votes still agree on an incident: don't lose it.
+                cat = top if top in ("person_down", "fighting") else None
+                if cat is None and c.get("normal", 0) < 0.80:
+                    cat = "person_down"                      # the second look is unsure: keep the first vote's alert
+                if cat:
+                    cc = max(c[cat], held["c"]["person_down"]) if cat == "person_down" else c[cat]
+                    opened.append(self._new_event(cam, cat, subtype if cat == top else None, severity(cat, None), cc, c,
+                                                  ts, t_ref, t_alert, "relook"))
+                else:
+                    self.held_log.append((cam, "hold_dropped", ts))
         for ev in opened:
             self.emit("alert", ev)
         return opened, supported
@@ -96,8 +165,21 @@ class EventManager:
         return best
 
     def tick(self, now=None, down_since=None):
-        """Close rule (§5a step 10, D43). down_since: {camera: time it went reconnecting/down} for cameras that are down."""
+        """Close rule (§5a step 10, D43). down_since: {camera: time it went reconnecting/down} for cameras that are down.
+        Also the down_guard fail-safe: a held person_down past its deadline opens (a fall is delayed, never lost)."""
         now, down_since = now or time.time(), down_since or {}
+        late = []
+        with self.lock:
+            for cam in [k for k, h in self.pending.items() if now >= h["deadline"]]:
+                h = self.pending.pop(cam)
+                self.new_holds.discard(cam)
+                if (cam, "person_down") not in self.open:
+                    late.append(self._new_event(cam, "person_down", h["subtype"], severity("person_down", None),
+                                                h["c"]["person_down"], h["c"], h["ts"], h["t_ref"], now, "hold_timeout"))
+                    self.held_log.append((cam, "hold_timeout", now))
+        for ev in late:
+            self.late_opened.append(ev)
+            self.emit("alert", ev)
         with self.lock:
             done = [k for k, ev in self.open.items()
                     if (ev["_nonsupport"] >= E["close_after_obs"] and now - ev["_last_support"] >= E["close_after_s"])

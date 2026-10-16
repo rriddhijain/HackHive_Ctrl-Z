@@ -1,0 +1,2 @@
+results_file,clip,recorded_label,reason
+ab_p5_dev.csv,desk_closeup.mp4,normal,"removed from the dev set and the demo playlist after this run (captain, 16 Oct 05:56 IST, REPORT.md section 3); the row is kept as measured and is part of the historical 0.641 (11 rows)"

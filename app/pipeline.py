@@ -47,13 +47,15 @@ class Pipeline:
         self.cams = {c["id"]: Camera(c["id"], c["name"], c["source"], loop, c.get("door_zone"), c.get("watch_zone"))
                      for c in cameras}
         self.events = EventManager(self.db, self.emit, {c["id"]: c["name"] for c in cameras})
-        self.arb = Arbiter(self.run_call)
+        self.arb = Arbiter(self.run_call, stale_s=V.get("relook_max_age_s", 6.0))
         self.sched = Scheduler(self.arb, self.events)
         self.dets = {cid: Detector(cam, on_frame=self.sched.on_frame) for cid, cam in self.cams.items()}
         self.n_base, self.down_since = defaultdict(int), {}
         self.alerts, self.calls, self.vetoes = [], [], []
         self.vlm_errors = self.err_streak = 0
         self.veto_log = open(DATA / "veto_log.jsonl", "a")
+        self.diag_log = open(DATA / "detector_diag.jsonl", "a")   # detector-miss records (D83 diagnostics)
+        self.relooks = []                                          # (camera, reason, outcome category, c)
 
     def start(self):
         _, b64 = vlm.mosaic([(0, np.full((360, 640, 3), 114, np.uint8), [])])
@@ -90,6 +92,9 @@ class Pipeline:
                 else:
                     self.down_since.pop(cid, None)
             self.events.tick(down_since=self.down_since)
+            while self.events.late_opened:                   # down_guard fail-safe opens (hold_timeout)
+                e = self.events.late_opened.popleft()
+                self.alerts.append((e["camera_id"], e["category"], e["_t_alert"], e))
 
     def run_call(self, req):
         if "fn" in req:                                     # P2 chat call (app.chat): runs its own text request
@@ -97,7 +102,7 @@ class Pipeline:
         cam, det = req["cam"], self.dets.get(req["cam"])
         if det is None:                                     # camera removed while the request waited
             return
-        base = req["prio"] == 3
+        base, relook = req["prio"] == 3, bool(req.get("relook"))
         if base:  # P3: mosaic from the freshest buffer frames, built now (§5a step 5)
             frames = vlm.pick_frames(det.buffer)
             if not frames:
@@ -108,6 +113,7 @@ class Pipeline:
         frames, ev = req["frames"], req["evidence"]
         newest = frames[-1]
         self.sched.note_call(cam, newest)
+        self._diag(cam, req, ev, newest)
         delayed = time.time() - req["created"] > V["trigger_max_age_s"]
         crop = vlm.track_crop(newest, req["track_ids"]) is not None if V["p1_crop"]["enabled"] and not base else False
         grid, b64 = vlm.mosaic(frames, req["track_ids"] if crop else ())
@@ -124,10 +130,16 @@ class Pipeline:
                 self.veto_log.write(json.dumps(v) + "\n"); self.veto_log.flush()
                 if before >= 0.3:
                     self.emit("veto", v)
-            opened, supported = self.events.decide(cam, c, sub, ev["triggers"], newest[0], req["created"])
+            opened, supported = self.events.decide(cam, c, sub, ev["triggers"], newest[0], req["created"],
+                                                   evidence=ev, relook=relook)
             for e in opened:
                 self.alerts.append((cam, e["category"], e["_t_alert"], e))
             st.update(c=c, evs=opened + supported, top=max(c, key=c.get), t_cat=t_cat)
+            if relook:
+                self.relooks.append((cam, req.get("why"), st["top"], round(c[st["top"]], 3)))
+            if hold := self.events.take_new_hold(cam):        # D83: person_down held -> second look, stop this call
+                self.submit_relook(cam, det, hold["why"])
+                return True
             # D67: a P1 that agrees with an event already open on this camera only updates it, no summary
             if req["prio"] == 1 and st["top"] in {e["category"] for e in supported}:
                 return True
@@ -187,6 +199,33 @@ class Pipeline:
         self.emit("trace", {"camera_id": cam, "trigger": req["trigger"], "created": req["created"], "timing": t,
                             "hints": hints, "raw_json": r.get("raw"), "mosaic_b64": b64})   # Workflow view (FR-15)
         self.emit("observation", obs)
+
+    def submit_relook(self, cam, det, why):
+        """P4 second look for a held person_down (D83): the whole 4 s buffer, and a hint that names the alternatives.
+        Frames frozen now; dropped as stale by the arbiter after relook_max_age_s (the hold then times out and opens)."""
+        frames = vlm.pick_frames(det.buffer, span=V.get("relook_span_s", 4.0))
+        if not frames:
+            return
+        hint = ("second look over the last 4 s: a person may be on the floor; decide whether another person attacked, "
+                "pushed or knocked them down (fighting), they fell or collapsed with nobody acting on them (person_down), "
+                "or they are sitting or lying down normally (normal); if unsure between fighting and person_down, "
+                "pick the more severe (possible fight or fall)")
+        self.arb.submit({"prio": 4, "cam": cam, "rule": None, "trigger": "relook", "relook": True, "why": why,
+                         "frames": frames, "evidence": self.sched.evidence(det, frames[-1][0]), "hint": hint,
+                         "track_ids": [t["id"] for t in persons(frames[-1])], "created": time.time()})
+
+    def _diag(self, cam, req, ev, newest):
+        """Detector-miss diagnostic record (D83) when the detector's view is thin: <= 1 person now, a horizontal/drop
+        trigger, a scene change, a person count that fell from >= 2 in the buffer, or a blind buffer."""
+        n_now = len(persons(newest))
+        why = [w for w, on in (("one_or_no_person", n_now <= 1), ("down_trigger", req.get("kind") in ("horizontal", "drop")),
+                                ("scene_change", req.get("rule") == "scene_change"),
+                                ("lost_person", ev.get("max_persons", 0) >= 2 and n_now < 2),
+                                ("detector_blind", ev.get("detector_blind"))) if on]
+        if why:
+            rec = {"ts": newest[0], "camera_id": cam, "trigger": req["trigger"], "why": why, "persons_now": n_now,
+                   **{k: (sorted(v) if isinstance(v, set) else v) for k, v in ev.items()}}
+            self.diag_log.write(json.dumps(rec) + "\n"); self.diag_log.flush()
 
     def print_emit(self, kind, d):
         now = time.strftime("%H:%M:%S")

@@ -3,6 +3,10 @@
 Priorities: 1 gate-triggered incident (round-robin across cameras) → 2 chat → 3 baseline → 4 re-look.
 Preemption: a P1 arriving while a P2/P3/P4 runs sets that request's `cancel` (the VLM client closes the stream and
 Ollama stops; chat retries its call, FR-8a); a running P1 is never cancelled. Also measures GPU duty = share of wall time a call is running (§12).
+Stale requests: a P4 re-look whose frames are older than `stale_s` when it reaches the head is dropped and counted
+(its frames no longer show "now"); P1s are never dropped (frozen frames, SPEC §5a step 5), P3 baselines build their
+mosaic at dispatch so they are never stale, P2 chat is never dropped. stats() reports queue wait and run time by
+priority, cancellations, stale drops, per-camera starvation and GPU duty over time (FR-8a instrumentation).
 """
 import threading
 import time
@@ -10,13 +14,16 @@ from collections import deque
 
 
 class Arbiter(threading.Thread):
-    def __init__(self, run):
+    def __init__(self, run, stale_s=6.0):
         """run(req) does the model call; req is a dict with at least prio, cam, created; 'cancel' is added here."""
         super().__init__(daemon=True, name="arbiter")
         self.run_fn, self.q, self.running = run, [], None
         self.cv = threading.Condition()
         self.busy = deque()            # (start, end) of finished calls, for GPU duty
         self._rr, self._stop = None, False
+        self.stale_s = stale_s
+        self.log = deque(maxlen=5000)  # finished requests: (prio, cam, created, start, end, cancelled)
+        self.dropped = deque(maxlen=1000)   # (prio, cam, created, dropped_at, reason)
 
     def submit(self, req):
         req.setdefault("created", time.time())
@@ -37,7 +44,17 @@ class Arbiter(threading.Thread):
             if req in self.q:
                 self.q.remove(req)
 
+    def _drop_stale(self, now):
+        for r in [r for r in self.q if r["prio"] == 4 and now - r["created"] > self.stale_s]:
+            self.q.remove(r)
+            self.dropped.append((r["prio"], r["cam"], r["created"], now, "stale"))
+            if r.get("on_drop"):
+                r["on_drop"](r)
+
     def _pick(self):
+        self._drop_stale(time.time())
+        if not self.q:
+            return None
         top = min(r["prio"] for r in self.q)
         cands = [r for r in self.q if r["prio"] == top]
         if top == 1:  # round-robin across cameras: next camera after the last one served, its oldest request
@@ -57,6 +74,8 @@ class Arbiter(threading.Thread):
                 if self._stop:
                     return
                 self.running = req = self._pick()
+                if req is None:
+                    continue
                 t0 = req["t_start"] = time.time()
             try:
                 self.run_fn(req)
@@ -64,7 +83,9 @@ class Arbiter(threading.Thread):
                 print(f"[arbiter] {req.get('cam')} P{req['prio']} failed: {e!r}", flush=True)
             with self.cv:
                 self.running = None
-                self.busy.append((t0, time.time()))
+                t1 = time.time()
+                self.busy.append((t0, t1))
+                self.log.append((req["prio"], req.get("cam"), req["created"], t0, t1, req["cancel"].is_set()))
 
     def duty(self, window=60.0, now=None):
         """Share of the last `window` seconds a model call was running (§12)."""
@@ -74,6 +95,34 @@ class Arbiter(threading.Thread):
         while self.busy and self.busy[0][1] < now - 600:
             self.busy.popleft()
         return sum(max(0.0, min(e, now) - max(s, now - window)) for s, e in busy) / window
+
+    def stats(self, now=None, window=None):
+        """Instrumentation: per priority n / queue wait / run time (ms p50, p95, max) / cancelled; stale drops; per camera
+        served, worst queue wait and the age of its oldest request still waiting (starvation); GPU duty per 10 s."""
+        now = now or time.time()
+        with self.cv:
+            log = [x for x in self.log if window is None or x[4] >= now - window]
+            waiting = [(r["prio"], r["cam"], now - r["created"]) for r in self.q]
+            dropped = list(self.dropped)
+
+        def q(xs):
+            xs = sorted(xs)
+            return {"p50": round(xs[len(xs) // 2]), "p95": round(xs[min(len(xs) - 1, int(0.95 * len(xs)))]),
+                    "max": round(xs[-1])} if xs else None
+        by_prio = {}
+        for p in sorted({x[0] for x in log}):
+            xs = [x for x in log if x[0] == p]
+            by_prio[f"P{p}"] = {"n": len(xs), "queue_ms": q([(x[3] - x[2]) * 1000 for x in xs]),
+                                "run_ms": q([(x[4] - x[3]) * 1000 for x in xs]), "cancelled": sum(x[5] for x in xs)}
+        by_cam = {}
+        for c in sorted({x[1] for x in log if x[1]} | {w[1] for w in waiting if w[1]}):
+            xs = [x for x in log if x[1] == c]
+            by_cam[c] = {"served": len(xs), "queue_ms": q([(x[3] - x[2]) * 1000 for x in xs]),
+                         "oldest_waiting_ms": round(max((a for _, cam, a in waiting if cam == c), default=0) * 1000)}
+        span = window or 60.0
+        timeline = [round(self.duty(window=10.0, now=now - k * 10.0), 3) for k in range(int(span // 10) - 1, -1, -1)]
+        return {"by_priority": by_prio, "by_camera": by_cam, "waiting": len(waiting),
+                "dropped_stale": len(dropped), "duty_last_60s": round(self.duty(60.0, now), 3), "duty_per_10s": timeline}
 
     def stop(self):
         with self.cv:

@@ -869,6 +869,7 @@ function Report() {
   if (r === false) return <Empty icon={Ic.Alert} title="Could not load the report" hint="Check the server is running." />;
   const a = r.accuracy, op = r.operator, lat = r.latency;
   const p = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const f2 = (x) => (x == null ? "—" : x.toFixed(2));
   const pair = (x) => (x?.[0] == null ? "—" : `${ms(x[0])} / ${ms(x[1])}`);
   return (
     <div className="space-y-6 p-4">
@@ -880,7 +881,9 @@ function Report() {
         {!a ? <Empty title="No dev-set run yet" hint="Run: uv run python -m bench.ab --dev --tag NAME" /> : (
           <>
             <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
-              {[["Clips right", `${a.right} / ${a.n}`], ["Incident recall", p(a.incident_recall)],
+              {[["Clips right", `${a.right} / ${a.n}`], ["Macro F1 · observed labels (dev)", f2(a.observed_label_macro_f1 ?? a.macro_f1)],
+                ["Macro F1 · supported of 8", f2(a.fixed?.macro_f1_supported)], ["Macro F1 · all 8 labels", f2(a.fixed?.macro_f1_all8)],
+                ["Incident recall", p(a.incident_recall)],
                 ["Incident precision", p(a.incident_precision)], ["False alarms, normal clips", v(a.false_alarms_normal)],
                 ["Onset → alert p50 / p95", pair(a.onset_to_alert_p50_p95)], ["Trigger → alert p50 / p95", pair(a.trigger_to_alert_p50_p95)],
                 ["Onset → alert, clip starts mid-incident", pair(a.onset_to_alert_mid_start_p50_p95)], ["GPU duty, mean", p(a.gpu_duty_mean)],
@@ -893,6 +896,37 @@ function Report() {
               first 2 s; {a.onset_to_alert_mid_start_n} clips that start mid-incident also time the buffer filling and are shown apart. Thresholds were
               tuned on these clips, so this is a training-set result; the held-out test split is reported separately.
             </p>
+            {a.fixed && (
+              <div className="mt-3">
+                <div className={`rounded-md border px-3 py-2 text-12 ${a.fixed.final_metric_valid ? "border-ok text-fg" : "border-crit text-fg-2"}`}>
+                  <b className={a.fixed.final_metric_valid ? "text-ok" : "text-crit"}>
+                    {a.fixed.final_metric_valid ? "Valid final 8-label test metric" : "Not a final metric"}</b>
+                  {!a.fixed.final_metric_valid && <> · {a.fixed.final_metric_invalid_reasons.join(" · ")}</>}
+                  <div className="mt-1 text-11 text-fg-3">Observed-label macro F1 averages only the labels that appear in these rows
+                    (a label predicted but never true scores 0); the 8-label numbers list every class, zero-support ones included.</div>
+                </div>
+                <table className="mt-2 w-full table-fixed text-12">
+                  <thead><tr className="text-left text-11 text-fg-3"><th className="w-[34%] py-1 font-medium">Class (fixed 8)</th>
+                    <th className="w-10 font-medium">Clips</th><th className="w-20 font-medium">TP/FP/FN</th><th className="font-medium">Prec.</th>
+                    <th className="font-medium">Recall</th><th className="w-14 text-right font-medium">F1</th></tr></thead>
+                  <tbody>
+                    {a.fixed.per_class.map((l) => (
+                      <tr key={l.label} className={`border-t border-line ${l.support ? "" : "text-fg-3"}`}>
+                        <td className="truncate py-1.5">{name(l.label)}{!l.support && " · no clips"}</td>
+                        <td className="font-mono">{l.support}</td><td className="font-mono">{l.tp}/{l.fp}/{l.fn}</td>
+                        <td className="font-mono">{p(l.precision)}</td><td className="font-mono">{p(l.recall)}</td>
+                        <td className="text-right font-mono">{f2(l.f1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {a.timing_warnings?.length > 0 && (
+              <div className="mt-2 space-y-0.5 text-11 text-high">
+                {a.timing_warnings.map((w) => <div key={w}>⚠ {w}</div>)}
+              </div>
+            )}
             <table className="mt-3 w-full table-fixed text-12">
               <thead><tr className="text-left text-11 text-fg-3"><th className="w-[38%] py-1 font-medium">Clip</th><th className="font-medium">Label</th>
                 <th className="font-medium">Detected</th><th className="w-20 text-right font-medium">Onset→alert</th></tr></thead>

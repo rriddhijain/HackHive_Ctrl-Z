@@ -26,4 +26,6 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `cd web && npm run build` then `uv run python -m app.server` dashboard at http://localhost:8000: boots in Clips mode with nothing running; Clips | Live toggle (`--selfcheck` for the self-check)
 - `uv run python -m scripts.seed_history` seeded demo history for chat (`--remove` deletes it) · `uv run python -m bench.chat_runner` chat question runner (30 questions, temp DB)
 - `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
+- `uv run python -m unittest discover -s tests -t .` unit + synthetic tests · `uv run python -m bench.validate` benchmark data checks (exit 1 on invalid) · `uv run python -m bench.diagnose` detector-only view of the dev clips
+- Two F1s (D83): `observed_label_macro_f1` (= historical `macro_f1`, dev diagnostic) vs the `fixed` 8-label block; only `fixed.final_metric_valid` may be quoted as the NFR-2 result
 - `uv run python -m app.pipeline <clip> [...]` full pipeline on clips: alerts, per-clip right/wrong, onset-to-alert ms, GPU duty (labels from `bench/labels.csv`)
