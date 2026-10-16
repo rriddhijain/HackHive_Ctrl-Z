@@ -392,7 +392,7 @@ def chat(body: dict):
     q = str(body.get("question") or "").strip()
     if not q or len(q) > 500:
         raise HTTPException(400, "question: 1-500 characters")
-    return chatbot.answer(q, P.db, P.arb, dict(P.events.cam_names))
+    return chatbot.answer(q, P.db, P.arb, dict(P.events.cam_names), session=str(body.get("session_id") or "")[:64] or None)
 
 
 @app.get("/api/metrics")

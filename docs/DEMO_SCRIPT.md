@@ -37,7 +37,7 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 12. Click "Clips" again (this stops both sources; history is kept).
 
 **Riddhi: the chat**
-13. Ask "How many fights were there?" → [#id] links and "template" in the small line. Ask "Summarise the incidents in the lobby today" → a paragraph and "model, N rows, …" in the small line. Both fine → reload (⌘R) so the chat log is empty at 09:00; Aryan re-arms the sound.
+13. Ask "How many fights were there?" → a conversational answer with [#id] links; the small line says who read the question and "model answer". Ask "Summarise the incidents in the lobby today" → a paragraph and "model, N rows, …" in the small line. Both fine → reload (⌘R) so the chat log is empty at 09:00; Aryan re-arms the sound.
 14. The three Act 3 questions on paper, exactly as written below.
 
 **Shivansh**
@@ -95,8 +95,8 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
   Say: "The brief's own example. No camera 2 has tailgating today, so it says so and names the cameras it knows. A grounded no is the point: it never invents an event."
 - Q2 "What incidents happened in the last 10 minutes?" → the Act 1 and Act 2 events, one [#id] each, with a key frame, IST time and camera under the answer. Riddhi clicks one [#id] → the card opens (bar, "trigger → alert", summary) → "close".
   Say: "Every [#id] is a stored event: key frame, IST timestamp, summary. Click one and you get the card you saw earlier."
-- Q3 "Summarise the incidents in the lobby today" → a paragraph; the small line reads "model, N rows, M sentences dropped".
-  Say: "This one is written by the model, but every sentence must cite an event; a sentence without a citation is dropped before you see it. The line underneath always says whether a template or the model answered." If it ends "→ template list": "the model was busy, so it fell back to the template; alerts outrank chat."
+- Q3 "Summarise the incidents in the lobby today" → a paragraph; the small line reads "… · model answer, N rows, M sentences dropped".
+  Say: "This one is written by the model, but every sentence must cite an event; a sentence without a citation is dropped before you see it. The line underneath always says whether a template or the model answered." If it ends "→ template": "the model was busy, so it fell back to the template; alerts outrank chat." Answers take a few seconds (two model calls on a follow-up); if chat misbehaves on stage, set `chat: llm: false` in config.yaml and restart (chat v1).
 - If Q2 lists nothing (Acts 1 and 2 produced no events): ask "Show all events today" (the seeded demo history, tagged "history" on the cards: "the earlier ones are seeded demo history so the chat has a day to talk about").
 - If an answer says "error": ⌘R and ask again.
 - The grey "history" tags in "INCIDENTS": seeded demo history so the chat has a day to talk about; say so if asked.

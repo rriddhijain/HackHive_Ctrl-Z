@@ -27,6 +27,8 @@ fi
 curl -sf "$URL/api/tags" | grep -q "\"$MODEL\"" \
   || die "model $MODEL is not in Ollama: copy ~/.ollama/models from the dev Mac (a pull needs the captain's OK, D21)"
 say "Ollama $(curl -sf "$URL/api/version" | sed 's/.*"version":"\([^"]*\)".*/\1/') up; warming up $MODEL"
+# a fresh load: a long-running MLX runner keeps a buffer cache (4 GB model seen at 12 GB after a night of calls, D75)
+curl -sf "$URL/api/generate" -d "{\"model\": \"$MODEL\", \"keep_alive\": 0}" >/dev/null || true
 # same keep_alive / num_ctx / think as the pipeline (app/vlm.py), so its first real call doesn't reload the model
 curl -sf -m 120 "$URL/api/chat" -d "{\"model\": \"$MODEL\", \"messages\": [{\"role\": \"user\", \"content\": \"ok\"}],
   \"stream\": false, \"think\": false, \"keep_alive\": -1, \"options\": {\"num_predict\": 1, \"num_ctx\": $NUM_CTX}}" >/dev/null \

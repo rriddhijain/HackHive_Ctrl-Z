@@ -1,11 +1,15 @@
-"""Chat v1 (SPEC §5a.2, §7.5, FR-8b, FR-18, D53, D57): rules -> SQL / FTS5 -> answer.
+"""Chat v2 (SPEC §5a.2, §7.5, FR-8b, FR-18, D53, D57, D75): the model reads -> SQL / FTS5 finds and counts -> the
+model answers, cited.
 
-list / count / latest / detail are templates (no model call); every event in the answer is cited as [#id].
-summary: the model at arbiter priority P2 (below gate-triggered calls, which preempt it) with <= 30 rows, then a
-sentence-by-sentence check: unknown [#id]s are removed, sentences left without a valid [#id] are dropped; nothing left
--> the template list. No rows -> "No matching events" + the filters. Facts only ever come from stored rows.
-Not built (v1): model extraction when the rules can't parse (§5a.2 step 3); unknown intent is `list`, leftover words
-are keywords.
+1. understand(): the model turns the question (+ the session's last 3 turns) into filters, as strict JSON, knowing the
+   §6.1 category definitions and the camera list; the rules parser keeps only what it does exactly (clock times,
+   #ids, "camera N"). No model in time -> the v1 rules parse everything (fallback).
+2. retrieve(): SQL + FTS5 (Porter stemming). Specific details the question asks for are required words; if they match
+   nothing but a category/subtype does, the category's events are shown under a plain "nothing mentions X" note.
+3. The model answers conversationally from <= 30 rows (oldest first) and the database's exact counts, at arbiter
+   priority P2 (gate-triggered calls preempt it). Sentence check (D57): unknown [#id]s are removed, sentences left
+   without a valid [#id] are dropped; nothing left, or no model in time -> the v1 template. No rows -> "No matching
+   events" + the filters. Facts only ever come from stored rows.
 """
 import datetime as dt
 import json
@@ -16,7 +20,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from app.vlm import CATS, V
+from app.config import CFG
+from app.vlm import CATS, TABLE, V
 
 IST = ZoneInfo("Asia/Kolkata")
 LIMIT = {"list": 20, "count": 200, "latest": 1, "detail": 1, "summary": 30}
@@ -262,6 +267,7 @@ def ground(text, ids):
             merged.append(s)
     out, dropped = [], 0
     for s in merged:
+        s = re.sub(r"\[(\d+)\]", lambda m: f"[#{m[1]}]" if int(m[1]) in ids else m[0], s)   # "[#8][19]": a missed #
         s = re.sub(r"\[?#(\d+)\]?", lambda m: f"[#{m[1]}]" if int(m[1]) in ids else "", s)
         s = re.sub(r"\[\s*[,;]?\s*\]|\(\s*\)", "", s)
         s = re.sub(r"\s+([.,;!?])", r"\1", re.sub(r"\s{2,}", " ", s)).strip()
@@ -273,15 +279,76 @@ def ground(text, ids):
     return " ".join(out), len(out), dropped
 
 
-SYSTEM = ("You are a security control-room assistant. Answer ONLY from the incident rows given (times are IST). "
-          "Every sentence must cite the rows it uses as [#id], for example [#12]. Restate only what the rows say: no "
-          "guesses about causes, injuries, people or outcomes. At most 3 short sentences, plain English, no lists.")
+SYSTEM = ("You are the assistant in a security control room, talking with an operator. Answer the question in a natural, "
+          "conversational way using ONLY the incident rows given (times are IST). Every sentence must cite the rows it "
+          "uses as [#id], for example [#12]. When counts are given, use exactly those numbers; never count yourself. "
+          "For a how-many question, start with the exact total. Restate only what the rows say: no guesses about causes, injuries, identities or outcomes. Say today or yesterday "
+          "only where a row is marked so. If the rows only partly answer the question, say what they do show. At most 3 "
+          "short sentences, no lists, no headings.")
+HISTORY, H_LOCK = {}, threading.Lock()          # session_id -> last 3 turns (question, answer, filters); per server run
+HELP = ("I answer questions about the incidents stored from your cameras: what happened, when, where, how many, and "
+        "anything a description mentions. Every event I mention is cited as [#id]; try “what happened in the last hour?”.")
+INTENTS = ["list", "count", "latest", "detail", "summary", "help"]
+UNDERSTAND = (
+    "You read a security control-room operator's question about stored incidents and turn it into search filters for "
+    "a database. Incident categories:\n" + "\n".join(
+        f"- {n}: {d}." + (f" Subtypes: {', '.join(st)}." if st else "") for n, d, _, st, _ in TABLE if n != "normal") +
+    "\n\nFields: meaning: one short sentence saying what kind of incident or detail the operator is looking for, "
+    "in your own words (for example which category it falls under). intent: list (the default: show, find, any, which, was there, did anyone) | count (only when the "
+    "question asks how many, the number or the total) | latest (the single most recent one) | detail (one event by its number) | "
+    "summary (what happened, describe, overview) | help (greetings, or questions about you rather than about incidents). "
+    "categories and subtypes: only the kinds of incident the question asks about, judged by their meaning; [] when it "
+    "asks about incidents in general (all, everything, anything). cameras: ids from the camera list that the question "
+    "names, [] when it names none; unknown_cameras: camera or place "
+    "names in the question that match no camera in the list. keywords: only specific details that must appear word "
+    "for word in an incident's description (colours, clothing, objects, vehicles, places); never generic words and "
+    "never words a category already covers; [] if none. follow_up: true if the question only makes sense with the "
+    "previous one (for example 'and yesterday?'); then repeat the filters it keeps. Reply only with compact JSON, e.g. "
+    '{"meaning":"a fire or smoke near a truck","intent":"list","categories":["fire_smoke"],"subtypes":[],"cameras":[],"unknown_cameras":[],"keywords":["truck"],'
+    '"follow_up":false} for "was there a fire near a truck?".')
 
 
-def _generate(messages, cancel, t0):
-    """One streamed text call (D38: same num_ctx as vision). Returns (text or None if cancelled, first-token ms from t0)."""
+def _subtypes(u):
+    """Subtypes narrow the search only when every chosen category has one of them ("fights or weapons" keeps all fights)."""
+    own = {r[0]: set(r[3]) for r in TABLE}
+    return u["subtypes"] if all(own[c] & set(u["subtypes"]) for c in u["categories"]) else []
+
+
+def understand(question, names, prev, arb, t0):
+    """Step 1 (§5a.2 step 3, D75): the model's reading of the question as filters, or None (no model in time / bad JSON)."""
+    ids = list(names)
+    schema = {"type": "object", "properties": {   # generated in this order: the paraphrase first, then the filters
+        "meaning": {"type": "string"},
+        "intent": {"type": "string", "enum": INTENTS},
+        "categories": {"type": "array", "items": {"type": "string", "enum": [c for c in CATS if c != "normal"]}},
+        "subtypes": {"type": "array", "items": {"type": "string", "enum": sorted({x for r in TABLE for x in r[3]})}},
+        "cameras": {"type": "array", "items": {"type": "string", "enum": ids}} if ids else {"type": "array", "maxItems": 0},
+        "unknown_cameras": {"type": "array", "items": {"type": "string"}},
+        "keywords": {"type": "array", "items": {"type": "string"}},
+        "follow_up": {"type": "boolean"}},
+        "required": ["meaning", "intent", "categories", "subtypes", "cameras", "unknown_cameras", "keywords", "follow_up"]}
+    ctx = "".join(f"Previous question: {q}\nIts filters: {json.dumps({k: pf[k] for k in ('intent', 'categories', 'subtypes', 'cameras', 'keywords')})}\n"
+                  for q, _, pf in prev)
+    msgs = [{"role": "system", "content": UNDERSTAND},
+            {"role": "user", "content": f"Cameras: {json.dumps(names)}\n{ctx}Question: {question}"}]
+    t = time.time()
+    r = ask_model(arb, msgs, t0, fmt=schema, num_predict=140)
+    try:
+        u = json.loads(r[0])
+        assert u["intent"] in INTENTS and set(u["cameras"]) <= set(ids)
+    except Exception:                           # no model in time, cancelled, or not the schema: the rules decide
+        return None
+    u["ms"] = round((time.time() - t) * 1000)
+    return u
+
+
+def _generate(messages, cancel, t0, fmt=None, num_predict=150):
+    """One streamed text call (D38: same num_ctx as vision); fmt = a JSON schema for structured output.
+    Returns (text or None if cancelled, first-token ms from t0)."""
     body = {"model": V["model"], "stream": True, "think": V["think"], "keep_alive": V["keep_alive"], "messages": messages,
-            "options": {"temperature": 0, "num_predict": 150, "num_ctx": V["num_ctx"]}}
+            "options": {"temperature": 0, "num_predict": num_predict, "num_ctx": V["num_ctx"]}}
+    if fmt:
+        body["format"] = fmt
     text, ttft = "", None
     with httpx.stream("POST", V["base_url"] + V["endpoint"], json=body, timeout=MODEL_WAIT_S) as r:
         r.raise_for_status()
@@ -301,14 +368,14 @@ def _generate(messages, cancel, t0):
     return text, ttft
 
 
-def ask_model(arb, messages, t0):
+def ask_model(arb, messages, t0, **kw):
     """P2 call through the arbiter; a P1 that preempts it makes it retry (FR-8a). None if no answer by MODEL_WAIT_S."""
     while (left := t0 + MODEL_WAIT_S - time.time()) > 0:
         out, done = {}, threading.Event()
 
         def fn(req):
             try:
-                out["r"] = _generate(messages, req["cancel"], t0)
+                out["r"] = _generate(messages, req["cancel"], t0, **kw)
             except Exception as e:              # the arbiter must never die on a chat call
                 out["e"] = e
             finally:
@@ -325,14 +392,48 @@ def ask_model(arb, messages, t0):
     return None
 
 
-def answer(question, db, arb, names=None, now=None):
-    """POST /api/chat body -> §7.5 response (+ `how`: template, or model rows / sentences kept / dropped)."""
+def answer(question, db, arb, names=None, now=None, session=None):
+    """POST /api/chat body -> §7.5 response (+ `how`: who read the question, template or model, rows / sentences kept /
+    dropped). `session`: the browser's session_id, for follow-up questions (last 3 turns)."""
     t0 = time.time()
     now = now or t0
     names = cam_names(db, names)
-    f = parse(question, names, now)
+    f = parse(question, names, now)             # rules: exact for clock times, #ids, "camera N"; fallback for the rest
+    with H_LOCK:
+        prev = list(HISTORY.get(session, []))[-3:] if session else []
     rows, obs = retrieve(db, f)
-    how = {"mode": "template"}
+    # D75 cascade: the rules' exact reading wins when it finds events and there is no conversation to follow; the model
+    # reads when the rules find nothing ("in total", "injured", "package") or the session has earlier turns ("and yesterday?")
+    u = None
+    vague = not any(f[k] for k in ("cameras", "categories", "subtypes", "keywords", "unknown_cameras")) \
+        and f["t_from"] is None and f["event_id"] is None    # the rules found no filter at all ("hi", "show me everything")
+    if arb and CFG["chat"].get("llm", True) and (not rows or prev or vague):   # D75 switch
+        u = understand(question, names, prev, arb, t0)
+        if u and rows and not vague and not u["follow_up"] and u["intent"] != "help":
+            u = None                            # a fresh question the rules already answer: keep their reading
+    how = {"mode": "template", "read_by": "model" if u else "rules"}
+    note = ""
+    if u:
+        how["read_ms"] = u["ms"]
+        if u["intent"] == "help" and f["event_id"] is None:
+            return {"answer": HELP, "events": [], "filters": f, "as_of": now, "latency_ms": round((time.time() - t0) * 1000), "how": how}
+        rule_cams = f["cameras"]                # "camera 2" / names matched exactly by the rules
+        kw = [w for k in u["keywords"] for w in re.findall(r"[a-z0-9]+", k.lower())]
+        f |= {"intent": "detail" if f["event_id"] is not None else u["intent"],
+              "categories": u["categories"], "subtypes": _subtypes(u),
+              "cameras": rule_cams or [c for c in u["cameras"] if len(u["cameras"]) < len(names)],   # exact > read; all = none
+              "unknown_cameras": [] if rule_cams else sorted(set(u["unknown_cameras"]) | set(f["unknown_cameras"])),
+              "keywords": kw or None}
+        if u["follow_up"] and prev and f["t_from"] is None:     # "and yesterday?" keeps; "what about the lobby?" keeps the time
+            f["t_from"], f["t_to"] = prev[-1][2]["t_from"], prev[-1][2]["t_to"]
+        f["limit"] = LIMIT[f["intent"]]
+        rows, obs = retrieve(db, f)
+    if not rows and u and f["keywords"] and set(f["subtypes"]) - {"other"} and f["event_id"] is None:
+        # only a specific subtype the model chose ("package" -> abandoned_object) may stand in for unmatched details;
+        # a bare category never does ("man in red" must stay a grounded no, not a list of every suspicious event)
+        rows, _ = retrieve(db, f | {"keywords": None})          # the details match nothing, the kind of incident does
+        if rows:
+            note = f"No description mentions “{' '.join(f['keywords'])}”, so these are all events for: {describe(f | {'keywords': None}, names)}."
     if not rows:
         if f["event_id"] is not None:
             text = f"No event #{f['event_id']}."
@@ -344,26 +445,44 @@ def answer(question, db, arb, names=None, now=None):
             if obs:
                 text += " Observations that mention it (not incidents): " + "; ".join(
                     f"{fmt(o['ts'])} {display(o['camera_id'], names)}: “{o['summary']}”" for o in obs) + "."
-    elif f["intent"] == "summary":
-        rows = rows[:LIMIT["summary"]]
-        msgs = [{"role": "system", "content": SYSTEM},
-                {"role": "user", "content": f"Question: {question}\nRows:\n" + "\n".join(
-                    f"[#{e['id']}] {fmt(e['start_ts'])}, {display(e['camera_id'], names)}, {e['category'].replace('_', ' ')}: "
-                    f"{e['summary'] or 'no summary'}" for e in sorted(rows, key=lambda e: e["start_ts"]))}]
+    elif arb and (CFG["chat"].get("llm", True) or f["intent"] == "summary"):   # D75: the model writes every answer
+        # (chat.llm false: v1 = the model writes summaries only)     # the model answers (v1 rules: summary questions only)
+        total = len(rows) if len(rows) < f["limit"] else len(retrieve(db, f | {"limit": 10000})[0])
+        by = {}
+        for e in retrieve(db, f | {"limit": 10000})[0] if total > len(rows) else rows:
+            by[e["category"]] = by.get(e["category"], 0) + 1
+        shown = sorted(rows[:LIMIT["summary"]], key=lambda e: e["start_ts"])
         # oldest first (newest-first rows got the chronology wrong); no severity/confidence (the model misread them)
-        r = ask_model(arb, msgs, t0)
-        text, kept, dropped = ground(r[0], {e["id"] for e in rows}) if r else ("", 0, 0)
-        how = {"mode": "model", "rows": len(rows), "sentences": kept, "dropped": dropped, "first_token_ms": r and r[1]}
-        if not kept:                            # nothing survived (or no model in time): the template list
-            f2 = f | {"intent": "list"}
-            text = template(f2, rows, names) + ("" if r else "\n(model busy: listed instead)")
-            how["fallback"] = "template list"
+        msgs = [{"role": "system", "content": SYSTEM}]
+        for q, a, _ in prev:
+            msgs += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
+        day = lambda ts: {0: " (today)", 1: " (yesterday)"}.get((dt.datetime.fromtimestamp(now, IST).date()
+                                                                 - dt.datetime.fromtimestamp(ts, IST).date()).days, "")
+        msgs.append({"role": "user", "content": (
+            f"Now: {fmt(now)} IST (today). Question: {question}\nThe database found {total} matching event{'s' if total != 1 else ''} "
+            f"({', '.join(f'{n} {c.replace(chr(95), chr(32))}' for c, n in sorted(by.items(), key=lambda kv: -kv[1]))})"
+            + (f"; the newest {len(shown)} are below" if total > len(shown) else "") + ".\nRows:\n" + "\n".join(
+                f"[#{e['id']}] {fmt(e['start_ts'])}{day(e['start_ts'])}, {display(e['camera_id'], names)}, {e['category'].replace('_', ' ')}"
+                + (f" / {e['subtype'].replace('_', ' ')}" if e.get("subtype") else "") + f": {e['summary'] or 'no summary'}"
+                for e in shown))})
+        r = ask_model(arb, msgs, t0, num_predict=120)
+        text, kept, dropped = ground(r[0], {e["id"] for e in shown}) if r else ("", 0, 0)
+        how |= {"mode": "model", "rows": len(shown), "sentences": kept, "dropped": dropped, "first_token_ms": r and r[1]}
+        if not kept:                            # nothing survived (or no model in time): the template
+            text = template(f | {"intent": "list" if f["intent"] == "summary" else f["intent"]}, rows, names, total)
+            text += "" if r else "\n(model busy: listed instead)"
+            how["fallback"] = "template"
     else:
         total = None
         if f["intent"] == "list" and len(rows) == f["limit"]:
             total = len(retrieve(db, f | {"limit": 10000})[0])
         text = template(f, rows, names, total)
+    if note:
+        how["note"] = note                      # shown above the answer by the UI; not part of the cited text
     ev = [e | {"camera_name": display(e["camera_id"], names)} for e in rows]
+    if session:
+        with H_LOCK:
+            HISTORY[session] = (HISTORY.get(session, []) + [(question, text, f)])[-3:]
     return {"answer": text, "events": ev, "filters": f, "as_of": now, "latency_ms": round((time.time() - t0) * 1000),
             "how": how}
 
@@ -423,17 +542,19 @@ if __name__ == "__main__":
     from app.models import Arbiter
     arb = Arbiter(lambda r: r["fn"](r)); arb.start()
     fake = {"text": "A man showed a knife [#15] and fought a guard [#16, #42]. Police arrived [#42]. It was calm."}
-    _generate = lambda m, cancel, t0: (fake["text"], 5)
+    _generate = lambda m, cancel, t0, **kw: ("not json" if kw.get("fmt") else fake["text"], 5)   # reading fails -> rules
     r = answer("What happened between 2 and 3 am?", db, arb, None, NOW)
     assert r["answer"] == "A man showed a knife [#15] and fought a guard [#16]." and r["how"]["dropped"] == 2, r
     assert {e["id"] for e in r["events"]} == {15, 16, 17} and r["how"]["rows"] == 3
     fake["text"] = "Everything was fine."
     r = answer("Summarise the lobby today", db, arb, None, NOW)
-    assert r["how"]["fallback"] == "template list" and cited(r) == {e["id"] for e in r["events"]} == {15, 16, 20, 23}, r
+    assert r["how"]["fallback"] == "template" and cited(r) == {e["id"] for e in r["events"]} == {15, 16, 20, 23}, r
     # 5. A gate-triggered P1 preempts a running chat call; chat retries and still answers (FR-8a).
     calls = []
 
-    def slow(m, cancel, t0):
+    def slow(m, cancel, t0, **kw):
+        if kw.get("fmt"):
+            return "not json", 1
         calls.append(1)
         for _ in range(30):
             if cancel.is_set():
@@ -446,6 +567,28 @@ if __name__ == "__main__":
     arb.submit({"prio": 1, "cam": "cam1", "fn": lambda req: time.sleep(0.05)})
     th.join(5)
     assert len(calls) == 2 and fake["r"]["answer"] == "The lobby had incidents [#20].", (calls, fake.get("r"))
+    # 6. v2 (D75): the model reads the question (fake JSON), the database counts, the model answers with citations.
+    def v2(m, cancel, t0, fmt=None, **kw):
+        if fmt:
+            q = m[-1]["content"].rsplit("Question: ", 1)[1]
+            return json.dumps({"meaning": "", "intent": "help" if q == "hi there" else "count" if "how many" in q.lower() else "list", "categories": ["person_down"] if "hurt" in q else [],
+                               "subtypes": ["abandoned_object"] if "bag" in q else [], "cameras": [], "unknown_cameras": [],
+                               "keywords": ["bag"] if "bag" in q else [], "follow_up": q.startswith("And")}), 1
+        rows = re.findall(r"\[#(\d+)\]", m[-1]["content"])
+        return f"There were {len(rows)} such incidents [#{rows[0]}]. Nobody was arrested.", 1
+    _generate = v2
+    r = answer("How many incidents in total?", db, arb, None, NOW, session="s1")
+    assert r["how"]["read_by"] == "model" and r["filters"]["intent"] == "count" and len(r["events"]) == 23, r["how"]
+    assert r["answer"].startswith("There were") and "arrested" not in r["answer"] and r["how"]["dropped"] == 1, r["answer"]
+    r = answer("Was anyone hurt today?", db, arb, None, NOW, session="s1")
+    assert {e["id"] for e in r["events"]} == {19, 23}, r["events"]                      # meaning -> category, rules -> time
+    r = answer("And yesterday?", db, arb, None, NOW, session="s1")
+    assert h(r["filters"]["t_from"]) == "15 00:00" and {e["id"] for e in r["events"]} == set(range(1, 13)), r["filters"]
+    r = answer("Any unattended bags?", db, arb, None, NOW)
+    assert {e["id"] for e in r["events"]} == {11, 22} and "mentions “bag”" in r["how"]["note"], r   # detail misses, subtype hits
+    assert ground("Falls at [#8][19].", {8, 19})[0] == "Falls at [#8][#19].", ground("Falls at [#8][19].", {8, 19})
+    r = answer("hi there", db, arb, None, NOW)
+    assert r["answer"] == HELP and r["events"] == [], r
     arb.stop()
     lat = [A(q)["latency_ms"] for q in ["Show all events today", "How many fights?", "Find the man in the blue jacket"] * 10]
     print(f"chat self-check ok: template latency max {max(lat)} ms")

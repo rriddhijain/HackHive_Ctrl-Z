@@ -43,3 +43,7 @@ Who kicked a car?,list,3,D74 paraphrase: stemming (kicked = kicks)
 Two people shoving,list,14,D74 paraphrase: stemming (shoving = shove); numbers dropped
 Did anyone wrestle a guard?,list,16,D74 paraphrase: stemming (wrestle = wrestles)
 Any people loitering near the barrier?,list,13,D74 paraphrase: subtype + keyword; filler words dropped
+How many incidents in total?,count,1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23,D75 brief-style: no filler word is a required keyword
+Was anyone injured?,list,8 19 23,D75: meaning -> category (injured = person down)
+Did anyone get hurt?,list,8 19 23,D75: meaning -> category (hurt = person down)
+Any suspicious package?,list,11 22,D75: meaning -> subtype (package = abandoned object)

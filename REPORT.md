@@ -9,7 +9,7 @@ Preliminary: dev clips only, one camera at a time, no held-out test split. Every
 - What it is: a YOLO26n person detector at 10 fps per camera gates a local Qwen3.5-4B vision model (`qwen3.5:4b-mlx` via Ollama, `config.yaml`). The model sees a 2x2 letterboxed mosaic of 4 frames spanning 2 s (288x160 tiles). Verdicts become events in SQLite; the chat answers only from those events. Fully local, no cloud. Each 2 s window gets one of 8 labels: fighting, person_down (a fall), fire_smoke, crowd_incident, tailgating, property_damage, suspicious_activity or normal; the dev clips cover fighting and normal only.
 - Accuracy (11 clips, each played once, alone): 10 of 11 clips right. All 7 incident clips raised an incident (recall 1.00); none of the 4 normal/look-alike clips raised an alert (precision 1.00, 0 false alarms). The one error: v026, a fight read as `person_down`. Macro F1 0.641 over the 3 labels present; not comparable with the 8-label target. The fight-gate thresholds were tuned on these same 11 clips (section 3), so 10 of 11 is a training-set result; the held-out test split (P8) does not exist yet. The 4 normal clips total 2 camera-minutes, so "0 false alarms" is a count over 2 minutes, not a rate (SPEC §12 needs >= 30 min).
 - Latency (same run): trigger -> alert p50 1268 ms, max 1332 ms over 7 alerts (with n = 7 the p95 is the max). Onset-to-alert, the number a judge times, exists for one clip only, measured twice: 3216 ms (pipeline run, ab_p5_dev.csv) and 3141 ms (browser run, p5_cold_start.json) against a target of p95 <= 3000 ms; both over (by 216 and 141 ms), two measurements of one clip, so no p95. Clip-start -> alert for the other fights: 2.9 s to 4.4 s (an upper bound).
-- Chat: 44 of 44 questions right on a seeded history (incl. 9 paraphrases such as "Did anyone get pushed?"), 0 invented events, 0 uncited sentences. Lookup answers p95 1 ms; model-written summaries p50 3.1 s, max 6.0 s.
+- Chat: 45 of 48 questions right on a seeded history, 0 invented events, 0 uncited sentences; the model writes the answers (p50 2.7 s, p95 5.9 s, 3 of 38 over 5 s).
 - Not measured yet: anything on the M5 (cold start, latency, 10-min heat run); onset labels for the 6 public fight clips; person_down (fall), fire_smoke, crowd_incident and tailgating clips; >= 30 min of normal footage (false alarms per camera-hour); watts per camera. Store -> card was measured on the M4 (p5_cold_start.json, 05:48 IST): p50 13.0 ms, p95 20.2 ms, n = 2; M5 pending.
 - Missed target: GPU duty with 3 busy cameras 91-99.6 % against <= 60 % (section 5e); that is why the demo plays one clip at a time.
 - Honesty rule (SPEC NFR-7): no number here comes from a plan, a decision log or an estimate.
@@ -207,11 +207,11 @@ ffmpeg 8.0.1 has no RTSP listen mode, so `scripts/rtsp_sim.sh` serves a looping 
 
 Source: bench/results/p5_rtsp.json.
 
-## 7. Chat (chat_runner, 16 Oct 06:07 IST)
+## 7. Chat (chat_runner, 16 Oct 07:09 IST)
 
-44 questions against a seeded demo history in a temporary DB, "now" = 16 Oct 06:00 IST, incl. 9 paraphrases added with the search fix (D74). Right 44 / 44. Invented events 0. Uncited sentences 0. Template (SQL/FTS) answers: p50 0 ms, p95 1 ms. Model-written summaries (4 questions): p50 3116 ms, max 6035 ms; first token 1263, 620, 310, 752 ms; sentences dropped for a missing citation 0; template fallbacks 0. NFR-1a chat answer <= 5 s: the longest model answer (6035 ms) is over it. NFR-2 (answers 100 % grounded): met on this seeded set.
+Chat v2 (D75): the model writes every answer that has events, each sentence citing a stored event as [#id] (uncited sentences are dropped before the answer is shown); the model also reads the question when the rule parser finds no filter, finds nothing, or it is a follow-up. 48 questions against a seeded demo history in a temporary DB, "now" = 16 Oct 06:00 IST, idle GPU. Right 45 / 48. Invented events 0. Uncited sentences 0. Model-written answers 38 of 48: p50 2718 ms, p95 5870 ms, max 6942 ms; 3 over the NFR-1a 5 s target (missed on those). Model reading of the question: 14 questions, p50 2235 ms. Template fallbacks 0.
 
-Search (D74): summaries are matched by keyword with stemming (SQLite FTS5, Porter), so "pushed", "pushing" and "push" match each other, and filler words (someone, anyone, person, people) are never required. Every keyword must still match, so "Anyone in a red jacket?" returns nothing instead of the blue-jacket events. Known limit: paraphrases with different words ("running away" vs "runs out", "lying still" vs "lies still") need meaning-level search (local embeddings), planned next.
+Misses: What did the man in red do?; Did anyone get hurt?; Any suspicious package?. The model's reading varies between runs on "injured" / "hurt" (the answer text named the right events; the key-frame strip listed more). "Any suspicious package?" (the stored events say backpack and suitcase) needs meaning-level search (local embeddings), planned next. Keyword search uses stemming (SQLite FTS5, Porter), so "pushed", "pushing" and "push" match; a detail the question asks for must still match, so "Anyone in a red jacket?" stays a grounded no.
 
 Source: bench/results/chat_runner_summary.json, chat_runner.csv.
 
@@ -262,7 +262,7 @@ Source: SPEC.md §4, §12, §13 for targets and methods. Owners from PLAN.md (va
 ## 10. Reproduce (M4, from the repo root)
 
 - Gate regression check (CPU, exit 1 on failure): `uv run python -m bench.ab --gate --check`
-- Chat question runner (44 questions, temp DB): `uv run python -m bench.chat_runner`
+- Chat question runner (48 questions, temp DB): `uv run python -m bench.chat_runner`
 - Full pipeline on one or more clips (alerts, per-clip right/wrong, onset-to-alert ms, GPU duty): `uv run python -m app.pipeline <clip> [...]`
 - The headline per-clip run that produced ab_p5_dev: `uv run python -c "from bench import ab; rows, tots = [], {}; ab.per_clip('v1.14_qwen3.5:4b-mlx', rows, tots); ab.report('p5_dev', rows, tots)"`
 - Outputs land in bench/results/: `ab_<name>.csv` + `ab_<name>_summary.json`, `chat_runner.csv` + `chat_runner_summary.json`; the gate check prints to stdout (saved as gate_check_p5.txt).

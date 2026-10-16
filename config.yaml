@@ -82,5 +82,6 @@ replay:
   reset_live_tables_on_start: true
 
 chat:
+  llm: true                 # D75: the model reads every question and writes the answer; false = chat v1 (rules + templates)
   base_url: "same-as-vlm"
   model: "same-as-vlm"
