@@ -12,7 +12,11 @@ export const post = (u, body) => fetch(u, { method: "POST", headers: { "Content-
 
 // Red, amber and green mean severity or state, nothing else.
 export const SEV_BG = { critical: "bg-crit", high: "bg-high", medium: "bg-fg-3" };
-export const SEV_TEXT = { critical: "text-crit", high: "text-high", medium: "text-fg-2" };
+// Solid severity chip: alerts must read as a warning at a glance, not as a muted tint.
+export const SEV_CHIP = { critical: "bg-crit-strong text-white", high: "bg-high text-black" };
+export function SevChip({ s }) {
+  return SEV_CHIP[s] ? <Chip className={`uppercase tracking-wide ${SEV_CHIP[s]}`}>{s}</Chip> : null;
+}
 export const STATE = {
   live: ["bg-ok", "Live"], connecting: ["bg-high", "Connecting"], reconnecting: ["bg-high", "Reconnecting"],
   down: ["bg-crit", "Down"], ended: ["bg-fg-3", "Finished"], stopped: ["bg-fg-3", "Stopped"],

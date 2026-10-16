@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import * as Ic from "./icons.jsx";
-import { Button, Chip, Dot, Empty, Label, Segmented, Skeleton, Top3, SEV_BG, SEV_TEXT, STATE, getJSON, ist, media, ms, name, pc, post, title, v } from "./ui.jsx";
+import { Button, Chip, Dot, Empty, Label, Segmented, Skeleton, Top3, SEV_BG, SevChip, STATE, getJSON, ist, media, ms, name, pc, post, title, v } from "./ui.jsx";
 
 // Every number shown here comes from the backend (SSE §9.2, /api/*); the UI only formats it.
 // P5b layout (D76): top bar · camera grid · right rail (Alerts | Ask | Pipeline) with a critical banner above it.
@@ -218,18 +218,18 @@ function Clock() {
 function Banner({ list, camName, onAck, onOpen }) {
   const e = list[0];
   return (
-    <div role="alert" className="shrink-0 animate-enter border-b border-crit/40 bg-crit-bg px-4 py-3">
+    <div role="alert" className="shrink-0 animate-enter bg-crit-strong px-4 py-3 text-white">
       <div className="flex items-center gap-3">
-        <Ic.Alert size={18} className="text-crit" />
+        <Ic.Alert size={18} className="text-white" />
         <button onClick={() => onOpen(e)} className="min-w-0 flex-1 text-left">
-          <div className="text-13 font-semibold text-fg">Critical · {title(e.category)}</div>
-          <div className="truncate font-mono text-12 text-fg-2">
+          <div className="text-15 font-semibold">Critical · {title(e.category)}</div>
+          <div className="truncate font-mono text-12 text-white/85">
             {ist(e.start_ts ?? e.alert?.t_stored)} IST · {pc(e.alert?.confidence ?? e.peak_confidence)} · {camName(e)}
           </div>
         </button>
-        <Button variant="primary" size="sm" onClick={() => onAck(e.id)}>Ack</Button>
+        <Button size="sm" className="border-0 !bg-white !text-crit-strong hover:!bg-white/90" onClick={() => onAck(e.id)}>Ack</Button>
       </div>
-      {list.length > 1 && <div className="mt-1 pl-[30px] text-12 text-fg-2">{list.length - 1} more unacknowledged</div>}
+      {list.length > 1 && <div className="mt-1 pl-[30px] text-12 text-white/85">{list.length - 1} more unacknowledged</div>}
     </div>
   );
 }
@@ -257,7 +257,7 @@ function Tile({ c, cm, onRemove, evs }) {
           </div>
         )}
         {hot && (
-          <Chip className={`absolute left-2 top-2 ${hot.severity === "critical" ? "bg-crit text-white" : "bg-high text-black"}`}>
+          <Chip className={`absolute left-2 top-2 ${hot.severity === "critical" ? "bg-crit-strong text-white" : "bg-high text-black"}`}>
             {title(hot.category)} · <span className="font-mono">{pc(hot.alert?.confidence ?? hot.peak_confidence)}</span>
           </Chip>
         )}
@@ -502,16 +502,17 @@ function AlertCard({ e, camName, onOpen, onAck }) {
   const t3 = useTop3(e);
   const thumb = e.keyframe_paths?.[0];
   return (
-    <article className={`relative border-b border-line px-4 py-3 hover:bg-surface ${e.alert ? "animate-enter" : ""}`}>
-      <span aria-hidden="true" className={`absolute inset-y-3 left-0 w-[3px] rounded-r-sm ${SEV_BG[e.severity] ?? "bg-fg-3"} ${e.status === "open" ? "" : "opacity-40"}`} />
+    <article className={`relative border-b border-line px-4 py-3 ${e.status === "open" && e.severity === "critical" ? "bg-crit-bg" : "hover:bg-surface"} ${e.alert ? "animate-enter" : ""}`}>
+      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${SEV_BG[e.severity] ?? "bg-fg-3"}`} />
       <div className="flex gap-3">
         {thumb ? <img src={media(thumb)} alt="" className="h-[54px] w-24 shrink-0 rounded bg-raised object-cover" />
-          : e.seeded ? <div className="grid h-[54px] w-24 shrink-0 place-items-center rounded bg-raised text-fg-3"><Ic.Video /></div>
+          : e.seeded ? null   // seeded history (E-19) is text only: no frame was ever captured
           : <Skeleton className="h-[54px] w-24 shrink-0" />}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             {/* the title's ::after covers the card, so a click anywhere opens it; Ack sits above it */}
             <button onClick={() => onOpen(e)} className="truncate text-left text-13 font-semibold text-fg after:absolute after:inset-0">{title(e.category)}</button>
+            <SevChip s={e.severity} />
             {e.seeded ? <Chip className="border border-line-strong text-fg-3" title="Seeded demo history (E-19)">History</Chip> : null}
             <span className="ml-auto shrink-0 font-mono text-12 text-fg-3">{ist(e.start_ts ?? e.alert?.t_stored)}</span>
           </div>
@@ -552,13 +553,13 @@ function EventDialog({ e, camName, onAck, onClose }) {
         <div className="flex h-12 items-center gap-2 border-b border-line px-4">
           <Dot className={SEV_BG[e.severity] ?? "bg-fg-3"} />
           <h2 id="ev-title" className="text-15 font-semibold">{title(e.category)}</h2>
-          <span className={`text-12 ${SEV_TEXT[e.severity] ?? "text-fg-3"}`}>{title(e.severity)}</span>
+          <SevChip s={e.severity} />
           <span className="font-mono text-12 text-fg-3">#{e.id}</span>
           {e.seeded ? <Chip className="border border-line-strong text-fg-3">History</Chip> : null}
           <button ref={close} onClick={onClose} aria-label="Close" className="ml-auto grid size-8 place-items-center rounded text-fg-3 hover:bg-raised hover:text-fg"><Ic.X /></button>
         </div>
         {thumb ? <img src={media(thumb)} alt={`Key frame of event ${e.id}`} className="block aspect-video w-full bg-black object-contain" />
-          : <div className="grid aspect-video place-items-center bg-page text-12 text-fg-3">{e.seeded ? "Seeded history has no key frame" : "No key frame yet"}</div>}
+          : e.seeded ? null : <div className="grid aspect-video place-items-center bg-page text-12 text-fg-3">No key frame yet</div>}
         <div className="space-y-4 p-4">
           {e.summary ? <p className="text-13 text-fg">{e.summary}</p> : <div className="space-y-1.5"><Skeleton className="h-3" /><Skeleton className="h-3 w-2/3" /></div>}
           {t3 !== false && <Top3 t3={t3} />}
@@ -655,12 +656,11 @@ function Answer({ a, n, onOpen }) {
       <Question text={a.question} />
       <div className={`whitespace-pre-wrap text-13 leading-6 ${a.error ? "text-crit" : "text-fg"}`}>{cite}</div>
       {a.error && <div className="text-12 text-fg-3">Reload the page (⌘R) and ask again.</div>}
-      {a.events?.length > 0 && (   // P5: key frame + IST time per cited event (the brief's "timestamps and key frames")
+      {a.events?.some((e) => e.keyframe_paths?.[0]) && (   // P5: key frame + IST time per cited event (the brief's "timestamps and key frames")
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1" data-frames>
-          {a.events.map((e) => (
+          {a.events.filter((e) => e.keyframe_paths?.[0]).map((e) => (
             <button key={e.id} onClick={() => onOpen(e)} title={e.summary ?? ""} className="w-28 shrink-0 rounded text-left">
-              {e.keyframe_paths?.[0] ? <img src={media(e.keyframe_paths[0])} className="h-[63px] w-28 rounded border border-line bg-raised object-cover" alt="" />
-                : <div className="grid h-[63px] w-28 place-items-center rounded border border-line bg-surface text-fg-3" title={e.seeded ? "Seeded history has no key frame" : "No key frame"}><Ic.Video /></div>}
+              <img src={media(e.keyframe_paths[0])} className="h-[63px] w-28 rounded border border-line bg-raised object-cover" alt="" />
               <div className="mt-1 truncate font-mono text-11 text-fg-2">#{e.id} · {ist(e.start_ts)}</div>
               <div className="truncate text-11 text-fg-3">{title(e.category)} · {e.camera_name}</div>
             </button>
