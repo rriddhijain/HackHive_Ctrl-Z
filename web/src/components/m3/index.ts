@@ -1,0 +1,24 @@
+// M3 Expressive component library (docs/ui/DESIGN.md §5, API in docs/ui/COMPONENTS.md). Frozen for page builders.
+export { Badge, type BadgeProps } from "./Badge";
+export { Button, type ButtonProps, type ButtonSize, type ButtonTone, type ButtonVariant } from "./Button";
+export { ButtonGroup, type ButtonGroupOption, type ButtonGroupProps } from "./ButtonGroup";
+export { Card, type CardProps } from "./Card";
+export { Chip, type ChipProps } from "./Chip";
+export { DataTable, type Column, type DataTableProps } from "./DataTable";
+export { Dialog, type DialogProps } from "./Dialog";
+export { Divider, type DividerProps } from "./Divider";
+export { EmptyState, type EmptyStateProps } from "./EmptyState";
+export { Icon, type IconProps } from "./Icon";
+export { IconButton, type IconButtonProps } from "./IconButton";
+export { LinearProgress, type LinearProgressProps } from "./LinearProgress";
+export { List, ListItem, type ListItemProps, type ListProps } from "./List";
+export { LoadingIndicator, type LoadingIndicatorProps } from "./LoadingIndicator";
+export { Menu, MenuGroup, MenuItem, type MenuItemProps, type MenuProps } from "./Menu";
+export { PageHeader, type PageHeaderProps } from "./PageHeader";
+export { Select, type SelectGroup, type SelectOption, type SelectProps } from "./Select";
+export { Shape, type ShapeProps } from "./Shape";
+export { Skeleton, SkeletonLines, type SkeletonProps } from "./Skeleton";
+export { StatTile, type StatTileProps } from "./StatTile";
+export { Dot, StatusChip, type StatusChipProps, type StatusVariant } from "./StatusChip";
+export { TextField, type TextFieldProps } from "./TextField";
+export { Tooltip, type TooltipProps } from "./Tooltip";

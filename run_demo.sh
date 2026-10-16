@@ -38,7 +38,7 @@ curl -sf "$URL/api/ps" | grep -q "\"$MODEL\"" || die "$MODEL answered but is not
 say "re-seeding the chat history (seed() deletes the old seeded rows first; times relative to now)"
 $PY -m scripts.seed_history
 
-if [ ! -f web/dist/index.html ] || [ -n "$(find web/src web/index.html -newer web/dist/index.html)" ]; then
+if [ ! -f web/dist/index.html ] || [ -n "$(find web/src web/scripts web/next.config.ts web/package.json web/postcss.config.mjs -newer web/dist/index.html)" ]; then
   [ -d web/node_modules ] || die "web/dist is missing or stale and web/node_modules is missing: copy web/dist from the dev Mac"
   say "building the dashboard"
   (cd web && npm run build >/dev/null) || die "dashboard build failed: run 'cd web && npm run build' to see why"

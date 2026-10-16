@@ -2,7 +2,28 @@
   "name": "hackhive-web",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "vite", "build": "vite build" },
-  "dependencies": { "react": "^19", "react-dom": "^19" },
-  "devDependencies": { "vite": "^7", "tailwindcss": "^4", "@tailwindcss/vite": "^4" }
+  "scripts": {
+    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev -p 3000",
+    "build": "NEXT_TELEMETRY_DISABLED=1 next build && rm -rf dist.new && cp -R out dist.new && rm -rf dist && mv dist.new dist",
+    "typecheck": "tsc --noEmit",
+    "theme": "node scripts/gen-theme.mjs > src/styles/theme.css"
+  },
+  "dependencies": {
+    "@fontsource-variable/google-sans-code": "5.3.2",
+    "@fontsource-variable/google-sans-flex": "5.3.2",
+    "material-symbols": "0.48.0",
+    "motion": "14.3.0",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@material/material-color-utilities": "0.4.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  }
 }

@@ -23,7 +23,8 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `uv run python -m app.preview` live camera grid with YOLO boxes (P1 validation)
 - `uv run python scripts/list_cameras.py` list camera indices / test a stream URL
 - `uv run python -m bench.latency_test` model latency + contention test
-- `cd web && npm run build` then `uv run python -m app.server` dashboard at http://localhost:8000: boots in Clips mode with nothing running; Clips | Live toggle (`--selfcheck` for the self-check)
+- `cd web && npm run build` (Next.js static export → `web/dist`) then `uv run python -m app.server` dashboard at http://localhost:8000: boots in Clips mode with nothing running; six tabs Clips, Live, Alerts, Ask, Pipeline, Report (`--selfcheck` for the self-check)
+- `cd web && npm run typecheck` TypeScript check · `npm run dev` hot-reload UI on :3000 (needs the API on :8000 for data) · `npm run theme` regenerate M3 colour tokens from the seed
 - `uv run python -m scripts.seed_history` seeded demo history for chat (`--remove` deletes it) · `uv run python -m bench.chat_runner` chat question runner (30 questions, temp DB)
 - `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
 - `uv run python -m app.pipeline <clip> [...]` full pipeline on clips: alerts, per-clip right/wrong, onset-to-alert ms, GPU duty (labels from `bench/labels.csv`)

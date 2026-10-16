@@ -1,0 +1,170 @@
+/* HackHive design system (docs/ui/DESIGN.md). Only M3 roles exist: the Tailwind palette is deleted. */
+@import "tailwindcss";
+@import "./theme.css";
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --font-*: initial;
+  --shadow-*: initial;
+
+  --font-sans: "Google Sans Flex Variable", system-ui, sans-serif;
+  --font-mono: "Google Sans Code Variable", ui-monospace, monospace;
+
+  /* Shape scale (androidx ShapeTokens) */
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --radius-lg-plus: 20px; --radius-xl: 28px; --radius-xl-plus: 32px; --radius-2xl: 48px;
+
+  /* Elevation (androidx ElevationTokens; M3 kit shadows) */
+  --shadow-level-1: 0 1px 2px 0 rgb(0 0 0 / .3), 0 1px 3px 1px rgb(0 0 0 / .15);
+  --shadow-level-2: 0 1px 2px 0 rgb(0 0 0 / .3), 0 2px 6px 2px rgb(0 0 0 / .15);
+  --shadow-level-3: 0 1px 3px 0 rgb(0 0 0 / .3), 0 4px 8px 3px rgb(0 0 0 / .15);
+  --shadow-level-4: 0 2px 3px 0 rgb(0 0 0 / .3), 0 6px 10px 4px rgb(0 0 0 / .15);
+  --shadow-level-5: 0 4px 4px 0 rgb(0 0 0 / .3), 0 8px 12px 6px rgb(0 0 0 / .15);
+
+  --breakpoint-wide: 1600px;
+  --breakpoint-cluster: 1680px;
+  --breakpoint-huge: 1800px;
+}
+
+@theme inline {
+  --color-primary: var(--md-sys-color-primary);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  --color-inverse-primary: var(--md-sys-color-inverse-primary);
+  --color-primary-fixed: var(--md-sys-color-primary-fixed);
+  --color-primary-fixed-dim: var(--md-sys-color-primary-fixed-dim);
+  --color-on-primary-fixed: var(--md-sys-color-on-primary-fixed);
+  --color-on-primary-fixed-variant: var(--md-sys-color-on-primary-fixed-variant);
+  --color-secondary: var(--md-sys-color-secondary);
+  --color-on-secondary: var(--md-sys-color-on-secondary);
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
+  --color-secondary-fixed: var(--md-sys-color-secondary-fixed);
+  --color-secondary-fixed-dim: var(--md-sys-color-secondary-fixed-dim);
+  --color-on-secondary-fixed: var(--md-sys-color-on-secondary-fixed);
+  --color-on-secondary-fixed-variant: var(--md-sys-color-on-secondary-fixed-variant);
+  --color-tertiary: var(--md-sys-color-tertiary);
+  --color-on-tertiary: var(--md-sys-color-on-tertiary);
+  --color-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+  --color-tertiary-fixed: var(--md-sys-color-tertiary-fixed);
+  --color-tertiary-fixed-dim: var(--md-sys-color-tertiary-fixed-dim);
+  --color-on-tertiary-fixed: var(--md-sys-color-on-tertiary-fixed);
+  --color-on-tertiary-fixed-variant: var(--md-sys-color-on-tertiary-fixed-variant);
+  --color-surface: var(--md-sys-color-surface);
+  --color-surface-dim: var(--md-sys-color-surface-dim);
+  --color-surface-bright: var(--md-sys-color-surface-bright);
+  --color-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+  --color-surface-container-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+  --color-surface-container-highest: var(--md-sys-color-surface-container-highest);
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-surface-variant: var(--md-sys-color-surface-variant);
+  --color-outline: var(--md-sys-color-outline);
+  --color-outline-variant: var(--md-sys-color-outline-variant);
+  --color-inverse-surface: var(--md-sys-color-inverse-surface);
+  --color-inverse-on-surface: var(--md-sys-color-inverse-on-surface);
+  --color-scrim: var(--md-sys-color-scrim);
+  --color-shadow: var(--md-sys-color-shadow);
+  --color-surface-tint: var(--md-sys-color-surface-tint);
+  --color-error: var(--md-sys-color-error);
+  --color-on-error: var(--md-sys-color-on-error);
+  --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
+  --color-critical: var(--hh-critical);
+  --color-on-critical: var(--hh-on-critical);
+  --color-critical-container: var(--hh-critical-container);
+  --color-on-critical-container: var(--hh-on-critical-container);
+  --color-critical-text: var(--hh-critical-text);
+  --color-high: var(--hh-high);
+  --color-on-high: var(--hh-on-high);
+  --color-high-container: var(--hh-high-container);
+  --color-on-high-container: var(--hh-on-high-container);
+  --color-high-text: var(--hh-high-text);
+  --color-ok: var(--hh-ok);
+  --color-on-ok: var(--hh-on-ok);
+  --color-ok-dot: var(--hh-ok-dot);
+  --color-ok-container: var(--hh-ok-container);
+  --color-on-ok-container: var(--hh-on-ok-container);
+  --color-ok-text: var(--hh-ok-text);
+  --color-black: #000;
+  --color-white: #fff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+}
+
+@layer base {
+  html { background: var(--md-sys-color-surface); }
+  body {
+    @apply bg-surface text-on-surface font-sans text-body-m;
+    font-variant-numeric: tabular-nums;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+  #root { min-height: 100vh; display: flex; flex-direction: column; }
+  :focus { outline: none; }
+  :focus-visible { outline: 3px solid var(--md-sys-color-secondary); outline-offset: 2px; }
+  button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+  button:not(:disabled), [role="button"], [role="option"], [role="radio"], [role="tab"], a[href] { cursor: pointer; }
+  ::selection { background: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+  * { scrollbar-width: thin; scrollbar-color: var(--md-sys-color-outline-variant) transparent; }
+}
+
+/* State layer (§4.5): content colour over the container at fixed opacities. */
+@utility state-layer {
+  position: relative;
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+    transition: opacity 100ms linear;
+  }
+  &:hover:not(:disabled):not([aria-disabled="true"])::before { opacity: var(--state-hover); }
+  &:focus-visible::before { opacity: var(--state-focus); }
+  &:active:not(:disabled):not([aria-disabled="true"])::before { opacity: var(--state-pressed); }
+  &[data-dragged]::before, &[data-active]::before { opacity: var(--state-focus); }
+}
+
+/* Material Symbols: axes driven by props (Icon.tsx); FILL may animate (the one CSS transition besides opacity). */
+.material-symbols-rounded {
+  font-variation-settings: "FILL" var(--icon-fill, 0), "wght" var(--icon-wght, 400), "GRAD" var(--icon-grad), "opsz" var(--icon-opsz, 24);
+  transition: font-variation-settings 120ms linear;
+  user-select: none;
+}
+
+/* Skeleton shimmer (§5.20): every skeleton sweeps in sync. */
+@keyframes hh-shimmer { from { background-position: -30vw 0; } to { background-position: 130vw 0; } }
+.hh-skeleton {
+  background-color: var(--md-sys-color-surface-container-highest);
+  background-image: linear-gradient(90deg, transparent 0, var(--hh-shimmer) 50%, transparent 100%);
+  background-size: 30vw 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  animation: hh-shimmer 1500ms linear infinite;
+}
+:root, :root[data-theme="dark"] { --hh-shimmer: color-mix(in srgb, var(--md-sys-color-surface-bright) 40%, transparent); }
+:root[data-theme="light"] { --hh-shimmer: color-mix(in srgb, var(--md-sys-color-surface-container-lowest) 60%, transparent); }
+
+@keyframes hh-spin { to { transform: rotate(360deg); } }
+.hh-spin { animation: hh-spin 1s linear infinite; }
+@keyframes hh-indet { from { left: -40%; } to { left: 100%; } }
+.hh-indet { animation: hh-indet 1.5s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+  .hh-skeleton { animation: none; background-image: none; }
+}
