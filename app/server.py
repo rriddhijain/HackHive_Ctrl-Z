@@ -389,6 +389,7 @@ def dismiss(eid: int):
     event(eid)                                           # 404 if unknown
     P.db.update("events", eid, {"status": "dismissed", "dismiss_reason": "operator"})
     P.events.dismiss(eid)
+    save_feedback(eid)
     out = event(eid)
     send("event_update", {k: v for k, v in out.items() if k != "observations"})
     return out
@@ -424,20 +425,32 @@ def report():
                          "by_category": ev}}
 
 
-@app.get("/api/report/feedback.csv")
-def feedback_csv():
-    """Operator-marked false alarms as labelled examples (FR-25): one row per observation of each dismissed event,
-    with its probabilities, for threshold calibration on the dev set (P8)."""
+FEEDBACK = DATA / "feedback" / "operator_false_alarms.csv"
+FB_COLS = ["event_id", "camera_id", "category", "peak_confidence", "ts", "obs_category", "confidence", "probs", "trigger",
+           "summary", "label"]
+
+
+def save_feedback(eid):
+    """Append the dismissed event's observations to FEEDBACK (FR-25 labels). A file, not the DB: the live tables are
+    cleared on every pipeline start (E-14), the operator's labels must outlive that."""
     rows = P.db.rows("SELECT e.id event_id, e.camera_id, e.category, e.peak_confidence, o.ts, o.category obs_category, "
                      "o.confidence, o.probs, o.trigger, o.summary FROM events e JOIN observations o ON o.event_id = e.id "
-                     "WHERE e.dismiss_reason='operator' ORDER BY e.id, o.ts")
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, ["event_id", "camera_id", "category", "peak_confidence", "ts", "obs_category", "confidence",
-                             "probs", "trigger", "summary", "label"])
-    w.writeheader()
-    w.writerows({**r, "probs": json.dumps(r["probs"]), "label": "false_alarm"} for r in rows)
-    return Response(buf.getvalue(), media_type="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=operator_false_alarms.csv"})
+                     "WHERE e.id=? ORDER BY o.ts", (eid,))
+    FEEDBACK.parent.mkdir(parents=True, exist_ok=True)
+    new = not FEEDBACK.exists()
+    with FEEDBACK.open("a", newline="") as fh:
+        w = csv.DictWriter(fh, FB_COLS)
+        if new:
+            w.writeheader()
+        w.writerows({**r, "probs": json.dumps(r["probs"]), "label": "false_alarm"} for r in rows)
+
+
+@app.get("/api/report/feedback.csv")
+def feedback_csv():
+    """Every operator-marked false alarm so far, one row per observation with its probabilities, for threshold
+    calibration on the dev set (P8)."""
+    body = FEEDBACK.read_text() if FEEDBACK.exists() else ",".join(FB_COLS) + "\n"
+    return Response(body, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=operator_false_alarms.csv"})
 
 
 @app.get("/api/observations")

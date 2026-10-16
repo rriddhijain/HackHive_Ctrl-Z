@@ -342,7 +342,7 @@ JSON-valued columns (`track_ids`, `keyframe_paths`, `timing`, `probs`) are store
 | GET | `/sse` | server-sent events, §9.2 |
 | POST | `/api/chat` | §7.5 |
 | GET | `/api/report` | `{accuracy, latency, operator}` (v1.19, D79): `accuracy` = the newest `bench/results/ab_dev_<tag>_summary.json` + its per-clip rows + onset→alert p50/p95 over right, labelled clips (null if none); `latency` = §9.1 `latency` + `trigger_to_alert_p95_ms`; `operator` = real (unseeded) events, operator-marked false alarms, camera-hours (first → last observation per camera), false alarms per camera-hour (null under 3 camera-minutes) |
-| GET | `/api/report/feedback.csv` | operator-marked false alarms as labelled examples: one row per observation of each dismissed event (probs, trigger, summary, `label=false_alarm`), for threshold calibration (P8) |
+| GET | `/api/report/feedback.csv` | operator-marked false alarms as labelled examples: one row per observation of each dismissed event (probs, trigger, summary, `label=false_alarm`), appended at dismiss time to `data/feedback/operator_false_alarms.csv`, which survives the live-table reset on start (E-14); for threshold calibration (P8) |
 | GET | `/media/keyframes/*`, `/media/thumbs/*`, `/media/mosaics/*` | images |
 | GET | `/` | the built React app |
 

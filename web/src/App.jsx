@@ -900,7 +900,7 @@ function Report() {
         )}
       </section>
       <section>
-        <Label className="mb-2">Operator · live</Label>
+        <Label className="mb-2">Operator · since server start</Label>
         <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
           {[["Events (real, not seeded)", v(op.events)], ["Marked false alarm", v(op.false_alarms)],
             ["Monitored camera-hours", op.camera_hours.toFixed(2)],
@@ -912,7 +912,7 @@ function Report() {
           ))}
         </dl>
         <p className="mt-2 text-11 text-fg-3">
-          Camera-hours run from each source's first to last observation. A rate needs at least 3 camera-minutes; the target is ≤ 1 per camera-hour.
+          Camera-hours run from each source's first to last observation; live rows reset when the server starts, the exported labels don't. A rate needs at least 3 camera-minutes; the target is ≤ 1 per camera-hour.
         </p>
         <a href="/api/report/feedback.csv" className="mt-2 inline-flex h-6 items-center gap-1.5 rounded border border-line-strong px-2 text-12 font-medium text-fg hover:bg-raised">
           Export operator labels (CSV)
