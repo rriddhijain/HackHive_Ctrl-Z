@@ -29,4 +29,5 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
 - `uv run python -m unittest discover -s tests -t .` unit + synthetic tests · `uv run python -m bench.validate` benchmark data checks (exit 1 on invalid) · `uv run python -m bench.diagnose` detector-only view of the dev clips
 - Two F1s (D87): `observed_label_macro_f1` (= historical `macro_f1`, dev diagnostic) vs the `fixed` 8-label block; only `fixed.final_metric_valid` may be quoted as the NFR-2 result
+- `uv run python -m app.notify` notifier self-check (fake endpoint) · `--test` sends one test message (needs `HACKHIVE_NTFY_URL` or the Telegram pair; D89, off by default)
 - `uv run python -m app.pipeline <clip> [...]` full pipeline on clips: alerts, per-clip right/wrong, onset-to-alert ms, GPU duty (labels from `bench/labels.csv`)
