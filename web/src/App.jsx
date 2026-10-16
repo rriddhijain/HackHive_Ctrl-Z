@@ -426,7 +426,10 @@ function AddSource({ cams, onDone }) {   // Act 2: devices (iPhone via Continuit
   const [devs, setDevs] = useState(null);   // null loading · false error
   const [url, setUrl] = useState("");
   const [msg, setMsg] = useState("");
-  useEffect(() => { getJSON("/api/devices").then(setDevs).catch(() => setDevs(false)); }, []);
+  // macOS lists the iPhone only while it is paired and awake next to this Mac (one Mac at a time), so the list is
+  // re-read on demand and whenever the window regains focus: the usual flow is unlock the phone, come back to the Mac.
+  const scan = () => getJSON("/api/devices").then(setDevs).catch(() => setDevs(false));
+  useEffect(() => { scan(); window.addEventListener("focus", scan); return () => window.removeEventListener("focus", scan); }, []);
   const running = new Set(cams.map((c) => c.source));
   const add = async (source, label) => {
     const r = await post("/api/cameras", { source, name: label });
@@ -438,9 +441,12 @@ function AddSource({ cams, onDone }) {   // Act 2: devices (iPhone via Continuit
       <div className="flex h-10 shrink-0 items-center border-b border-line px-4"><Label>Add source</Label></div>
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div>
-          <div className="label mb-2">Devices</div>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="label">Devices</div>
+            <Button variant="ghost" size="sm" className="-my-1" onClick={scan}>Rescan</Button>
+          </div>
           {devs == null ? <div className="flex gap-2"><Skeleton className="h-8 w-32" /><Skeleton className="h-8 w-28" /></div>
-            : devs === false ? <p className="text-12 text-crit">Could not list cameras. Reload the page.</p>
+            : devs === false ? <p className="text-12 text-crit">Could not list cameras. Rescan, or reload the page.</p>
             : !devs.length ? <p className="text-12 text-fg-3">No cameras found. Check camera permission, or add a stream URL.</p>
             : (
               <div className="flex flex-wrap gap-2">
@@ -451,6 +457,11 @@ function AddSource({ cams, onDone }) {   // Act 2: devices (iPhone via Continuit
                 ))}
               </div>
             )}
+          {Array.isArray(devs) && !devs.some((d) => d.name === "iPhone (live)") && (
+            <p className="mt-2 text-11 text-fg-3">
+              No iPhone listed: it must be on this Mac's Apple Account with Bluetooth and Wi‑Fi on, unlocked nearby or on a USB cable, and not in use by another Mac. Then Rescan.
+            </p>
+          )}
         </div>
         <form onSubmit={(e) => { e.preventDefault(); if (url.trim()) add(url.trim(), null); }}>
           <label htmlFor="src-url" className="label mb-2 block">Stream URL</label>

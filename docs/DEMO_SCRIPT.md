@@ -82,7 +82,7 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 - Alert: banner, card, and a red ring on that camera's tile. Click "Ack" on the banner after the line below. Say: "Caught live. The alert came about a second after the gate fired; the stopwatch from first contact is the onset-to-alert number in the report."
 - Abhinav sits down on the floor and stays down for a few seconds.
 - Say: "The look-alike: a person on the floor. The fall rule wants a fast drop and a horizontal body; sitting down is neither. No alert." (Time left: a hug; the gate wakes the model, the model says normal.)
-- If "iPhone (live)" is missing: iPhone locked, landscape, still, Bluetooth on; click "Clips" then "Live" to rescan. Still missing → webcam alone, and say so.
+- If "iPhone (live)" is missing: iPhone locked, landscape, still, Bluetooth on, same Apple Account as this Mac, not paired to another Mac (Continuity serves one Mac at a time); click "Rescan" in Add source (the list also refreshes when the window regains focus). Still missing → USB-C cable and Rescan; still missing → webcam alone, and say so.
 - If the buttons are swapped (D70): use the other one. Tile "Down" or "Reconnecting": click its ■ (top right of the tile) and add it again.
 - If the shove is not caught after two tries: click "Clips", play p3c_shove_sit_hug.mp4 and say plainly: "The live take missed. This is the same sequence recorded on our webcam, through the same pipeline." No third try.
 - If "3+ live cameras: alerts may slow" appears (amber, above the tiles): ■ the third tile; keep two.
