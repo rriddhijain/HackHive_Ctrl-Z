@@ -111,9 +111,7 @@ class Pipeline:
         delayed = time.time() - req["created"] > V["trigger_max_age_s"]
         crop = vlm.track_crop(newest, req["track_ids"]) is not None if V["p1_crop"]["enabled"] and not base else False
         grid, b64 = vlm.mosaic(frames, req["track_ids"] if crop else ())
-        hints = f"Detector: up to {ev['max_persons']} people in the last 4 s. Gate: {req['hint'] or 'no trigger'}."
-        if crop:
-            hints += " The bottom-right tile is a close-up of those tracks in the newest frame."   # FR-9c
+        hints = vlm.user_turn(ev["max_persons"], req["hint"], crop)   # D77 metadata contract; crop = FR-9c tile
         summary_turn = base and self.n_base[cam] % V["summary_every_n"] == 1   # 1st, 4th, 7th... baseline (D42)
         st = {}
 

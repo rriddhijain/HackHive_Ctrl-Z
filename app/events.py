@@ -23,6 +23,7 @@ class EventManager:
         self.db, self.emit, self.cam_names = db, emit, cam_names or {}
         self.win = defaultdict(lambda: deque(maxlen=E["window_n"]))   # camera -> last 3 observations' c maps
         self.open = {}                                                 # (camera, category) -> event dict
+        self.hold = {}                                                 # (camera, category) -> no new event until (FR-25)
         self.lock = threading.Lock()
 
     def is_open(self, cam, cat):
@@ -52,7 +53,7 @@ class EventManager:
                 else:
                     ev["_nonsupport"] += 1
             for cat in CATS[:-1]:
-                if (cam, cat) in self.open:
+                if (cam, cat) in self.open or self.hold.get((cam, cat), 0) > ts:
                     continue
                 sev = severity(cat, subtype if cat == top else None)
                 single = E["open_single_critical"] if sev == "critical" else E["open_single_other"]
@@ -106,6 +107,16 @@ class EventManager:
             self.close(ev)
         return closed
 
+    def dismiss(self, eid, now=None):
+        """Operator marked event eid a false alarm (FR-25): it stops updating and its (camera, category) opens no new
+        event for dismiss_hold_s, so the same scene doesn't re-alert a second later. True if it was open."""
+        with self.lock:
+            k = next((k for k, ev in self.open.items() if ev["id"] == eid), None)
+            if k:
+                self.open.pop(k)["status"] = "dismissed"
+                self.hold[k] = (now or time.time()) + E["dismiss_hold_s"]
+        return k is not None
+
     def close_all(self):
         with self.lock:
             closed, self.open = list(self.open.values()), {}
@@ -149,6 +160,11 @@ if __name__ == "__main__":
     # Starved camera (no observations for 30 s) keeps its event; a camera down for 8 s closes it.
     assert em.tick(now=140) == [] and em.is_open("cam2", "fighting")
     assert [e["camera_id"] for e in em.tick(now=150, down_since={"cam2": 141})] == ["cam2"]
+    # Operator false alarm (FR-25): the event leaves the open set and the same category is held on that camera.
+    op, _ = em.decide("cam7", C(fighting=0.8), None, {"fighting"}, 200, 200)
+    assert em.dismiss(op[0]["id"], now=200) and not em.is_open("cam7", "fighting") and not em.dismiss(op[0]["id"])
+    assert em.decide("cam7", C(fighting=0.9), None, {"fighting"}, 230, 230)[0] == []
+    assert [e["category"] for e in em.decide("cam7", C(fighting=0.9), None, {"fighting"}, 200 + E["dismiss_hold_s"] + 1, 0)[0]] == ["fighting"]
     rows = em.db.rows("SELECT camera_id, category, status, summary, keyframe_paths FROM events ORDER BY id")
     assert rows[0] == {"camera_id": "cam1", "category": "fighting", "status": "closed", "summary": "Two people shoving.",
                        "keyframe_paths": [f"k{rows and 1}"]}, rows[0]

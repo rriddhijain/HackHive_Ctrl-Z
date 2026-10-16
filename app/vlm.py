@@ -68,9 +68,19 @@ SYSTEM = (  # all static text (prefix-cached, D38); every §6.1 definition + exc
     "If several apply, pick the most severe, in this order: " + " > ".join(CATS) + ". If unsure, choose normal.\n\n"
     "Categories:\n" + "\n".join(
         f"- {n}: {d}." + (f" {x}." if x else "") + (f" Subtypes: {', '.join(s)}." if s else "") for n, d, x, s, _ in TABLE) +
+    "\n\nThe text sent with the image is metadata from the detector (people counts, box motion, scene change), not a "
+    "description of the scene. Use it only as a hint; never mention it or the detector in the summary, which describes "
+    "only what the frames show."
     "\n\nFields: category; subtype (one of that category's subtypes, else null); people_count (people visible in the "
     "newest frame); summary (objective, at most 30 words: who, what, where in the frame). Reply only with JSON."
 )
+
+
+def user_turn(max_persons, hint=None, crop=False):
+    """The dynamic user turn (D77): labelled as detector metadata so the model never narrates it as scene content.
+    hint: gate text (§7.4) with numbers and a named hypothesis, no track ids, never the word gate; crop: FR-9c tile."""
+    s = f"Detector metadata, not visible in the frames: up to {max_persons} people in the last 4 s; trigger: {hint or 'none'}."
+    return s + (" The bottom-right tile is a close-up of the people in the trigger, newest frame." if crop else "")
 
 
 # ---- mosaic (§5a step 5, D44) ----
@@ -312,9 +322,9 @@ if __name__ == "__main__":
         if i % 15 == 0:
             frames.append((i / 25, cv2.resize(f, (640, 480)), []))
     _, b64 = mosaic(frames[:4])
-    call(b64, "Detector: up to 4 people in the last 4 s. Gate: no trigger.")  # warm-up
+    call(b64, user_turn(4))  # warm-up
     seen = {}
-    r = call(b64, "Detector: up to 4 people in the last 4 s. Gate: no trigger.",
+    r = call(b64, user_turn(4),
              on_decide=lambda p, c, s, t: seen.update(p=p, c=c))
     t = r["timing"]
     print(json.dumps({k: r[k] for k in ("category", "subtype", "people_count", "summary", "prompt_eval_count")}),
@@ -324,7 +334,7 @@ if __name__ == "__main__":
     assert r["ok"] and seen["c"] == r["category"] and abs(sum(r["probs"].values()) - 1) < 1e-6
     assert t["t_category"] < t["t_vlm_done"] and r["summary"]
     # 5. Stop at the category (confident-normal baseline path) is much shorter than the full call.
-    r2 = call(b64, "Detector: up to 4 people in the last 4 s. Gate: no trigger.", on_decide=lambda *a: True)
+    r2 = call(b64, user_turn(4), on_decide=lambda *a: True)
     print("stopped at category: %.2f s" % (r2["timing"]["t_vlm_done"] - r2["timing"]["t_vlm_start"]))
     assert r2["stopped"] == "category" and r2["summary"] is None
     print("vlm self-check ok")

@@ -85,6 +85,10 @@ export default function App() {
     const r = await fetch(`/api/events/${id}/ack`, { method: "POST" });
     if (r.ok) { const { observations, ...e } = await r.json(); merge(e.id, e); }
   };
+  const dismiss = async (id) => {   // FR-25: operator false alarm; hidden from the feed, counted in Report
+    const r = await fetch(`/api/events/${id}/dismiss`, { method: "POST" });
+    if (r.ok) { const { observations, ...e } = await r.json(); merge(e.id, e); setOpenEv((o) => (o?.id === id ? null : o)); }
+  };
   const all = Object.values(events);
   const feed = all.filter((e) => e.status !== "dismissed").sort((a, b) => b.id - a.id).slice(0, 50);
   // The banner holds every critical alert until someone acknowledges it, even after the event closes.
@@ -145,9 +149,9 @@ export default function App() {
         </main>
 
         <aside className="flex min-h-0 flex-col border-l border-line">
-          {critical.length > 0 && <Banner key={critical[0].id} list={critical} camName={camName} onAck={ack} onOpen={setOpenEv} />}
+          {critical.length > 0 && <Banner key={critical[0].id} list={critical} camName={camName} onAck={ack} onDismiss={dismiss} onOpen={setOpenEv} />}
           <div role="tablist" aria-label="Rail" className="flex h-10 shrink-0 items-stretch gap-4 border-b border-line px-4">
-            {[["alerts", "Alerts", nOpen], ["ask", "Ask"], ["pipeline", "Pipeline"]].map(([k, t, n]) => (
+            {[["alerts", "Alerts", nOpen], ["ask", "Ask"], ["pipeline", "Pipeline"], ["report", "Report"]].map(([k, t, n]) => (
               <button key={k} role="tab" id={`tab-${k}`} aria-selected={tab === k} aria-controls={`panel-${k}`} onClick={() => setTab(k)}
                 className={`-mb-px flex items-center gap-1.5 border-b-2 text-13 font-medium ${tab === k ? "border-accent-fg text-fg" : "border-transparent text-fg-3 hover:text-fg"}`}>
                 {t}{n ? <span className="font-mono text-11 text-fg-3">{n}</span> : null}
@@ -158,7 +162,7 @@ export default function App() {
             </span>
           </div>
           <div role="tabpanel" id="panel-alerts" aria-labelledby="tab-alerts" className={tab === "alerts" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
-            <Alerts feed={feed} load={evLoad} camName={camName} onOpen={setOpenEv} onAck={ack} />
+            <Alerts feed={feed} load={evLoad} camName={camName} onOpen={setOpenEv} onAck={ack} onDismiss={dismiss} />
           </div>
           <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className={tab === "ask" ? "min-h-0 flex-1" : "hidden"}>
             <Chat onOpen={setOpenEv} inputRef={askRef} />
@@ -166,10 +170,13 @@ export default function App() {
           <div role="tabpanel" id="panel-pipeline" aria-labelledby="tab-pipeline" className={tab === "pipeline" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
             <Pipeline cams={cams} traces={traces} m={m} />
           </div>
+          <div role="tabpanel" id="panel-report" aria-labelledby="tab-report" className={tab === "report" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
+            {tab === "report" && <Report />}
+          </div>
         </aside>
       </div>
 
-      {openEv && <EventDialog e={{ ...openEv, ...events[openEv.id] }} camName={camName} onAck={ack} onClose={() => setOpenEv(null)} />}
+      {openEv && <EventDialog e={{ ...openEv, ...events[openEv.id] }} camName={camName} onAck={ack} onDismiss={dismiss} onClose={() => setOpenEv(null)} />}
     </div>
   );
 }
@@ -215,7 +222,7 @@ function Clock() {
   return <span className="whitespace-nowrap text-fg-2">{ist(t)} IST</span>;
 }
 
-function Banner({ list, camName, onAck, onOpen }) {
+function Banner({ list, camName, onAck, onDismiss, onOpen }) {
   const e = list[0];
   return (
     <div role="alert" className="shrink-0 animate-enter bg-crit-strong px-4 py-3 text-white">
@@ -227,6 +234,7 @@ function Banner({ list, camName, onAck, onOpen }) {
             {ist(e.start_ts ?? e.alert?.t_stored)} IST · {pc(e.alert?.confidence ?? e.peak_confidence)} · {camName(e)}
           </div>
         </button>
+        {!e.seeded && <Button size="sm" variant="ghost" className="!text-white hover:!bg-white/15" onClick={() => onDismiss(e.id)}>False alarm</Button>}
         <Button size="sm" className="border-0 !bg-white !text-crit-strong hover:!bg-white/90" onClick={() => onAck(e.id)}>Ack</Button>
       </div>
       {list.length > 1 && <div className="mt-1 pl-[30px] text-12 text-white/85">{list.length - 1} more unacknowledged</div>}
@@ -492,7 +500,7 @@ function useTop3(e) {   // live alert: top-3 from the SSE message; history: from
 
 const STATUS_WORD = { open: "Open", closed: "Closed", acknowledged: "Acknowledged", dismissed: "Dismissed" };
 
-function Alerts({ feed, load, camName, onOpen, onAck }) {
+function Alerts({ feed, load, camName, onOpen, onAck, onDismiss }) {
   if (load === "loading") return (
     <div>{[0, 1, 2].map((i) => (
       <div key={i} className="flex gap-3 border-b border-line px-4 py-3">
@@ -504,12 +512,12 @@ function Alerts({ feed, load, camName, onOpen, onAck }) {
   if (!feed.length) return <Empty icon={Ic.Check} title="No alerts" hint="Incidents appear here the moment the model confirms one." />;
   return (
     <ol aria-live="polite" aria-label="Alerts">
-      {feed.map((e) => <li key={e.id}><AlertCard e={e} camName={camName(e)} onOpen={onOpen} onAck={onAck} /></li>)}
+      {feed.map((e) => <li key={e.id}><AlertCard e={e} camName={camName(e)} onOpen={onOpen} onAck={onAck} onDismiss={onDismiss} /></li>)}
     </ol>
   );
 }
 
-function AlertCard({ e, camName, onOpen, onAck }) {
+function AlertCard({ e, camName, onOpen, onAck, onDismiss }) {
   const t3 = useTop3(e);
   const thumb = e.keyframe_paths?.[0];
   return (
@@ -542,14 +550,17 @@ function AlertCard({ e, camName, onOpen, onAck }) {
       <div className="mt-2 flex h-6 items-center gap-3 whitespace-nowrap font-mono text-11 text-fg-3">
         {e.time_to_alert_ms != null && <span>trigger → alert {ms(e.time_to_alert_ms)}</span>}
         {e.alert?.onset_to_alert_ms != null && <span>onset → alert {ms(e.alert.onset_to_alert_ms)}</span>}
-        {e.status === "open" ? <Button size="sm" className="relative z-10 ml-auto font-sans" onClick={() => onAck(e.id)}>Ack</Button>
-          : <span className="ml-auto font-sans">{STATUS_WORD[e.status] ?? e.status}</span>}
+        <span className="ml-auto" />
+        {!e.seeded && <Button size="sm" variant="ghost" className="relative z-10 font-sans" title="Not an incident: hide it, count it in Report, keep it as a labelled example (FR-25)"
+          onClick={() => onDismiss(e.id)}>False alarm</Button>}
+        {e.status === "open" ? <Button size="sm" className="relative z-10 font-sans" onClick={() => onAck(e.id)}>Ack</Button>
+          : <span className="font-sans">{STATUS_WORD[e.status] ?? e.status}</span>}
       </div>
     </article>
   );
 }
 
-function EventDialog({ e, camName, onAck, onClose }) {
+function EventDialog({ e, camName, onAck, onDismiss, onClose }) {
   const t3 = useTop3(e);
   const close = useRef(null);
   useEffect(() => { close.current?.focus(); }, []);
@@ -578,8 +589,11 @@ function EventDialog({ e, camName, onAck, onClose }) {
             {facts.map(([k, val]) => <div key={k} className="min-w-0"><dt className="text-11 text-fg-3">{k}</dt><dd className="truncate font-mono text-12 text-fg">{val}</dd></div>)}
           </dl>
         </div>
-        {e.status === "open" && (
-          <div className="flex justify-end border-t border-line px-4 py-3"><Button variant="primary" onClick={() => onAck(e.id)}>Ack</Button></div>
+        {(e.status === "open" || !e.seeded) && (
+          <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
+            {!e.seeded && e.status !== "dismissed" && <Button onClick={() => onDismiss(e.id)}>Mark false alarm</Button>}
+            {e.status === "open" && <Button variant="primary" onClick={() => onAck(e.id)}>Ack</Button>}
+          </div>
         )}
       </div>
     </div>
@@ -817,6 +831,93 @@ function System({ m }) {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+// Report (FR-20): the newest dev-set pass from bench/results, plus live operator numbers. Every figure is measured.
+function Report() {
+  const [r, setR] = useState(null);   // null loading · false error
+  useEffect(() => {
+    const load = () => getJSON("/api/report").then(setR).catch(() => setR(false));
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+  if (r === null) return <div className="space-y-3 p-4"><Skeleton className="h-20" /><Skeleton className="h-40" /></div>;
+  if (r === false) return <Empty icon={Ic.Alert} title="Could not load the report" hint="Check the server is running." />;
+  const a = r.accuracy, op = r.operator, lat = r.latency;
+  const p = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const pair = (x) => (x?.[0] == null ? "—" : `${ms(x[0])} / ${ms(x[1])}`);
+  return (
+    <div className="space-y-6 p-4">
+      <section>
+        <div className="mb-2 flex items-baseline justify-between">
+          <Label>Accuracy · dev set</Label>
+          {a && <span className="font-mono text-11 text-fg-3">{a.tag} · {ist(a.run_at)} IST</span>}
+        </div>
+        {!a ? <Empty title="No dev-set run yet" hint="Run: uv run python -m bench.ab --dev --tag NAME" /> : (
+          <>
+            <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
+              {[["Clips right", `${a.right} / ${a.n}`], ["Incident recall", p(a.incident_recall)],
+                ["Incident precision", p(a.incident_precision)], ["False alarms, normal clips", v(a.false_alarms_normal)],
+                ["Onset → alert p50 / p95", pair(a.onset_to_alert_p50_p95)], ["Trigger → alert p50 / p95", pair(a.trigger_to_alert_p50_p95)],
+              ].map(([k, val]) => (
+                <div key={k} className="bg-surface px-3 py-2"><dt className="truncate text-11 text-fg-3">{k}</dt><dd className="font-mono text-15 text-fg">{val}</dd></div>
+              ))}
+            </dl>
+            <p className="mt-2 text-11 text-fg-3">
+              Each clip played once, alone, at real-time speed. Onset → alert over {a.onset_to_alert_n} labelled clips. Thresholds were
+              tuned on these clips, so this is a training-set result; the held-out test split is reported separately.
+            </p>
+            <table className="mt-3 w-full table-fixed text-12">
+              <thead><tr className="text-left text-11 text-fg-3"><th className="w-[38%] py-1 font-medium">Clip</th><th className="font-medium">Label</th>
+                <th className="font-medium">Detected</th><th className="w-20 text-right font-medium">Onset→alert</th></tr></thead>
+              <tbody>
+                {a.clips.map((c) => {
+                  const ok = c.label === c.pred;
+                  return (
+                    <tr key={c.clip} className="border-t border-line" title={c.summary}>
+                      <td className="truncate py-1.5 font-mono text-fg-2">{c.clip}</td>
+                      <td className="truncate text-fg-2">{name(c.label)}</td>
+                      <td className="truncate"><span className="inline-flex items-center gap-1.5"><Dot className={ok ? "bg-ok" : "bg-crit"} />
+                        <span className={ok ? "text-fg" : "text-crit"}>{name(c.pred)}</span></span></td>
+                      <td className="text-right font-mono text-fg-2">{c.onset_to_alert_ms ? ms(+c.onset_to_alert_ms) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {Object.keys(a.errors ?? {}).length > 0 && (
+              <div className="mt-3 space-y-1">
+                <div className="text-11 text-fg-3">Errors by confusion pair</div>
+                {Object.entries(a.errors).map(([k, list]) => (
+                  <div key={k} className="text-12"><span className="font-mono text-crit">{k}</span> <span className="text-fg-3">· {list.map((x) => x.split(" ")[0]).join(", ")}</span></div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+      <section>
+        <Label className="mb-2">Operator · live</Label>
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
+          {[["Events (real, not seeded)", v(op.events)], ["Marked false alarm", v(op.false_alarms)],
+            ["Monitored camera-hours", op.camera_hours.toFixed(2)],
+            ["False alarms / camera-hour", op.false_alarms_per_camera_hour == null ? "—" : op.false_alarms_per_camera_hour],
+            ["Onset → alert p50 (live)", lat.onset_to_alert_ms?.n ? ms(lat.onset_to_alert_ms.p50) : "—"],
+            ["Store → card p95", lat.store_to_card_ms?.n ? ms(lat.store_to_card_ms.p95) : "—"],
+          ].map(([k, val]) => (
+            <div key={k} className="bg-surface px-3 py-2"><dt className="truncate text-11 text-fg-3">{k}</dt><dd className="font-mono text-15 text-fg">{val}</dd></div>
+          ))}
+        </dl>
+        <p className="mt-2 text-11 text-fg-3">
+          Camera-hours run from each source's first to last observation. A rate needs at least 3 camera-minutes; the target is ≤ 1 per camera-hour.
+        </p>
+        <a href="/api/report/feedback.csv" className="mt-2 inline-flex h-6 items-center gap-1.5 rounded border border-line-strong px-2 text-12 font-medium text-fg hover:bg-raised">
+          Export operator labels (CSV)
+        </a>
+      </section>
     </div>
   );
 }

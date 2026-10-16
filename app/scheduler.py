@@ -78,7 +78,7 @@ class Scheduler:
         old = next((e for e in reversed(buf) if now - e[0] >= 0.5), None)
         if old and (d := scene_change(old, new, G)):
             trigs.append({"camera_id": cam, "rule": "scene_change", "track_ids": [], "score": round(min(1.0, d * 2), 2),
-                          "hint": f"The scene changed suddenly ({d:.0%} of the picture) in 0.5 s."})
+                          "hint": f"the background changed abruptly in 0.5 s (mean pixel change {d:.0%}, people excluded) (possible scene change)"})
         rec = self.recent[cam]
         while rec and now - rec[0]["t"] > D["buffer_s"]:
             rec.popleft()

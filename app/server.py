@@ -11,6 +11,8 @@ hands the message to the event loop; it never blocks the model.
 """
 import asyncio
 import base64
+import csv
+import io
 import json
 import re
 import sys
@@ -380,6 +382,64 @@ def ack(eid: int):
     return out
 
 
+@app.post("/api/events/{eid}/dismiss")
+def dismiss(eid: int):
+    """FR-25: operator marks a false alarm. Kept for audit (status dismissed, reason operator), hidden from the feed and
+    the chat, counted per camera-hour in the report, exported as labelled examples (/api/report/feedback.csv)."""
+    event(eid)                                           # 404 if unknown
+    P.db.update("events", eid, {"status": "dismissed", "dismiss_reason": "operator"})
+    P.events.dismiss(eid)
+    out = event(eid)
+    send("event_update", {k: v for k, v in out.items() if k != "observations"})
+    return out
+
+
+def camera_hours():
+    """Monitored time: first → last real observation per camera (seeded history excluded), summed."""
+    r = P.db.rows("SELECT SUM(t) h FROM (SELECT MAX(ts) - MIN(ts) t FROM observations WHERE seeded=0 GROUP BY camera_id)")
+    return (r[0]["h"] or 0) / 3600
+
+
+@app.get("/api/report")
+def report():
+    """FR-20 report tab: the newest dev-set pass (bench/results/ab_dev_*), plus live operator numbers from the DB."""
+    dev = sorted((ROOT / "bench" / "results").glob("ab_dev_*_summary.json"), key=lambda p: p.stat().st_mtime)
+    acc = None
+    if dev:
+        tag = dev[-1].name[len("ab_dev_"):-len("_summary.json")]
+        summ = next(iter(json.loads(dev[-1].read_text()).values()))
+        csvp = dev[-1].with_name(f"ab_dev_{tag}.csv")
+        keep = ("clip", "label", "pred", "confidence", "onset_to_alert_ms", "trigger_to_alert_ms", "summary")
+        clips = [{k: r[k] for k in keep} for r in csv.DictReader(csvp.open())] if csvp.exists() else []
+        o2a = [float(r["onset_to_alert_ms"]) for r in clips if r["onset_to_alert_ms"] and r["pred"] == r["label"]]
+        acc = {"tag": tag, "run_at": dev[-1].stat().st_mtime, **summ, "clips": clips,
+               "onset_to_alert_p50_p95": (pct(o2a, .5), pct(o2a, .95)), "onset_to_alert_n": len(o2a)}
+    ev = P.db.rows("SELECT category, status, dismiss_reason, COUNT(*) n FROM events WHERE seeded=0 GROUP BY 1, 2, 3")
+    fa = sum(r["n"] for r in ev if r["dismiss_reason"] == "operator")
+    hours = camera_hours()
+    m = metrics()
+    return {"accuracy": acc, "latency": m["latency"] | {"trigger_to_alert_p95_ms": m["vlm"].get("alert_p95_ms")},
+            "operator": {"events": sum(r["n"] for r in ev), "false_alarms": fa, "camera_hours": round(hours, 3),
+                         "false_alarms_per_camera_hour": round(fa / hours, 2) if hours >= 0.05 else None,
+                         "by_category": ev}}
+
+
+@app.get("/api/report/feedback.csv")
+def feedback_csv():
+    """Operator-marked false alarms as labelled examples (FR-25): one row per observation of each dismissed event,
+    with its probabilities, for threshold calibration on the dev set (P8)."""
+    rows = P.db.rows("SELECT e.id event_id, e.camera_id, e.category, e.peak_confidence, o.ts, o.category obs_category, "
+                     "o.confidence, o.probs, o.trigger, o.summary FROM events e JOIN observations o ON o.event_id = e.id "
+                     "WHERE e.dismiss_reason='operator' ORDER BY e.id, o.ts")
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, ["event_id", "camera_id", "category", "peak_confidence", "ts", "obs_category", "confidence",
+                             "probs", "trigger", "summary", "label"])
+    w.writeheader()
+    w.writerows({**r, "probs": json.dumps(r["probs"]), "label": "false_alarm"} for r in rows)
+    return Response(buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=operator_false_alarms.csv"})
+
+
 @app.get("/api/observations")
 def observations(camera: str = None, frm: float = Query(None, alias="from"), to: float = None, limit: int = 50):
     w, args = where(camera=camera, frm=frm, to=to, tcol="ts")
@@ -488,9 +548,22 @@ def selfcheck():
         assert c.get("/api/metrics").json()["latency"]["store_to_card_ms"]["last"] == 12.5
         assert c.get("/api/events").status_code == 200 and isinstance(c.get("/api/observations").json(), list)
         r = c.post("/api/chat", json={"session_id": "s", "question": "How many incidents today?"}).json()
-        assert r["how"]["mode"] == "template" and r["answer"] and "filters" in r, r                       # P4
+        assert r["how"]["mode"] in ("template", "model") and r["answer"] and "filters" in r, r   # P4; D75: model answers
         assert c.post("/api/chat", json={"question": ""}).status_code == 400 and c.get("/api/events?q=zzqx").json() == []
         assert all(o["thumb_path"] is None for o in c.get("/api/observations").json() if o["category"] == "normal")
+        # FR-25 mark false alarm + FR-20 report (a throwaway event, deleted after so the real counts stay true)
+        eid = P.db.insert("events", {"camera_id": "selfcheck", "category": "fighting", "severity": "critical",
+                                     "start_ts": time.time(), "status": "open"})
+        try:
+            d = c.post(f"/api/events/{eid}/dismiss").json()
+            assert d["status"] == "dismissed" and d["dismiss_reason"] == "operator", d
+            assert c.post("/api/events/999999999/dismiss").status_code == 404
+            rep = c.get("/api/report").json()
+            assert rep["operator"]["false_alarms"] >= 1 and "onset_to_alert_ms" in rep["latency"], rep
+            assert c.get("/api/report/feedback.csv").text.startswith("event_id,camera_id")
+        finally:
+            with P.db.lock:
+                P.db.con.execute("DELETE FROM events WHERE id=?", (eid,))
         # upload rules (v1.9 conditions): bad extension 400, path stripped, real clip -> new camera, removable
         assert c.post("/api/cameras/upload?name=x.exe", content=b"1").status_code == 400
         r = c.post("/api/cameras/upload?name=../../evil/clip.mp4", content=Path(clip).read_bytes())

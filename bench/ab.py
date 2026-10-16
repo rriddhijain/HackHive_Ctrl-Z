@@ -6,6 +6,7 @@
                                        track values behind the ones that didn't (fight pair speed, overlap, persons seen)
   uv run python -m bench.ab --gate --check   gate regression check (D72), CPU only, ~2 min; exit 1 on failure.
                                        Every gate or threshold change must pass it (CLAUDE.md)
+  uv run python -m bench.ab --dev --tag T  every dev clip alone, played once (the headline accuracy/latency pass)
   uv run python -m bench.ab --tiles    2x2 mosaic vs person-crop tile 4 (FR-9c) vs the 4 frames as separate images
   uv run python -m bench.ab --run a.mp4 [b.mp4 ...] [--seconds N] [--tag T]   one pipeline run (several clips = several
                                        cameras at once; --seconds loops them): per-camera rows -> ab_run_<tag>.csv
@@ -346,7 +347,7 @@ def write(test, rows):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    for f in ("model", "gate", "tiles", "check"):
+    for f in ("model", "gate", "tiles", "check", "dev"):
         ap.add_argument("--" + f, action="store_true")
     ap.add_argument("--run", nargs="+"); ap.add_argument("--seconds", type=float); ap.add_argument("--tag", default="x")
     ap.add_argument("--duty-target", type=float, help="override vlm.duty_target (e.g. 1.01 = no back-off, the 'before')")
@@ -359,6 +360,10 @@ if __name__ == "__main__":
         test_model()
     if a.tiles:
         test_tiles()
+    if a.dev:   # the headline pass: every dev clip alone, played once -> ab_dev_<tag>.csv + _summary.json
+        rows, tots = [], {}
+        per_clip(a.tag, rows, tots)
+        report(f"dev_{a.tag}", rows, tots)
     if a.run:
         rows, tot = run(a.run, a.seconds, a.tag)
         write(f"run_{a.tag}", rows)

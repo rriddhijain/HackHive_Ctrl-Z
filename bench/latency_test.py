@@ -49,7 +49,7 @@ def mosaic_b64(tile=int(os.environ.get('TILE', 336))):
 
 
 def call(model, image=True, max_tokens=100):
-    msg = {"role": "user", "content": "Detector hints: persons=4, no gate triggers. Classify."}
+    msg = {"role": "user", "content": "Detector metadata, not visible in the frames: up to 4 people in the last 4 s; trigger: none."}
     if image:
         msg["images"] = [mosaic_b64()]
     body = {"model": model, "stream": True, "think": False, "keep_alive": -1,

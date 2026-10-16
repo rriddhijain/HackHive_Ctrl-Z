@@ -1,10 +1,10 @@
 clip,label,split,onset_s
-v001.avi,fighting,dev,
-v003.avi,fighting,dev,
-v006.avi,fighting,dev,
-v011.avi,fighting,dev,
-v026.avi,fighting,dev,
-w001_masked.avi,fighting,dev,
+v001.avi,fighting,dev,0.0
+v003.avi,fighting,dev,0.0
+v006.avi,fighting,dev,2.0
+v011.avi,fighting,dev,1.0
+v026.avi,fighting,dev,0.0
+w001_masked.avi,fighting,dev,0.5
 sample_bus.mp4,normal,dev,
 p3c_shove_sit_hug.mp4,fighting,dev,5.6
 idle_60s.mp4,normal,dev,
