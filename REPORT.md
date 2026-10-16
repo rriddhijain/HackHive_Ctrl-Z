@@ -284,7 +284,16 @@ Source: DECISIONS.md D87; bench/validate.py; bench/metrics.py; tests/.
 
 - **Model and layout A/B** (7 clips, 16 Oct 03:05-03:20 IST, older gates): 4B 4/7 vs 2B 5/7, with the same incident recall (0.667); the 4B was 285 ms faster at p50 (1207 vs 1492 ms trigger -> alert). The 2x2 mosaic was kept over native video: native video got one more clip right but was 1.9x slower at p50 and ran the GPU at 97 %. Source: ab_model_summary.json, ab_tiles_summary.json.
 - **The first headline run** (11 clips, fighting and normal only, 16 Oct 05:35 IST): 10 of 11 right; its labels-present macro F1 of 0.641 was re-verified on three runs by D87. It is a dev diagnostic, not comparable with the numbers above. Source: ab_p5_dev_summary.json; tests/test_metrics.py.
-- **Model only, P0** (15 Oct 21:52 IST; excludes gate, queue and capture, so never quoted as alert latency): 4b-mlx at tile 224, category token p50 / p95 1.740 / 2.004 s, full call 3.679 / 4.085 s. Source: latency_p0_tile224.json.
+- **Model only, P0** (15 Oct 21:52-21:54 IST; excludes gate, queue and capture, so never quoted as alert latency; seconds):
+
+  | Model | Tile | Category token p50 / p95 | Full call p50 / p95 |
+  |---|---|---|---|
+  | qwen3.5:4b-mlx | 160 | 1.603 / 2.190 | 3.539 / 4.357 |
+  | qwen3.5:4b-mlx | 224 | 1.740 / 2.004 | 3.679 / 4.085 |
+  | qwen3.5:2b | 160 | 1.229 / 1.797 | 2.305 / 3.594 |
+  | qwen3.5:2b | 224 | 1.347 / 1.455 | 2.437 / 2.612 |
+
+  Source: latency_p0_tile160.json, latency_p0_tile224.json. The pipeline uses 288x160 tiles, not measured in this form.
 - **Store -> card** (browser): p50 13.0 ms, p95 20.2 ms, n = 2 (budget <= 100 ms). Source: p5_cold_start.json.
 - **Cold start**, `./run_demo.sh` on the M4: 10.2 s with Ollama killed first (target < 2 min). Source: p5_cold_start.json.
 - **GPU duty, 3 cameras** (16 Oct 03:2x IST): 1 idle camera 53-56 %; 3 static cameras 39 %; 3 cameras with people moving 91-99.6 % (target <= 60 %: missed). Source: ab_run_bus60_*, ab_run_duty_*_totals.json, p2a_duty_static_x3.json.
