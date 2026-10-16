@@ -12,14 +12,33 @@ import cv2
 
 
 def names():
-    """{OpenCV index: name}. OpenCV can't name devices, so ffmpeg's AVFoundation listing names them, but OpenCV's list
-    leaves out Desk View cameras and screens (measured: ffmpeg [1] Desk View -> OpenCV "out of bound (0-0)"), so the
-    index is the position among the rest. ponytail: assumes both lists keep the same order; check with an iPhone."""
-    out = subprocess.run(["ffmpeg", "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
-                         capture_output=True, text=True).stderr
-    video = out.split("audio devices")[0]
-    found = [n for _, n in re.findall(r"\[(\d+)\] (.+)", video) if "Desk View" not in n and "Capture screen" not in n]
-    return dict(enumerate(found))
+    """{OpenCV index: name}. Uses ffmpeg if present, otherwise system_profiler SPCameraDataType."""
+    try:
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+                             capture_output=True, text=True).stderr
+        video = out.split("audio devices")[0]
+        found = [n for _, n in re.findall(r"\[(\d+)\] (.+)", video) if "Desk View" not in n and "Capture screen" not in n]
+        if found:
+            return dict(enumerate(found))
+    except FileNotFoundError:
+        pass
+
+    try:
+        sp = subprocess.run(["system_profiler", "SPCameraDataType"], capture_output=True, text=True).stdout
+        cams = [line.strip().rstrip(':') for line in sp.splitlines() if line.startswith('    ') and not line.startswith('      ') and line.strip()]
+        filtered = [n for n in cams if "Desk View" not in n and "Capture screen" not in n]
+        if filtered:
+            return dict(enumerate(filtered))
+    except Exception:
+        pass
+
+    res = {}
+    for i in range(5):
+        cap = cv2.VideoCapture(i, cv2.CAP_AVFOUNDATION)
+        if cap.isOpened():
+            res[i] = f"Camera {i}"
+            cap.release()
+    return res
 
 
 def probe(src, label):
