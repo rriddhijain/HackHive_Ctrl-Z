@@ -1,1 +1,67 @@
 @import "tailwindcss";
+
+/* P5b design tokens (D76). Every colour the UI uses is one of these; a light theme redefines this block only.
+   Muted text is #8f8f99, not zinc-500: zinc-500 is 3.6:1 on zinc-900 and fails the 4.5:1 rule. */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-black: #000;
+  --color-white: #fff;
+  --color-page: #09090b;        /* zinc-950 */
+  --color-surface: #18181b;     /* zinc-900 panels */
+  --color-raised: #27272a;      /* zinc-800 hover, inputs, skeletons */
+  --color-line: #27272a;        /* zinc-800 hairlines */
+  --color-line-strong: #3f3f46; /* zinc-700 control borders */
+  --color-fg: #f4f4f5;          /* zinc-100 */
+  --color-fg-2: #b4b4bd;        /* secondary text, 8.9:1 on surface */
+  --color-fg-3: #8f8f99;        /* labels and meta, 5.5:1 on surface */
+  --color-accent: #2563eb;      /* the one interactive colour: fills (white text 5.2:1) */
+  --color-accent-hover: #1d4ed8;
+  --color-accent-fg: #60a5fa;   /* interactive text and focus rings, 6.9:1 on surface */
+  --color-crit: #ef4444;        /* severity critical / state bad */
+  --color-crit-bg: #2a1215;
+  --color-high: #f59e0b;        /* severity high / state pending */
+  --color-ok: #22c55e;          /* state good */
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+
+  /* five sizes only */
+  --text-*: initial;
+  --text-11: 11px;
+  --text-11--line-height: 16px;
+  --text-12: 12px;
+  --text-12--line-height: 16px;
+  --text-13: 13px;
+  --text-13--line-height: 20px;
+  --text-15: 15px;
+  --text-15--line-height: 20px;
+  --text-20: 20px;
+  --text-20--line-height: 28px;
+
+  --animate-enter: enter 150ms ease-out;
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(-4px); }
+  }
+}
+
+html { color-scheme: dark; }
+body {
+  background: var(--color-page);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+@layer base {
+  :focus-visible { outline: 2px solid var(--color-accent-fg); outline-offset: 2px; }
+}
+@layer components {
+  .label { font-size: 11px; line-height: 16px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; color: var(--color-fg-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

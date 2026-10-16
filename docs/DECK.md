@@ -39,7 +39,7 @@ Source: REPORT.md §1 (YOLO26n, 10 fps, Qwen3.5-4B as qwen3.5:4b-mlx via Ollama,
 - Streaming VLM -> cross-check veto -> early alert at the category token.
 - Events: SQLite + FTS5 + key frames -> FastAPI -> SSE -> React dashboard.
 - Chat: rules -> SQL/FTS5 -> template, or model answer with citation check.
-- One coordinate system end to end; every stage timed in the Workflow view.
+- One coordinate system end to end; every stage timed in the Pipeline view.
 
 Speaker notes: Each camera keeps only its latest frame, runs the detector on the CPU and feeds person tracks to the gate rules; a change-gated baseline timer covers what the gates cannot see. One arbiter owns the single GPU: gate-triggered calls go first and stale requests are dropped, so a fight on one camera never waits behind a routine look at an empty corridor. The alert leaves as soon as the category token streams in; the full JSON, the event store, the dashboard and the chat come after it.
 
@@ -51,7 +51,7 @@ Source: no numbers on this slide (architecture as in SPEC.md §5).
 - Act 1, look-alike p3c_shove_sit_hug.mp4: the shove alerts; the sit and hug do not.
 - Act 2, live (webcam + iPhone): a staged shove alerts; a floor-sit does not.
 - Act 3, chat: "Show all tailgating events from camera 2 today", then two more.
-- Watch for: probability bar, trigger -> alert on the card, Workflow mosaic, raw JSON.
+- Watch for: probability bar, trigger -> alert on the card, Pipeline stage timeline, mosaic, raw JSON.
 - Chat answers cite [#id] events: key frame, IST time, camera; a grounded no counts.
 
 Speaker notes: Three acts follow the slides: recorded clips, two live cameras, then the chat; the script and every fallback are in docs/DEMO_SCRIPT.md. Act 3 asks the brief's own example, "Show all tailgating events from camera 2 today", then "What incidents happened in the last 10 minutes?" and "How many falls today?". We quote no numbers on stage: the card shows trigger -> alert, the result tile puts the labelled onset next to the alert time, and REPORT.md has the rest.
