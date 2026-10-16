@@ -1,19 +1,22 @@
 import { Skeleton, StatTile } from "@/components/m3";
-import { ms, v } from "@/lib/format";
+import { ms, n, v } from "@/lib/format";
 import type { Metrics } from "@/lib/types";
 import { Section } from "./Section";
 
 type Row = [label: string, value: string, tip?: string, bad?: boolean];
+
+/** Keeps one reading on one line, so a two-reading value wraps only at its " · ". */
+const keep = (s: string) => s.replaceAll(" ", "\u00a0");
 
 /** B-84 rows: labels, values and tooltips verbatim; VLM errors > 0 and store → card p95 > 100 in the error style. */
 function rows(m: Metrics): Row[] {
   const x = m.vlm ?? {}, o2a = m.latency?.onset_to_alert_ms, s2c = m.latency?.store_to_card_ms;
   return [
     ["GPU duty (60 s)", v(x.gpu_duty_pct, "%"), "Share of the last 60 s the model was busy. Target ≤ 60 % average with 3 cameras."],
-    ["Onset → alert", o2a?.n ? `${ms(o2a.last)} · p50 ${o2a.p50}` : "—",
+    ["Onset → alert", o2a?.n ? `${keep(ms(o2a.last))} · ${keep(`p50 ${ms(o2a.p50)}`)}` : "—",
       "Labelled incident onset in the clip → alert (§12). Only for labelled clips played once (uploads, bench/labels.csv); live onset is measured from 240 fps phone video."],
     ["Model time-to-alert p95", ms(x.alert_p95_ms), "Newest frame captured → category known, p95 over all calls. Never quoted alone (D50)."],
-    ["VLM call p50 / p95", `${v(x.p50_ms)} / ${v(x.p95_ms)} ms`],
+    ["VLM call p50 / p95", `${n(x.p50_ms)} / ${n(x.p95_ms)} ms`],
     ["Store → card p95", s2c?.n ? `${ms(s2c.p95)} · n ${s2c.n}` : "—",
       "Event row stored → card painted in this browser; budget ≤ 100 ms. Valid only when the browser runs on the server machine (it compares the two clocks); readings from other devices are ignored.",
       (s2c?.p95 ?? 0) > 100],
