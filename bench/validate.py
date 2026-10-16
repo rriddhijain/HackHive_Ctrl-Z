@@ -54,7 +54,7 @@ def validate(root=ROOT, labels_csv=None, results_dir=None, data=None, require_fi
     results_dir = Path(results_dir or root / "bench" / "results")
     data = Path(data or root / "data")
     errors, warnings = [], []
-    rows = list(csv.DictReader(io.StringIO(Path(labels_csv).read_text(), newline=''))) if labels_csv.exists() else []
+    rows = list(csv.DictReader(io.StringIO(Path(labels_csv).read_text(encoding="utf-8"), newline=''))) if labels_csv.exists() else []
     if not rows:
         errors.append(f"{labels_csv}: no label rows")
     files = find_files(data)
@@ -99,12 +99,12 @@ def validate(root=ROOT, labels_csv=None, results_dir=None, data=None, require_fi
         if name not in clips:
             warnings.append(f"{name}: video under data/ with no labels.csv row (unlabelled: never scored)")
     # results: every row must name a labelled clip; a test clip must not appear in any tuning input
-    marked = {(r["results_file"], r["clip"]): r for r in csv.DictReader(io.StringIO(Path(root / "bench" / "unlabelled_rows.csv").read_text(), newline=''))} \
+    marked = {(r["results_file"], r["clip"]): r for r in csv.DictReader(io.StringIO(Path(root / "bench" / "unlabelled_rows.csv").read_text(encoding="utf-8"), newline=''))} \
         if (root / "bench" / "unlabelled_rows.csv").exists() else {}
     test = {c for c, x in clips.items() if x["split"] == "test"}
     tuning_hits = defaultdict(set)
     for f in sorted(results_dir.glob("*.csv")):
-        rs = list(csv.DictReader(io.StringIO(Path(f).read_text(), newline='')))
+        rs = list(csv.DictReader(io.StringIO(Path(f).read_text(encoding="utf-8"), newline='')))
         if not rs or "clip" not in rs[0]:
             continue
         for r in rs:
@@ -122,7 +122,7 @@ def validate(root=ROOT, labels_csv=None, results_dir=None, data=None, require_fi
                 tuning_hits[c].add(f.name)
     for f in sorted(results_dir.glob("gate_check*.txt")):
         for c in test:
-            if c in f.read_text():
+            if c in f.read_text(encoding="utf-8"):
                 tuning_hits[c].add(f.name)
     for c, fs in tuning_hits.items():
         errors.append(f"{c}: test clip appears in tuning inputs {sorted(fs)}")
@@ -161,7 +161,7 @@ def main():
     for e in r["errors"]:
         print("ERROR  ", e)
     if a.json:
-        Path(a.json).write_text(json.dumps(r, indent=1))
+        Path(a.json).write_text(json.dumps(r, indent=1), encoding="utf-8")
     print("validation", "FAILED" if r["errors"] else "ok")
     sys.exit(1 if r["errors"] else 0)
 

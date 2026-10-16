@@ -26,12 +26,9 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-import cv2
-from ultralytics import YOLO
-
-from app import vlm
 from app.config import CFG, ROOT
-from app.gate import _old_enough, gate, norm_speed, overlap
+# OpenCV, ultralytics, app.vlm and app.gate load inside the functions that run the detector or the model, so
+# score() and the metric tests import this module without them.
 
 V = CFG["vlm"]
 
@@ -48,6 +45,9 @@ def clips():
 
 def replay_gates(path, model_path, cfg=G):
     """Detector + gates on a clip at DET fps in clip time (same resize/track args as app.detect). Returns a dict."""
+    import cv2
+    from ultralytics import YOLO
+    from app.gate import _old_enough, gate, norm_speed, overlap
     m = YOLO(str(ROOT / model_path))
     pose = "pose" in str(model_path)
     cap = cv2.VideoCapture(str(path))
@@ -116,6 +116,7 @@ def check_gates():
     silences act as they do live. Passes when every incident clip's category gate fires from onset − 1 s to onset + 5 s
     (any time without an onset; so a later look-alike in the clip can't pass for it), as a new ① or merged into one
     (D72), except KNOWN_MISS, and the normal/look-alike clips together make ≤ MAX_FALSE_PER_MIN ①s per camera-minute."""
+    import cv2
     from types import SimpleNamespace as NS
     from app.detect import Detector
     from app.pipeline import load_labels
@@ -191,6 +192,7 @@ def pct(xs, q):
 def run(paths, seconds=None, tag="run"):
     """Real Pipeline (app.pipeline), one camera per clip, in this process. Played once unless seconds (looped).
     Returns (per-camera rows, run totals)."""
+    from app import vlm
     from app.pipeline import Pipeline, load_labels
     labels = load_labels()
     cams = [{"id": f"cam{i + 1}", "name": Path(c).name, "source": str(c)} for i, c in enumerate(paths)]
@@ -213,7 +215,8 @@ def run(paths, seconds=None, tag="run"):
     rows = []
     for cid, c in p.cams.items():
         label, onset = labels.get(Path(str(c.source)).name, (None, None))
-        evs = p.db.rows("SELECT * FROM events WHERE camera_id=? ORDER BY peak_confidence DESC", (cid,))
+        evs = p.db.rows("SELECT * FROM events WHERE camera_id=? AND status != 'dismissed' ORDER BY peak_confidence DESC",
+                        (cid,))                     # an event retracted by a re-look (E-9, D83) is not a prediction
         obs = p.db.rows("SELECT * FROM observations WHERE camera_id=? ORDER BY ts", (cid,))
         best = evs[0] if evs else None
         pred = best["category"] if best else "normal"
@@ -265,7 +268,7 @@ def run(paths, seconds=None, tag="run"):
 def label_splits():
     """bench/labels.csv -> {clip: split}. Every dev/train clip counts as a tuning input (thresholds are tuned on dev)."""
     lf = ROOT / "bench" / "labels.csv"
-    return {Path(r["clip"]).name: (r.get("split") or "").strip() for r in csv.DictReader(open(lf))} if lf.exists() else {}
+    return {Path(r["clip"]).name: (r.get("split") or "").strip() for r in csv.DictReader(open(lf, encoding="utf-8", newline=""))} if lf.exists() else {}
 
 
 def onset_stats(rows):
@@ -327,7 +330,7 @@ def per_clip(variant, rows_all, tots):
         tots[("drift", variant)] = max(tots.get(("drift", variant)) or 0, t["clock_drift_ms"])
         gl = ROOT / "data" / "ab" / variant.replace(":", "_") / "gate_log.jsonl"   # data/: gitignored
         gl.parent.mkdir(parents=True, exist_ok=True)
-        with gl.open("a") as fh:
+        with gl.open("a", encoding="utf-8") as fh:
             fh.writelines(json.dumps({"clip": path.name, **g}) + "\n" for g in t["gate_log"])
         print(variant, {k: rows[-1][k] for k in ("clip", "label", "pred", "confidence", "top3", "start_to_alert_ms",
                                                   "trigger_to_alert_ms", "gate_fired", "vetoes")}, flush=True)
@@ -348,7 +351,7 @@ def report(test, rows_all, tots, reps=1):
         meta = metrics.run_meta(ROOT, ROOT / "config.yaml", f"{test}/{v}", split, V["model"], reps,
                                 {"clips": [r["clip"] for r in rows], "clock_drift_ms": tots.get(("drift", v))})
         out[v] = score(rows, split, tuned, meta) | {"gpu_duty_mean": round(statistics.mean(tots[v]), 3), "meta": meta}
-    (OUT / f"ab_{test}_summary.json").write_text(json.dumps(out, indent=1))
+    (OUT / f"ab_{test}_summary.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
     print(json.dumps(out, indent=1))
     return out
 
@@ -364,6 +367,7 @@ def test_model():
 
 
 def test_tiles():
+    from app import vlm
     rows, tots = [], {}
     per_clip("mosaic", rows, tots)
     V["p1_crop"]["enabled"] = True
@@ -390,7 +394,7 @@ def test_tiles():
 def write(test, rows):
     OUT.mkdir(parents=True, exist_ok=True)
     keys = list(dict.fromkeys(k for r in rows for k in r))
-    with open(OUT / f"ab_{test}.csv", "w", newline="") as fh:
+    with open(OUT / f"ab_{test}.csv", "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, keys)
         w.writeheader()
         w.writerows(rows)
@@ -421,7 +425,7 @@ if __name__ == "__main__":
     if a.run:
         rows, tot = run(a.run, a.seconds, a.tag)
         write(f"run_{a.tag}", rows)
-        (OUT / f"ab_run_{a.tag}_totals.json").write_text(json.dumps(tot, indent=1))
+        (OUT / f"ab_run_{a.tag}_totals.json").write_text(json.dumps(tot, indent=1), encoding="utf-8")
         for r in rows:
             print(r)
         print(json.dumps(tot, indent=1))

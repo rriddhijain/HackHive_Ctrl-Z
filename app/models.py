@@ -90,10 +90,10 @@ class Arbiter(threading.Thread):
     def duty(self, window=60.0, now=None):
         """Share of the last `window` seconds a model call was running (§12)."""
         now = now or time.time()
-        with self.cv:
+        with self.cv:                                   # the worker appends to busy under the same lock
+            while self.busy and self.busy[0][1] < now - 600:
+                self.busy.popleft()
             busy = list(self.busy) + ([(self.running["t_start"], now)] if self.running else [])
-        while self.busy and self.busy[0][1] < now - 600:
-            self.busy.popleft()
         return sum(max(0.0, min(e, now) - max(s, now - window)) for s, e in busy) / window
 
     def stats(self, now=None, window=None):

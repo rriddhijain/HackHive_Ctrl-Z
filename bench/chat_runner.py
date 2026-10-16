@@ -30,7 +30,7 @@ def main():
     seed(db, NOW)
     arb = Arbiter(lambda r: r["fn"](r)); arb.start()
     rows = []
-    for q in csv.DictReader(open(ROOT / "bench" / "chat_questions.csv")):
+    for q in csv.DictReader(open(ROOT / "bench" / "chat_questions.csv", encoding="utf-8", newline="")):
         r = answer(q["question"], db, arb, {}, NOW)
         want = set() if q["ids"] == "none" else {int(i) for i in q["ids"].split()}
         got = {e["id"] for e in r["events"]}
@@ -47,7 +47,7 @@ def main():
         print(f"{'OK ' if ok else 'BAD'} {r['filters']['intent']:8} {r['latency_ms']:5} ms  {q['question']}\n    {r['answer'][:300]}")
     arb.stop()
     OUT.mkdir(exist_ok=True)
-    with open(OUT / "chat_runner.csv", "w", newline="") as fh:
+    with open(OUT / "chat_runner.csv", "w", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
     lat = lambda intent: [x["latency_ms"] for x in rows if x["intent"] == intent]
     tmpl = [x["latency_ms"] for x in rows if json.loads(x["how"])["mode"] == "template"]
@@ -58,7 +58,7 @@ def main():
             "summary_first_token_ms": [x["first_token_ms"] for x in rows if x["first_token_ms"]],
             "model_sentences_dropped": sum(json.loads(x["how"]).get("dropped", 0) for x in rows),
             "template_fallbacks": sum("fallback" in json.loads(x["how"]) for x in rows)}
-    (OUT / "chat_runner_summary.json").write_text(json.dumps(summ, indent=1))
+    (OUT / "chat_runner_summary.json").write_text(json.dumps(summ, indent=1), encoding="utf-8")
     print(json.dumps(summ, indent=1))
     assert summ["invented"] == 0 and summ["uncited"] == 0, "grounding broken"
 

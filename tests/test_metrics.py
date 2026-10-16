@@ -14,7 +14,21 @@ RES = ROOT / "bench" / "results"
 
 
 def rows(name):
-    return list(csv.DictReader(io.StringIO(Path(RES / name).read_text(), newline='')))
+    return list(csv.DictReader(io.StringIO(Path(RES / name).read_text(encoding="utf-8"), newline='')))
+
+
+class Labels(unittest.TestCase):
+    def test_labels_match_the_model_categories(self):
+        try:
+            from app.vlm import CATS
+        except ImportError as e:                                      # app.vlm needs OpenCV
+            self.skipTest(f"app.vlm not importable here: {e}")
+        self.assertEqual(LABELS, CATS)
+
+    def test_metrics_and_validate_load_without_opencv(self):
+        import subprocess, sys
+        code = "import sys; import bench.metrics, bench.validate, bench.ab; sys.exit('cv2' in sys.modules or 'ultralytics' in sys.modules)"
+        self.assertEqual(subprocess.run([sys.executable, "-c", code], cwd=ROOT).returncode, 0)
 
 
 class Historical(unittest.TestCase):
@@ -102,10 +116,10 @@ class Validate(unittest.TestCase):
     def _write(self, d, labels, results=None):
         (d / "bench" / "results").mkdir(parents=True)
         (d / "data" / "dev").mkdir(parents=True)
-        with open(d / "bench" / "labels.csv", "w", newline="") as fh:
+        with open(d / "bench" / "labels.csv", "w", encoding="utf-8", newline="") as fh:
             w = csv.writer(fh); w.writerow(["clip", "label", "split", "onset_s"]); w.writerows(labels)
         for name, rs in (results or {}).items():
-            with open(d / "bench" / "results" / name, "w", newline="") as fh:
+            with open(d / "bench" / "results" / name, "w", encoding="utf-8", newline="") as fh:
                 w = csv.writer(fh); w.writerow(["clip", "label", "pred"]); w.writerows(rs)
 
     def run_v(self, labels, results=None):
@@ -129,6 +143,23 @@ class Validate(unittest.TestCase):
         self.assertIn("person_down", r["classes_without_clips"]["dev"])
         self.assertEqual(r["classes_without_clips"]["test"], LABELS)
         self.assertFalse(r["final_metric_possible"])
+
+    def test_non_ascii_files_read_as_utf8(self):
+        # Windows' default code page broke validation on these: dashes, curly quotes, accents, emoji in results files.
+        text = "en – em — “quoted” ‘single’ café 🚨"
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t); self._write(d, [["a.mp4", "fighting", "dev", "1"]])
+            with open(d / "bench" / "results" / "ab_dev_u.csv", "w", encoding="utf-8", newline="") as fh:
+                w = csv.writer(fh); w.writerow(["clip", "label", "pred", "summary"]); w.writerow(["a.mp4", "fighting", "fighting", text])
+            (d / "bench" / "results" / "gate_check_u.txt").write_text(text, encoding="utf-8")
+            # Fail on any open()/read_text() of ours that relies on the platform's default encoding.
+            code = ("import sys, warnings; warnings.simplefilter('error', EncodingWarning); from pathlib import Path; "
+                    "from bench.validate import validate; r = validate(root=Path(sys.argv[1]), require_files=False); "
+                    "sys.exit(1 if r['errors'] else 0)")
+            import subprocess, sys
+            p = subprocess.run([sys.executable, "-X", "warn_default_encoding", "-c", code, t], cwd=ROOT,
+                               capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(p.returncode, 0, p.stderr[-2000:])
 
     def test_repo_labels_valid(self):
         from bench.validate import validate

@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def load(path=ROOT / "config.yaml"):
-    cfg = yaml.safe_load(Path(path).read_text())
+    cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     for cam in cfg["cameras"]:
         cam.setdefault("door_zone", None)
         cam.setdefault("watch_zone", None)

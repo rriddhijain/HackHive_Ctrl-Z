@@ -7,7 +7,7 @@ Preliminary: dev clips only, one camera at a time, no held-out test split. Every
 > **Update, branch `fix/benchmark-metrics-v026` (16 Oct, evening).** Section 11 adds: the independently re-verified
 > 0.641 and what it is (an observed-label dev diagnostic), the fixed 8-label metric status (not a final metric: no
 > test split, 6 of 8 classes without clips), a detector-level diagnosis of v026 on the real clip, and the proposed
-> person_down second look (D83). **No vision-model benchmark was re-run on this branch**: every new number in section 11
+> person_down second look, alert-first with a linked, visible correction (D83). **No vision-model benchmark was re-run on this branch**: every new number in section 11
 > is detector-only (CPU, no model) or re-computed from the committed result files.
 
 ## 1. In one minute
@@ -327,25 +327,40 @@ Detector replay of the real clip at 10 FPS, the same Detector + Scheduler code a
   horizontal box, motion as low as the normal clips). A rule built from these signals would either miss v026 or alert
   on empty or quiet normal footage. What the detector CAN say is that it is blind here, which is what 11d uses.
 
-### 11d. Proposed fix: person_down second look (D83, pending captain)
+### 11d. Proposed fix: person_down second look, alert-first (D83, pending captain)
 
-A person_down that the detector cannot vouch for is **held, not alerted**, and the model is asked again over the
-whole 4 s buffer with a hint naming the alternatives (fight / fall / lying normally). "Cannot vouch" = people seen in
-fewer than half of the buffer frames (`detector_blind`), or a fighting gate fired in the buffer (`interaction`). The
-second look opens fighting, opens person_down, or drops the hold only on a confident normal (c >= 0.80); an unsure
-second look keeps person_down. A hold not resolved in 4 s opens person_down anyway (`hold_timeout`), so a real fall is
-delayed, never lost. person_down is never turned into fighting without a model vote for fighting.
+**Alert first, correct in the open.** A person_down alerts exactly as on main (no added latency). If the detector
+cannot vouch for it, the alert is marked unverified and a P4 second look runs over the whole 4 s buffer with a hint
+naming the alternatives (fight / fall / lying normally). "Cannot vouch" = people seen in fewer than half of the buffer
+frames (`detector_blind`), or a fighting gate fired in the buffer (`interaction`). The second look's verdict:
+
+- **fighting** -> a fighting event opens (or the open one is used) and the person_down event is marked `dismissed`,
+  `dismiss_reason: relook` (SPEC E-9). Nothing is rewritten or deleted: both rows stay in the DB and point at each
+  other (`events.related_event_id`); the feed keeps both cards: "Re-checked: reclassified as Fighting #2" on the
+  original, "Reclassified from Person down #1 after a re-check" on the new one. The fighting event's trigger -> alert
+  is timed from the original trigger, so the correction's latency is reported honestly.
+- **confident normal** (c >= 0.80) -> the person_down card is marked "Re-checked: the second look saw no incident".
+- **anything else** -> the alert stands, marked confirmed.
+- **no verdict** (stale P4 dropped after 6 s, verification window `verify_s` 10 s over, event already closed or
+  dismissed by the operator, camera removed) -> the alert stands as it was; the late vote changes nothing.
+
+While a fight that came from a re-label is open, another unverified person_down on that camera is the same incident
+and does not alert again (`covered_by` in the log); a fall the detector vouches for still alerts. person_down is
+never turned into fighting without a model vote for fighting. Every step is in the second-look log
+(`GET /api/arbiter` `held_log`: unverified, relook, reclassified, retracted, verified, verify_expired, verify_moot,
+relook_stale, relook_after_close, covered_by).
 
 How often it would arm (bench.diagnose, real clips, every model call of the replay): v026 2 of 2 calls
 (detector_blind); normal clips: sample_bus 0/4, idle_60s 1/19, floor_sit 4/8 (after its false fight-gate fire);
 fight clips 1-6 per clip (interaction). It changes behaviour only where the model says person_down. First design
 also counted any two overlapping boxes as interaction; replay showed that is true on almost every call of the
-normal clips (idle_60s 19/19), so it was dropped. Plumbing verified end to end on v026 with a stand-in model (hold
--> stop at the category -> P4 second look -> fighting opened; confident normal -> no alert; sample_bus person_down
-unaffected).
+normal clips (idle_60s 19/19), so it was dropped. Plumbing verified end to end on v026 with a stand-in model that
+answers person_down, then fighting on the second look (not a result, a wiring test): person_down #1 alerted at
+441 ms, fighting #2 opened 1.7 s after the original trigger, #1 marked re-checked, both rows linked, both cards on
+the dashboard; on p3c (detector vouches) the second look never arms.
 
 **Not measured**: whether the real model's second look calls v026 fighting. If it answers a confident normal, v026
-goes from a wrong-category incident to a miss. Decide with the A/B on the Mac:
+keeps its (wrong-category) alert in the history, marked re-checked, and the clip scores as a miss. Decide with the A/B on the Mac:
 `bench.ab --dev --tag d83` vs `bench.ab --dev --tag d83off --no-down-guard`; adopt only if v026 improves and no
 normal/look-alike clip gains an alert.
 
@@ -369,13 +384,21 @@ normal/look-alike clip gains an alert.
 
 `GET /api/arbiter` and every `bench.ab --run` now report: queue wait and run time by priority (p50/p95/max), cancelled
 calls, stale drops, per-camera served count, queue wait and oldest waiting request (starvation), GPU duty per 10 s.
-A stale P4 second look (> 6 s) is dropped explicitly and its hold times out into an alert; P1s are never dropped,
+A stale P4 second look (> 6 s) is dropped explicitly and the alert it would have checked stands; P1s are never dropped,
 P3 baselines build their mosaic at dispatch and are never stale. No throughput number changed on this branch: the
 91-99.6 % duty with 3 busy cameras (section 5e) still stands until re-measured on the Mac with these counters.
 
 ### 11g. Tests and checks run on this branch
 
-32 unit tests (`uv run python -m unittest discover -s tests -t .`): metric modes incl. the 0.641 regression and
-zero-support classes, data validation, the second look (12 cases), arbiter fairness / preemption / stale drops /
-duty timeline, scheduler de-duplication, gate-log fields, deterministic replay. All module self-checks, the server
-self-check, `bench.validate` and `bench.ab --gate --check` pass. Frontend builds.
+65 unit tests, stdlib unittest only (`uv run python -m unittest discover -s tests -t .`; pytest is not a dependency,
+`pyproject.toml` only scopes its collection to `tests/` if someone runs it): metric modes incl. the 0.641
+regression and zero-support classes; data validation incl. UTF-8 results files (fails on any read that relies on the
+platform default encoding); the alert-first second look (27 cases: the immediate first alert, the later
+reclassification with both rows linked, retraction, relook after close / operator dismissal / camera removal, stale
+and duplicate relooks, repeated frames, two cameras, operator hold, old DB migration); the Report tab's accuracy
+block on old / partial / odd files (no CSV, empty CSV, summary without `fixed`, unicode, zero and blank timings,
+unknown labels); arbiter fairness / preemption / stale drops / duty timeline / JSON-serialisable `/api/arbiter` /
+`duty()` under concurrent readers; scheduler de-duplication, gate-log fields, deterministic replay. `bench.metrics`,
+`bench.validate` and `bench.ab` import without OpenCV or ultralytics. All module self-checks (vlm and server against a
+stand-in model), `bench.validate`, `bench.ab --gate --check` pass; frontend builds. Run on Linux (cloud); the Mac
+run is the one that counts.

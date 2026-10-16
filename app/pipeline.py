@@ -53,8 +53,8 @@ class Pipeline:
         self.n_base, self.down_since = defaultdict(int), {}
         self.alerts, self.calls, self.vetoes = [], [], []
         self.vlm_errors = self.err_streak = 0
-        self.veto_log = open(DATA / "veto_log.jsonl", "a")
-        self.diag_log = open(DATA / "detector_diag.jsonl", "a")   # detector-miss records (D83 diagnostics)
+        self.veto_log = open(DATA / "veto_log.jsonl", "a", encoding="utf-8")
+        self.diag_log = open(DATA / "detector_diag.jsonl", "a", encoding="utf-8")   # detector-miss records (D83 diagnostics)
         self.relooks = []                                          # (camera, reason, outcome category, c)
 
     def start(self):
@@ -92,9 +92,6 @@ class Pipeline:
                 else:
                     self.down_since.pop(cid, None)
             self.events.tick(down_since=self.down_since)
-            while self.events.late_opened:                   # down_guard fail-safe opens (hold_timeout)
-                e = self.events.late_opened.popleft()
-                self.alerts.append((e["camera_id"], e["category"], e["_t_alert"], e))
 
     def run_call(self, req):
         if "fn" in req:                                     # P2 chat call (app.chat): runs its own text request
@@ -137,9 +134,9 @@ class Pipeline:
             st.update(c=c, evs=opened + supported, top=max(c, key=c.get), t_cat=t_cat)
             if relook:
                 self.relooks.append((cam, req.get("why"), st["top"], round(c[st["top"]], 3)))
-            if hold := self.events.take_new_hold(cam):        # D83: person_down held -> second look, stop this call
+                return st["top"] != "fighting"                # confirm / retract need no summary; a new fight card does
+            if hold := self.events.take_new_hold(cam):        # D83: alert already sent; verify it in the background
                 self.submit_relook(cam, det, hold["why"])
-                return True
             # D67: a P1 that agrees with an event already open on this camera only updates it, no summary
             if req["prio"] == 1 and st["top"] in {e["category"] for e in supported}:
                 return True
@@ -201,8 +198,8 @@ class Pipeline:
         self.emit("observation", obs)
 
     def submit_relook(self, cam, det, why):
-        """P4 second look for a held person_down (D83): the whole 4 s buffer, and a hint that names the alternatives.
-        Frames frozen now; dropped as stale by the arbiter after relook_max_age_s (the hold then times out and opens)."""
+        """P4 second look at an unverified person_down (D83): the whole 4 s buffer, and a hint that names the
+        alternatives. Frames frozen now; dropped as stale by the arbiter after relook_max_age_s (the alert stands)."""
         frames = vlm.pick_frames(det.buffer, span=V.get("relook_span_s", 4.0))
         if not frames:
             return
@@ -260,7 +257,7 @@ def load_labels():
     """bench/labels.csv -> {clip file name: (label, onset_s or None)} (FR-21)."""
     lf = ROOT / "bench" / "labels.csv"
     return {Path(r["clip"]).name: (r["label"], float(r["onset_s"]) if r.get("onset_s") else None)
-            for r in csv.DictReader(open(lf))} if lf.exists() else {}
+            for r in csv.DictReader(open(lf, encoding="utf-8", newline=""))} if lf.exists() else {}
 
 
 def main():
@@ -306,7 +303,7 @@ def main():
            "clips": []}
     for cid, c in p.cams.items():
         rows = p.db.rows("SELECT category, peak_confidence, summary, time_to_alert_ms FROM events WHERE camera_id=? "
-                         "ORDER BY peak_confidence DESC", (cid,))
+                         "AND status != 'dismissed' ORDER BY peak_confidence DESC", (cid,))   # E-9 retractions don't count
         pred = rows[0]["category"] if rows else "normal"
         label, onset = labels.get(Path(str(c.source)).name, (None, None))
         hit = next((t for cam, cat, t, _ in p.alerts if cam == cid and cat == label), None)
@@ -317,7 +314,7 @@ def main():
                              "summary": rows[0]["summary"] if rows else None})
     print("\n" + json.dumps(out, indent=1))
     if a.out:
-        Path(a.out).write_text(json.dumps(out, indent=1))
+        Path(a.out).write_text(json.dumps(out, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":
@@ -326,7 +323,7 @@ if __name__ == "__main__":
     else:  # self-check: the sample clip (people walking past a bus) end to end -> observations stored, no alert
         sys.argv += ["data/demo/sample_bus.mp4", "--label", "normal", "--out", str(DATA / "pipeline_selfcheck.json")]
         main()
-        r = json.loads((DATA / "pipeline_selfcheck.json").read_text())
+        r = json.loads((DATA / "pipeline_selfcheck.json").read_text(encoding="utf-8"))
         db = DB()
         n = db.rows("SELECT count(*) n FROM observations")[0]["n"]
         assert n >= 2 and r["calls"]["P3"] >= 2 and r["vlm_errors"] == 0, (n, r)

@@ -92,7 +92,7 @@ def main():
               f"{r['frames_with_2plus']:>5}{r['frames_horizontal']:>6}{r['motion_mad_p90']:>11}{len(r['gate_fires']):>11}"
               f"{len(r['calls']):>6}{r['calls_guarded']:>8}  {', '.join(r['guard_reasons']) or '-'}")
     if not a.clips:
-        (OUT / f"diag_{a.tag}.json").write_text(json.dumps(res, indent=1))
+        (OUT / f"diag_{a.tag}.json").write_text(json.dumps(res, indent=1), encoding="utf-8")
     elif a.trace:
         for f in res[0]["trace"]:
             print(f)

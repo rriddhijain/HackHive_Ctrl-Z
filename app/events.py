@@ -5,15 +5,16 @@ alert fires before the summary exists. finish() runs at t_vlm_done: summary, sub
 tick() runs every second: an event closes only after 2 non-supporting observations AND 8 s since its last support,
 or after its camera has been down for 8 s; a camera starved of model time keeps its events open (D43).
 
-person_down second look (events.down_guard, proposed D83): when a person_down observation would open an event but the
+person_down second look (events.down_guard, proposed D83): when a person_down observation opens an event but the
 detector evidence says it cannot vouch for the scene (detector_blind: people seen in < blind_frac of the 4 s buffer)
-or that people were interacting (a fighting gate fired in the 4 s buffer), the event is HELD,
-not opened, and the caller asks for a re-look (P4, longer time span, question: fight vs fall vs lying vs unclear).
-The re-look is a second model vote and counts as corroboration for person_down and fighting: it opens person_down,
-opens fighting, or drops the hold only when it is a CONFIDENT normal (c >= 0.80); an unsure second look keeps the
-first vote's person_down. Fail-safe: a hold not resolved within hold_s opens person_down
-anyway (opened_by "hold_timeout"), so a real fall is delayed, never lost. person_down is never relabelled fighting
-without a model vote for fighting.
+or that people were interacting (a fighting gate fired in the 4 s buffer), the alert still fires AT ONCE (no added
+latency) but the event is marked unverified and the caller asks for a re-look (P4, the whole 4 s buffer, question:
+fight vs fall vs lying normally). The re-look is a second model vote: fighting -> a fighting event opens (or the open
+one is used) and the person_down event is marked dismissed, reason "relook" (SPEC E-9), never rewritten or deleted;
+the two rows point at each other through related_event_id, so the history shows "alerted as person down, re-checked,
+reclassified as fighting". A CONFIDENT normal (c >= 0.80) -> the person_down event is marked dismissed the same way;
+anything else confirms it. A re-look that arrives after the original closed leaves it as it was. A re-look that never runs (stale, busy GPU) changes
+nothing: the alert stands. person_down is never relabelled fighting without a model vote for fighting.
 """
 import threading
 import time
@@ -34,10 +35,9 @@ class EventManager:
         self.win = defaultdict(lambda: deque(maxlen=E["window_n"]))   # camera -> last 3 observations' c maps
         self.open = {}                                                 # (camera, category) -> event dict
         self.hold = {}                                                 # (camera, category) -> no new event until (FR-25)
-        self.pending = {}                                              # camera -> held person_down (down_guard)
-        self.new_holds = set()                                         # cameras whose hold the caller must re-look
+        self.pending = {}                                              # camera -> unverified person_down (down_guard)
+        self.new_holds = set()                                         # cameras whose unverified event needs a re-look
         self.held_log = deque(maxlen=500)                              # (camera, outcome, ts) for reports
-        self.late_opened = deque()                                     # hold_timeout events, drained by the pipeline
         self.lock = threading.Lock()
 
     def is_open(self, cam, cat):
@@ -87,11 +87,18 @@ class EventManager:
         top = max(c, key=c.get)
         opened, supported = [], []
         why = self.guarded(evidence) if not relook else None
+        retracted = []
         with self.lock:
             held = self.pending.pop(cam, None) if relook else None
-            if held:                                        # the second look decides the held person_down
+            if relook:
+                self.new_holds.discard(cam)
+                pd = self.open.get((cam, "person_down"))
+                if not held or pd is None or pd["id"] != held["eid"]:
+                    # Nothing left to judge (expired, closed, dismissed by the operator, camera removed): the
+                    # history stays exactly as it was and this vote changes nothing, not even the window.
+                    self.held_log.append((cam, "relook_after_close" if held else "relook_stale", ts))
+                    return [], []
                 self.held_log.append((cam, f"relook:{top}", ts))
-                t_ref = held["t_ref"]
             win = self.win[cam]
             win.append(c)
             for (cm, cat), ev in self.open.items():
@@ -112,35 +119,58 @@ class EventManager:
                 corroborated = cat in triggers or cat == "fire_smoke" or (relook and cat in ("person_down", "fighting"))
                 S = sum(w[cat] for w in win) / len(win)
                 thr = E["open_window_ungated"] if cat in UNGATED else E["open_window"]
-                if held and cat == "person_down" and top != "person_down":
-                    continue                                # the second look outvotes the held window
+                if held and cat == "person_down":
+                    continue                                # the second look never re-opens what it is judging
                 if (c[cat] >= single and corroborated) or (len(win) >= 2 and S >= thr):
-                    if cat == "person_down" and why and top == "person_down":
-                        if cam not in self.pending:         # hold it for a second look instead of alerting
-                            self.pending[cam] = {"c": c, "subtype": subtype, "ts": ts, "t_ref": t_ref,
-                                                 "deadline": t_alert + (E.get("down_guard") or {}).get("hold_s", 4.0),
-                                                 "why": why}
-                            self.new_holds.add(cam)
-                            self.held_log.append((cam, "held:" + why, ts))
+                    fight = self.open.get((cam, "fighting"))
+                    if cat == "person_down" and why and fight and fight.get("related_event_id"):
+                        # A second look already re-labelled this scene's person_down as this fight: another
+                        # unverified person_down while it is open is the same incident, not a new alert.
+                        self.held_log.append((cam, f"covered_by:{fight['id']}", ts))
                         continue
-                    opened.append(self._new_event(cam, cat, subtype if cat == top else None, sev, c[cat], c, ts,
-                                                  t_ref, t_alert, "relook" if relook else None))
-            if (cam, "person_down") in self.open and cam in self.pending:   # opened unguarded meanwhile: hold is moot
-                self.pending.pop(cam); self.new_holds.discard(cam)
-            if held and not any(e["category"] in ("person_down", "fighting") for e in opened) \
-                    and not any((cam, k) in self.open for k in ("person_down", "fighting")):
-                # Below the open threshold, but two model votes still agree on an incident: don't lose it.
-                cat = top if top in ("person_down", "fighting") else None
-                if cat is None and c.get("normal", 0) < 0.80:
-                    cat = "person_down"                      # the second look is unsure: keep the first vote's alert
-                if cat:
-                    cc = max(c[cat], held["c"]["person_down"]) if cat == "person_down" else c[cat]
-                    opened.append(self._new_event(cam, cat, subtype if cat == top else None, severity(cat, None), cc, c,
-                                                  ts, t_ref, t_alert, "relook"))
+                    ev = self._new_event(cam, cat, subtype if cat == top else None, sev, c[cat], c, ts,
+                                         held["t_ref"] if held else t_ref, t_alert, "relook" if relook else None)
+                    opened.append(ev)
+                    if cat == "person_down" and why:        # alert now, verify in the background (no added latency)
+                        ev["opened_by"] = "unverified:" + why
+                        self.pending[cam] = {"eid": ev["id"], "why": why, "t_ref": t_ref,
+                                             "deadline": t_alert + (E.get("down_guard") or {}).get("verify_s", 10.0)}
+                        self.new_holds.add(cam)
+                        self.held_log.append((cam, "unverified:" + why, ts))
+            linked = None
+            if held:                                        # pd is the open event this re-look judges
+                fight = next((e for e in opened if e["category"] == "fighting"), None) if top == "fighting" else None
+                if top == "fighting" and fight is None:
+                    fight = self.open.get((cam, "fighting"))
+                    if fight is None and self.hold.get((cam, "fighting"), 0) <= ts:   # never over an operator dismissal
+                        # A second vote for fighting below the single-observation bar still opens it: two votes, one incident.
+                        fight = self._new_event(cam, "fighting", None, severity("fighting", None), c["fighting"], c,
+                                                ts, held["t_ref"], t_alert, "relook")
+                        opened.append(fight)
+                if fight is not None or (top == "normal" and c["normal"] >= 0.80):
+                    # Re-labelled or retracted, never rewritten: the original row stays, marked and linked (E-9).
+                    self.open.pop((cam, "person_down"))
+                    pd.update(status="dismissed", dismiss_reason="relook")
+                    if fight is not None:
+                        pd["related_event_id"], fight["related_event_id"] = fight["id"], pd["id"]
+                        linked = fight
+                    retracted.append(pd)
+                    self.held_log.append((cam, f"reclassified:{held['eid']}->{fight['id']}" if fight else "retracted:normal", ts))
+                elif top != "fighting":
+                    pd["opened_by"] = "verified"
+                    self.held_log.append((cam, "verified", ts))
                 else:
-                    self.held_log.append((cam, "hold_dropped", ts))
+                    self.held_log.append((cam, "relook_fighting_on_hold", ts))   # left unverified, unchanged
         for ev in opened:
             self.emit("alert", ev)
+        for ev in retracted:                                # E-9: dismissed after re-check, linked to its replacement
+            self.db.update("events", ev["id"], {"status": "dismissed", "dismiss_reason": "relook",
+                                                "related_event_id": ev.get("related_event_id")})
+            self.emit("event_close", ev)
+        if linked is not None:
+            self.db.update("events", linked["id"], {"related_event_id": linked["related_event_id"]})
+            if linked not in opened:
+                self.emit("event_update", linked)
         return opened, supported
 
     def finish(self, cam, obs, events, keyframes):
@@ -166,25 +196,21 @@ class EventManager:
 
     def tick(self, now=None, down_since=None):
         """Close rule (§5a step 10, D43). down_since: {camera: time it went reconnecting/down} for cameras that are down.
-        Also the down_guard fail-safe: a held person_down past its deadline opens (a fall is delayed, never lost)."""
+        Also expires down_guard verifications that never got their re-look (the alert simply stands)."""
         now, down_since = now or time.time(), down_since or {}
-        late = []
         with self.lock:
             for cam in [k for k, h in self.pending.items() if now >= h["deadline"]]:
-                h = self.pending.pop(cam)
-                self.new_holds.discard(cam)
-                if (cam, "person_down") not in self.open:
-                    late.append(self._new_event(cam, "person_down", h["subtype"], severity("person_down", None),
-                                                h["c"]["person_down"], h["c"], h["ts"], h["t_ref"], now, "hold_timeout"))
-                    self.held_log.append((cam, "hold_timeout", now))
-        for ev in late:
-            self.late_opened.append(ev)
-            self.emit("alert", ev)
+                self.pending.pop(cam); self.new_holds.discard(cam)
+                self.held_log.append((cam, "verify_expired", now))
         with self.lock:
             done = [k for k, ev in self.open.items()
                     if (ev["_nonsupport"] >= E["close_after_obs"] and now - ev["_last_support"] >= E["close_after_s"])
                     or (k[0] in down_since and now - down_since[k[0]] >= E["close_after_s"])]
             closed = [self.open.pop(k) for k in done]
+            open_ids = {ev["id"] for ev in self.open.values()}
+            for cam in [k for k, h in self.pending.items() if h["eid"] not in open_ids]:
+                self.pending.pop(cam); self.new_holds.discard(cam)     # its event closed: nothing left to verify
+                self.held_log.append((cam, "verify_moot", now))
         for ev in closed:
             self.close(ev)
         return closed

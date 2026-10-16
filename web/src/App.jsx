@@ -90,9 +90,10 @@ export default function App() {
     if (r.ok) { const { observations, ...e } = await r.json(); merge(e.id, e); setOpenEv((o) => (o?.id === id ? null : o)); }
   };
   const all = Object.values(events);
-  const feed = all.filter((e) => e.status !== "dismissed").sort((a, b) => b.id - a.id).slice(0, 50);
+  // Operator false alarms leave the feed; a re-check (E-9, D83) stays in it, marked and linked, so history never changes silently.
+  const feed = all.filter((e) => e.status !== "dismissed" || e.dismiss_reason === "relook").sort((a, b) => b.id - a.id).slice(0, 50);
   // The banner holds every critical alert until someone acknowledges it, even after the event closes.
-  const critical = feed.filter((e) => e.severity === "critical" && (e.alert || e.status === "open") && e.status !== "acknowledged");
+  const critical = feed.filter((e) => e.severity === "critical" && (e.alert || e.status === "open") && e.status !== "acknowledged" && e.status !== "dismissed");
   const camName = (e) => e.camera_name ?? cams.find((c) => c.id === e.camera_id)?.name ?? name(e.camera_id);
   const mode = m?.mode;
   const switchMode = async (k) => {   // stops every source of the other mode; history stays
@@ -162,7 +163,7 @@ export default function App() {
             </span>
           </div>
           <div role="tabpanel" id="panel-alerts" aria-labelledby="tab-alerts" className={tab === "alerts" ? "min-h-0 flex-1 overflow-y-auto" : "hidden"}>
-            <Alerts feed={feed} load={evLoad} camName={camName} onOpen={setOpenEv} onAck={ack} onDismiss={dismiss} />
+            <Alerts feed={feed} byId={events} load={evLoad} camName={camName} onOpen={setOpenEv} onAck={ack} onDismiss={dismiss} />
           </div>
           <div role="tabpanel" id="panel-ask" aria-labelledby="tab-ask" className={tab === "ask" ? "min-h-0 flex-1" : "hidden"}>
             <Chat onOpen={setOpenEv} inputRef={askRef} />
@@ -176,7 +177,7 @@ export default function App() {
         </aside>
       </div>
 
-      {openEv && <EventDialog e={{ ...openEv, ...events[openEv.id] }} camName={camName} onAck={ack} onDismiss={dismiss} onClose={() => setOpenEv(null)} />}
+      {openEv && <EventDialog e={{ ...openEv, ...events[openEv.id] }} byId={events} camName={camName} onAck={ack} onDismiss={dismiss} onClose={() => setOpenEv(null)} />}
     </div>
   );
 }
@@ -499,8 +500,21 @@ function useTop3(e) {   // live alert: top-3 from the SSE message; history: from
 }
 
 const STATUS_WORD = { open: "Open", closed: "Closed", acknowledged: "Acknowledged", dismissed: "Dismissed" };
+const rechecked = (e) => e.status === "dismissed" && e.dismiss_reason === "relook";
 
-function Alerts({ feed, load, camName, onOpen, onAck, onDismiss }) {
+// D83 second look, said out loud: what the re-check did to this alert, with the linked event's #id.
+function recheckNote(e, byId) {
+  const rel = e.related_event_id != null ? byId?.[e.related_event_id] : null;
+  const other = rel ? title(rel.category) : "another category";
+  if (rechecked(e)) return e.related_event_id != null
+    ? `Re-checked: reclassified as ${other} #${e.related_event_id}` : "Re-checked: the second look saw no incident";
+  if (e.related_event_id != null) return `Reclassified from ${rel ? title(rel.category) : "an earlier alert"} #${e.related_event_id} after a re-check`;
+  if (e.opened_by?.startsWith("unverified")) return "Re-check pending";
+  if (e.opened_by === "verified") return "Confirmed by re-check";
+  return null;
+}
+
+function Alerts({ feed, byId, load, camName, onOpen, onAck, onDismiss }) {
   if (load === "loading") return (
     <div>{[0, 1, 2].map((i) => (
       <div key={i} className="flex gap-3 border-b border-line px-4 py-3">
@@ -512,16 +526,17 @@ function Alerts({ feed, load, camName, onOpen, onAck, onDismiss }) {
   if (!feed.length) return <Empty icon={Ic.Check} title="No alerts" hint="Incidents appear here the moment the model confirms one." />;
   return (
     <ol aria-live="polite" aria-label="Alerts">
-      {feed.map((e) => <li key={e.id}><AlertCard e={e} camName={camName(e)} onOpen={onOpen} onAck={onAck} onDismiss={onDismiss} /></li>)}
+      {feed.map((e) => <li key={e.id}><AlertCard e={e} byId={byId} camName={camName(e)} onOpen={onOpen} onAck={onAck} onDismiss={onDismiss} /></li>)}
     </ol>
   );
 }
 
-function AlertCard({ e, camName, onOpen, onAck, onDismiss }) {
+function AlertCard({ e, byId, camName, onOpen, onAck, onDismiss }) {
   const t3 = useTop3(e);
   const thumb = e.keyframe_paths?.[0];
+  const note = recheckNote(e, byId);
   return (
-    <article className={`relative border-b border-line px-4 py-3 ${e.status === "open" && e.severity === "critical" ? "bg-crit-bg" : "hover:bg-surface"} ${e.alert ? "animate-enter" : ""}`}>
+    <article className={`relative border-b border-line px-4 py-3 ${e.status === "open" && e.severity === "critical" ? "bg-crit-bg" : "hover:bg-surface"} ${e.alert ? "animate-enter" : ""} ${rechecked(e) ? "opacity-60" : ""}`}>
       <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${SEV_BG[e.severity] ?? "bg-fg-3"}`} />
       <div className="flex gap-3">
         {thumb ? <img src={media(thumb)} alt="" className="h-[54px] w-24 shrink-0 rounded bg-raised object-cover" />
@@ -542,8 +557,9 @@ function AlertCard({ e, camName, onOpen, onAck, onDismiss }) {
               {e.alert && e.peak_confidence > e.alert.confidence && ` (peak ${pc(e.peak_confidence)})`}
             </span>
           </div>
+          {note && <p className="mt-1 text-12 font-medium text-fg">{note}</p>}
           {e.summary ? <p className="mt-1 line-clamp-2 text-13 text-fg-2">{e.summary}</p>
-            : <div className="mt-2 space-y-1.5"><Skeleton className="h-3" /><Skeleton className="h-3 w-2/3" /></div>}
+            : rechecked(e) ? null : <div className="mt-2 space-y-1.5"><Skeleton className="h-3" /><Skeleton className="h-3 w-2/3" /></div>}
         </div>
       </div>
       {t3 !== false && <div className="mt-3"><Top3 t3={t3} /></div>}
@@ -551,23 +567,24 @@ function AlertCard({ e, camName, onOpen, onAck, onDismiss }) {
         {e.time_to_alert_ms != null && <span>trigger → alert {ms(e.time_to_alert_ms)}</span>}
         {e.alert?.onset_to_alert_ms != null && <span>onset → alert {ms(e.alert.onset_to_alert_ms)}</span>}
         <span className="ml-auto" />
-        {!e.seeded && <Button size="sm" variant="ghost" className="relative z-10 font-sans" title="Not an incident: hide it, count it in Report, keep it as a labelled example (FR-25)"
+        {!e.seeded && e.status !== "dismissed" && <Button size="sm" variant="ghost" className="relative z-10 font-sans" title="Not an incident: hide it, count it in Report, keep it as a labelled example (FR-25)"
           onClick={() => onDismiss(e.id)}>False alarm</Button>}
         {e.status === "open" ? <Button size="sm" className="relative z-10 font-sans" onClick={() => onAck(e.id)}>Ack</Button>
-          : <span className="font-sans">{STATUS_WORD[e.status] ?? e.status}</span>}
+          : <span className="font-sans">{rechecked(e) ? "Re-checked" : STATUS_WORD[e.status] ?? e.status}</span>}
       </div>
     </article>
   );
 }
 
-function EventDialog({ e, camName, onAck, onDismiss, onClose }) {
+function EventDialog({ e, byId, camName, onAck, onDismiss, onClose }) {
   const t3 = useTop3(e);
   const close = useRef(null);
   useEffect(() => { close.current?.focus(); }, []);
   const thumb = e.keyframe_paths?.[0];
   const facts = [["Camera", camName(e)], ["Time", `${ist(e.start_ts ?? e.alert?.t_stored)} IST`],
     ["Confidence", `${pc(e.alert?.confidence ?? e.peak_confidence)}${e.alert?.rating ? ` ${e.alert.rating}` : ""}`],
-    ["Trigger → alert", ms(e.time_to_alert_ms)], ["Onset → alert", ms(e.alert?.onset_to_alert_ms)], ["Status", STATUS_WORD[e.status] ?? e.status]];
+    ["Trigger → alert", ms(e.time_to_alert_ms)], ["Onset → alert", ms(e.alert?.onset_to_alert_ms)], ["Status", rechecked(e) ? "Re-checked" : STATUS_WORD[e.status] ?? e.status]];
+  const note = recheckNote(e, byId);
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
       <div role="dialog" aria-modal="true" aria-labelledby="ev-title" onClick={(x) => x.stopPropagation()} data-event-card={e.id}
@@ -584,6 +601,7 @@ function EventDialog({ e, camName, onAck, onDismiss, onClose }) {
           : e.seeded ? null : <div className="grid aspect-video place-items-center bg-page text-12 text-fg-3">No key frame yet</div>}
         <div className="space-y-4 p-4">
           {e.summary ? <p className="text-13 text-fg">{e.summary}</p> : <div className="space-y-1.5"><Skeleton className="h-3" /><Skeleton className="h-3 w-2/3" /></div>}
+          {note && <p className="text-12 font-medium text-fg">{note}</p>}
           {t3 !== false && <Top3 t3={t3} />}
           <dl className="grid grid-cols-3 gap-x-4 gap-y-3 border-t border-line pt-4">
             {facts.map(([k, val]) => <div key={k} className="min-w-0"><dt className="text-11 text-fg-3">{k}</dt><dd className="truncate font-mono text-12 text-fg">{val}</dd></div>)}

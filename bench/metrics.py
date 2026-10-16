@@ -3,7 +3,7 @@ read as the final target:
 
   observed(rows)  OBSERVED-LABEL diagnostic: macro F1 over the labels that appear as a truth or a prediction in these
                   rows (the historical `macro_f1`, e.g. 0.641 on ab_p5_dev). Comparable only with itself.
-  fixed(rows)     FIXED-LABEL evaluation over the 8 canonical labels (app.vlm.CATS, the one place they are defined):
+  fixed(rows)     FIXED-LABEL evaluation over the 8 canonical labels (SPEC §6.2, the same list and order as app.vlm.CATS):
                   per-class support/TP/FP/FN/precision/recall/F1 with zero-support classes listed, macro F1 over the
                   supported classes and over all 8, weighted F1, incident-vs-normal precision/recall, confusion matrix,
                   and `final_metric_valid`: true only on a test split with every class supported, no test clip used for
@@ -18,9 +18,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from app.vlm import CATS
-
-LABELS = list(CATS)            # the 8 canonical labels, in SPEC §6.2 tie-break order; "normal" last
+# The 8 canonical labels in SPEC §6.2 tie-break order, "normal" last. Spelled out rather than imported from app.vlm so
+# metrics and validation load without OpenCV; tests/test_metrics.py fails if this ever drifts from app.vlm.CATS.
+LABELS = ["fire_smoke", "fighting", "person_down", "crowd_incident", "property_damage", "suspicious_activity",
+          "tailgating", "normal"]
 INCIDENT = [c for c in LABELS if c != "normal"]
 
 
@@ -135,3 +136,62 @@ def run_meta(root, cfg_path, tag, split, model, repetitions=1, extra=None):
             "machine": {"platform": platform.platform(), "machine": platform.machine(), "processor": platform.processor(),
                         "python": platform.python_version(), "node": platform.node()},
             **(extra or {})}
+
+
+def num(x):
+    """A CSV/JSON cell as a float, or None for blank, "None", "nan" or anything unparsable. 0 stays 0."""
+    if x is None or isinstance(x, bool):
+        return None
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return None if v != v else v
+
+
+def _pct(xs, q):
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else None
+
+
+REPORT_COLS = ("clip", "label", "pred", "confidence", "onset_to_alert_ms", "onset_to_gate_ms", "trigger_to_alert_ms", "summary")
+
+
+def dev_report(summary_path, onsets, span_s):
+    """The Report tab's accuracy block (FR-20) from one bench.ab dev pass: ab_dev_<tag>_summary.json + ab_dev_<tag>.csv.
+    onsets: {clip: labelled onset_s or None}; span_s: vlm.mosaic_span_s. Tolerates what older or partial passes leave
+    behind: no CSV, an empty CSV, missing columns, a summary without `fixed`, blank/zero/None timings, labels outside the
+    8 (counted as <other>), non-ASCII summaries. Both metric modes are recomputed from the rows (D83)."""
+    p = Path(summary_path)
+    tag = p.name[len("ab_dev_"):-len("_summary.json")]
+    try:
+        summ = next(iter(json.loads(p.read_text(encoding="utf-8")).values()), None)
+    except (OSError, ValueError):
+        summ = None
+    summ = summ if isinstance(summ, dict) else {}
+    csvp = p.with_name(f"ab_dev_{tag}.csv")
+    import csv
+    clips = []
+    if csvp.exists():
+        with csvp.open(encoding="utf-8", newline="") as fh:
+            clips = [{k: r.get(k) for k in REPORT_COLS} for r in csv.DictReader(fh)]
+    # same split as bench.ab score(): an incident that starts before the first full mosaic also times the buffer
+    # filling, which a running camera never does; the headline is the steady-state group
+    steady, mid, warn = [], [], []
+    for r in clips:
+        on, o2g, o2a = onsets.get(r["clip"]), num(r.get("onset_to_gate_ms")), num(r.get("onset_to_alert_ms"))
+        if o2g is not None and o2g < 0:
+            warn.append(f"{r['clip']}: gate fired {-o2g:.0f} ms before the labelled onset (onset label may be late)")
+        if o2a is not None and r.get("pred") == r.get("label") and on is not None:
+            if o2a < 0:                                     # alert before the labelled onset: suspect label
+                warn.append(f"{r['clip']}: alert {-o2a:.0f} ms before the labelled onset")
+                continue
+            (steady if on >= span_s else mid).append(o2a)
+    fixed_block = summ.get("fixed")
+    if not isinstance(fixed_block, dict):                   # a pass from before D83
+        fixed_block = fixed(clips, split="dev", meta=summ.get("meta"))
+    return {"tag": tag, "run_at": p.stat().st_mtime if p.exists() else None, **summ, "clips": clips,
+            "observed_label_macro_f1": observed(clips)["observed_label_macro_f1"], "fixed": fixed_block,
+            "timing_warnings": summ.get("timing_warnings") if summ.get("timing_warnings") is not None else warn,
+            "onset_to_alert_p50_p95": (_pct(steady, .5), _pct(steady, .95)), "onset_to_alert_n": len(steady),
+            "onset_to_alert_mid_start_p50_p95": (_pct(mid, .5), _pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid)}
