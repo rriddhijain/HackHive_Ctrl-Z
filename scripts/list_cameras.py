@@ -12,7 +12,9 @@ import cv2
 
 
 def names():
-    """{OpenCV index: name}. Uses ffmpeg if present, otherwise system_profiler SPCameraDataType."""
+    """{OpenCV index: name}. Uses ffmpeg if present, otherwise system_profiler SPCameraDataType. OpenCV leaves out
+    Desk View cameras and screens, so the index is the position among the rest. Never opens a camera: the server
+    calls this on every device listing. ponytail: assumes both lists keep OpenCV's order; check with an iPhone."""
     try:
         out = subprocess.run(["ffmpeg", "-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
                              capture_output=True, text=True).stderr
@@ -31,14 +33,7 @@ def names():
             return dict(enumerate(filtered))
     except Exception:
         pass
-
-    res = {}
-    for i in range(5):
-        cap = cv2.VideoCapture(i, cv2.CAP_AVFOUNDATION)
-        if cap.isOpened():
-            res[i] = f"Camera {i}"
-            cap.release()
-    return res
+    return {}
 
 
 def probe(src, label):
