@@ -1,0 +1,19 @@
+crowd_timesq_a.mp4     crowd_incident  46.5 s  onset 22.0  no gate for this category fires {}  ①s []
+crowd_timesq_b.mp4     crowd_incident  43.5 s  onset 6.5  no gate for this category fires {'fighting': [2.2, 34.8, 37.2, 40.0]}  ①s [(2.2, 'fighting'), (34.8, 'fighting'), (35.8, 'fighting'), (37.2, 'fighting'), (38.2, 'fighting'), (40.0, 'fighting')]
+p3c_shove_sit_hug.mp4  fighting   29.9 s  onset 5.6  fires        fires {'fighting': [5.5, 7.4, 23.8]}  ①s [(5.5, 'fighting'), (7.4, 'fighting'), (23.8, 'fighting')]
+v001.avi               fighting    6.4 s  onset 0.0  fires        fires {'fighting': [0.7]}  ①s [(1.0, 'fighting'), (2.0, 'fighting'), (3.0, 'fighting'), (4.0, 'fighting'), (5.0, 'fighting'), (6.3, 'fighting')]
+v003.avi               fighting    3.0 s  onset 0.0  fires        fires {'fighting': [1.2]}  ①s [(1.2, 'fighting'), (2.2, 'fighting')]
+v006.avi               fighting    5.8 s  onset 2.0  fires        fires {'fighting': [1.5, 2.8]}  ①s [(1.5, 'fighting'), (2.8, 'fighting'), (3.8, 'fighting'), (4.8, 'fighting')]
+v011.avi               fighting    8.7 s  onset 1.0  fires        fires {'fighting': [2.0, 5.6], 'person_down': [8.4]}  ①s [(2.0, 'fighting'), (5.6, 'fighting'), (8.4, 'person_down:drop')]
+v026.avi               fighting    9.7 s  onset 0.0  KNOWN MISS: D64: nano never detects both fighters, so no gate can fire; only a baseline can catch it fires {}  ①s []
+w001_masked.avi        fighting    5.1 s  onset 0.5  fires        fires {'person_down': [1.6], 'fighting': [1.6]}  ①s [(1.6, 'person_down:horizontal')]
+fire_printer.mp4       fire_smoke  50.0 s  onset 18.0  no gate for this category fires {}  ①s []
+floor_sit.mp4          normal     19.9 s  onset None  3.0 ①/min    fires {'fighting': [5.7]}  ①s [(5.7, 'fighting')]
+idle_60s.mp4           normal     60.0 s  onset None  1.0 ①/min    fires {'fighting': [31.0]}  ①s [(31.0, 'fighting')]
+sample_bus.mp4         normal     12.0 s  onset None  0.0 ①/min    fires {}  ①s []
+vandal_007.mp4         property_damage  32.0 s  onset 9.0  no gate for this category fires {'scene_change': [31.2]}  ①s [(31.2, 'scene_change')]
+vandal_024.mp4         property_damage  32.0 s  onset 20.0  no gate for this category fires {}  ①s []
+vandal_037.mp4         property_damage  45.0 s  onset 12.0  no gate for this category fires {'fighting': [9.1, 14.0, 35.9, 41.4], 'person_down': [41.4]}  ①s [(9.1, 'fighting'), (14.0, 'fighting'), (35.9, 'fighting'), (41.4, 'person_down:horizontal'), (42.5, 'fighting'), (43.7, 'fighting')]
+normal + look-alike clips: 2 gate ①s in 1.5 camera-min = 1.31/min (limit 2.0)
+gate check ok
+uv run python -m bench.ab --gate --check  145.90s user 77.30s system 260% cpu 1:25.84 total
