@@ -112,8 +112,21 @@ class Pipeline:
         self.sched.note_call(cam, newest)
         self._diag(cam, req, ev, newest)
         delayed = time.time() - req["created"] > V["trigger_max_age_s"]
-        crop = vlm.track_crop(newest, req["track_ids"]) is not None if V["p1_crop"]["enabled"] and not base else False
-        grid, b64 = vlm.mosaic(frames, req["track_ids"] if crop else ())
+        target_bbox = req.get("target_bbox")
+        bbox_a, bbox_b = req.get("bbox_a"), req.get("bbox_b")
+        rule = req.get("rule")
+        if rule == "person_down" and target_bbox:
+            grid, b64 = vlm.build_focused_mosaic(frames, target_bbox, margin=0.35)
+            crop = True
+        elif rule == "fighting" and bbox_a and bbox_b:
+            grid, b64 = vlm.build_interaction_mosaic(frames, bbox_a, bbox_b, margin=0.25)
+            crop = True
+        elif rule in ("crowd_incident", "fire_smoke", "scene_change") or base:
+            grid, b64 = vlm.mosaic(frames, ())
+            crop = False
+        else:
+            crop = vlm.track_crop(newest, req["track_ids"]) is not None if V["p1_crop"]["enabled"] and not base else False
+            grid, b64 = vlm.mosaic(frames, req["track_ids"] if crop else ())
         hints = vlm.user_turn(ev["max_persons"], req["hint"], crop)   # D77 metadata contract; crop = FR-9c tile
         summary_turn = base and self.n_base[cam] % V["summary_every_n"] == 1   # 1st, 4th, 7th... baseline (D42)
         st = {}

@@ -7,8 +7,8 @@
   "frames_with_person": 294,
   "frames_with_2plus": 188,
   "frames_horizontal": 0,
-  "motion_mad_p50": 2.92,
-  "motion_mad_p90": 7.01,
+  "motion_mad_p50": 2.93,
+  "motion_mad_p90": 7.04,
   "gate_fires": [
    {
     "clip_t": 5.51,
@@ -93,7 +93,7 @@
     "max_persons": 2,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 7.4,
@@ -102,7 +102,7 @@
     "max_persons": 2,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 10.5,
@@ -111,7 +111,7 @@
     "max_persons": 2,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 13.6,
@@ -156,7 +156,7 @@
     "max_persons": 2,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 26.8,
@@ -165,7 +165,7 @@
     "max_persons": 2,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 29.9,
@@ -177,21 +177,19 @@
     "guard": null
    }
   ],
-  "calls_guarded": 5,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "v001.avi",
   "duration_s": 6.4,
   "frames": 65,
-  "persons_max": 7,
+  "persons_max": 6,
   "frames_with_person": 65,
-  "frames_with_2plus": 59,
+  "frames_with_2plus": 56,
   "frames_horizontal": 0,
-  "motion_mad_p50": 6.25,
-  "motion_mad_p90": 12.19,
+  "motion_mad_p50": 6.26,
+  "motion_mad_p90": 12.21,
   "gate_fires": [
    {
     "clip_t": 0.7,
@@ -218,7 +216,7 @@
     "clip_t": 1.0,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 3,
     "outcome": "submitted"
    },
    {
@@ -260,7 +258,7 @@
     "clip_t": 1.6,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 1,
     "outcome": "too_soon"
    },
    {
@@ -281,21 +279,21 @@
     "clip_t": 1.9,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 1,
     "outcome": "too_soon"
    },
    {
     "clip_t": 2.0,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 1,
     "outcome": "submitted"
    },
    {
     "clip_t": 2.1,
     "rule": "fighting",
     "kind": null,
-    "persons": 1,
+    "persons": 2,
     "outcome": "too_soon"
    },
    {
@@ -309,7 +307,7 @@
     "clip_t": 2.3,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 1,
     "outcome": "too_soon"
    },
    {
@@ -386,14 +384,14 @@
     "clip_t": 3.4,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 3,
     "outcome": "too_soon"
    },
    {
     "clip_t": 3.5,
     "rule": "fighting",
     "kind": null,
-    "persons": 2,
+    "persons": 4,
     "outcome": "too_soon"
    },
    {
@@ -484,7 +482,7 @@
     "clip_t": 4.8,
     "rule": "fighting",
     "kind": null,
-    "persons": 4,
+    "persons": 3,
     "outcome": "too_soon"
    },
    {
@@ -547,7 +545,7 @@
     "clip_t": 6.3,
     "rule": "fighting",
     "kind": null,
-    "persons": 4,
+    "persons": 3,
     "outcome": "submitted"
    },
    {
@@ -562,8 +560,8 @@
    {
     "t": 0.0,
     "trigger": "baseline",
-    "persons_now": 6,
-    "max_persons": 6,
+    "persons_now": 5,
+    "max_persons": 5,
     "person_frames_frac": 1.0,
     "pair_contact": true,
     "guard": null
@@ -571,38 +569,38 @@
    {
     "t": 1.0,
     "trigger": "gate:fighting",
-    "persons_now": 2,
-    "max_persons": 7,
+    "persons_now": 3,
+    "max_persons": 6,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 2.0,
     "trigger": "gate:fighting",
-    "persons_now": 2,
-    "max_persons": 7,
+    "persons_now": 1,
+    "max_persons": 6,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 3.0,
     "trigger": "gate:fighting",
     "persons_now": 3,
-    "max_persons": 7,
+    "max_persons": 6,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 4.0,
     "trigger": "gate:fighting",
     "persons_now": 2,
-    "max_persons": 7,
+    "max_persons": 6,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 5.0,
@@ -611,22 +609,20 @@
     "max_persons": 4,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 6.3,
     "trigger": "gate:fighting",
-    "persons_now": 4,
+    "persons_now": 3,
     "max_persons": 5,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 6,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "v003.avi",
@@ -636,8 +632,8 @@
   "frames_with_person": 30,
   "frames_with_2plus": 29,
   "frames_horizontal": 0,
-  "motion_mad_p50": 1.65,
-  "motion_mad_p90": 2.87,
+  "motion_mad_p50": 1.64,
+  "motion_mad_p90": 2.86,
   "gate_fires": [
    {
     "clip_t": 1.2,
@@ -664,7 +660,7 @@
     "clip_t": 1.8,
     "rule": "fighting",
     "kind": null,
-    "persons": 3,
+    "persons": 4,
     "outcome": "too_soon"
    },
    {
@@ -741,7 +737,7 @@
     "max_persons": 5,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 2.2,
@@ -750,13 +746,11 @@
     "max_persons": 5,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 2,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "v006.avi",
@@ -766,8 +760,8 @@
   "frames_with_person": 59,
   "frames_with_2plus": 59,
   "frames_horizontal": 0,
-  "motion_mad_p50": 5.96,
-  "motion_mad_p90": 7.7,
+  "motion_mad_p50": 5.95,
+  "motion_mad_p90": 7.71,
   "gate_fires": [
    {
     "clip_t": 1.5,
@@ -784,11 +778,18 @@
     "outcome": "too_soon"
    },
    {
+    "clip_t": 2.8,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 6,
+    "outcome": "submitted"
+   },
+   {
     "clip_t": 2.9,
     "rule": "fighting",
     "kind": null,
-    "persons": 4,
-    "outcome": "submitted"
+    "persons": 6,
+    "outcome": "too_soon"
    },
    {
     "clip_t": 3.0,
@@ -836,29 +837,29 @@
     "clip_t": 3.6,
     "rule": "fighting",
     "kind": null,
-    "persons": 6,
+    "persons": 8,
     "outcome": "too_soon"
    },
    {
     "clip_t": 3.7,
     "rule": "fighting",
     "kind": null,
-    "persons": 3,
+    "persons": 4,
     "outcome": "too_soon"
    },
    {
     "clip_t": 3.8,
     "rule": "fighting",
     "kind": null,
-    "persons": 3,
-    "outcome": "too_soon"
+    "persons": 4,
+    "outcome": "submitted"
    },
    {
     "clip_t": 3.9,
     "rule": "fighting",
     "kind": null,
     "persons": 3,
-    "outcome": "submitted"
+    "outcome": "too_soon"
    },
    {
     "clip_t": 4.0,
@@ -869,6 +870,20 @@
    },
    {
     "clip_t": 4.1,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.2,
+    "rule": "fighting",
+    "kind": null,
+    "persons": 4,
+    "outcome": "too_soon"
+   },
+   {
+    "clip_t": 4.3,
     "rule": "fighting",
     "kind": null,
     "persons": 3,
@@ -907,14 +922,14 @@
     "rule": "fighting",
     "kind": null,
     "persons": 4,
-    "outcome": "too_soon"
+    "outcome": "submitted"
    },
    {
     "clip_t": 4.9,
     "rule": "fighting",
     "kind": null,
-    "persons": 5,
-    "outcome": "submitted"
+    "persons": 4,
+    "outcome": "too_soon"
    },
    {
     "clip_t": 5.0,
@@ -941,267 +956,55 @@
     "max_persons": 8,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 2.9,
+    "t": 2.8,
+    "trigger": "gate:fighting",
+    "persons_now": 6,
+    "max_persons": 8,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 3.8,
     "trigger": "gate:fighting",
     "persons_now": 4,
     "max_persons": 8,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 3.9,
+    "t": 4.8,
     "trigger": "gate:fighting",
-    "persons_now": 3,
+    "persons_now": 4,
     "max_persons": 8,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
-   },
-   {
-    "t": 4.9,
-    "trigger": "gate:fighting",
-    "persons_now": 5,
-    "max_persons": 7,
-    "person_frames_frac": 1.0,
-    "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 4,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "v011.avi",
   "duration_s": 8.7,
   "frames": 88,
-  "persons_max": 4,
-  "frames_with_person": 64,
-  "frames_with_2plus": 42,
-  "frames_horizontal": 0,
-  "motion_mad_p50": 3.73,
+  "persons_max": 6,
+  "frames_with_person": 68,
+  "frames_with_2plus": 44,
+  "frames_horizontal": 2,
+  "motion_mad_p50": 3.72,
   "motion_mad_p90": 8.7,
   "gate_fires": [
    {
-    "clip_t": 2.5,
+    "clip_t": 2.0,
     "rule": "fighting",
     "kind": null,
     "persons": 4,
-    "outcome": "submitted"
-   },
-   {
-    "clip_t": 2.6,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 3,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 2.7,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 2.8,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 2.9,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.0,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.1,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.2,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.3,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.4,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.5,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "submitted"
-   },
-   {
-    "clip_t": 3.6,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.7,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.8,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 3.9,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.0,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.1,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.2,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.3,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.4,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.5,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "submitted"
-   },
-   {
-    "clip_t": 4.6,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.7,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.8,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 4.9,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.0,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.1,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.2,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.3,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.4,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.5,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 2,
     "outcome": "submitted"
    },
    {
@@ -1209,7 +1012,7 @@
     "rule": "fighting",
     "kind": null,
     "persons": 2,
-    "outcome": "too_soon"
+    "outcome": "submitted"
    },
    {
     "clip_t": 5.7,
@@ -1224,104 +1027,6 @@
     "kind": null,
     "persons": 1,
     "outcome": "too_soon"
-   },
-   {
-    "clip_t": 5.9,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.0,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.1,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.2,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.3,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.4,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.5,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "submitted"
-   },
-   {
-    "clip_t": 6.6,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.7,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 1,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.8,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 6.9,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 7.0,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 7.1,
-    "rule": "fighting",
-    "kind": null,
-    "persons": 0,
-    "outcome": "too_soon"
-   },
-   {
-    "clip_t": 8.4,
-    "rule": "person_down",
-    "kind": "drop",
-    "persons": 3,
-    "outcome": "submitted"
    }
   ],
   "calls": [
@@ -1335,75 +1040,55 @@
     "guard": null
    },
    {
-    "t": 2.5,
+    "t": 2.0,
     "trigger": "gate:fighting",
     "persons_now": 4,
-    "max_persons": 4,
-    "person_frames_frac": 0.92,
+    "max_persons": 6,
+    "person_frames_frac": 0.9,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 3.5,
-    "trigger": "gate:fighting",
-    "persons_now": 2,
-    "max_persons": 4,
-    "person_frames_frac": 0.92,
-    "pair_contact": true,
-    "guard": "interaction"
-   },
-   {
-    "t": 4.5,
-    "trigger": "gate:fighting",
-    "persons_now": 0,
+    "t": 5.0,
+    "trigger": "baseline",
+    "persons_now": 1,
     "max_persons": 4,
     "person_frames_frac": 0.82,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 5.5,
+    "t": 5.6,
     "trigger": "gate:fighting",
     "persons_now": 2,
     "max_persons": 4,
-    "person_frames_frac": 0.8,
+    "person_frames_frac": 0.88,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 6.5,
-    "trigger": "gate:fighting",
-    "persons_now": 0,
-    "max_persons": 3,
-    "person_frames_frac": 0.72,
-    "pair_contact": true,
-    "guard": "interaction"
-   },
-   {
-    "t": 8.4,
-    "trigger": "gate:person_down",
+    "t": 8.6,
+    "trigger": "baseline",
     "persons_now": 3,
-    "max_persons": 3,
-    "person_frames_frac": 0.55,
+    "max_persons": 5,
+    "person_frames_frac": 0.65,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 6,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "v026.avi",
   "duration_s": 9.7,
   "frames": 97,
   "persons_max": 1,
-  "frames_with_person": 3,
+  "frames_with_person": 7,
   "frames_with_2plus": 0,
   "frames_horizontal": 0,
   "motion_mad_p50": 0.61,
-  "motion_mad_p90": 1.8,
+  "motion_mad_p90": 1.82,
   "gate_fires": [],
   "calls": [
    {
@@ -1413,22 +1098,29 @@
     "max_persons": 0,
     "person_frames_frac": 0.0,
     "pair_contact": false,
-    "guard": "detector_blind"
+    "guard": null
    },
    {
     "t": 3.0,
     "trigger": "baseline",
     "persons_now": 0,
     "max_persons": 1,
-    "person_frames_frac": 0.1,
+    "person_frames_frac": 0.23,
     "pair_contact": false,
-    "guard": "detector_blind"
+    "guard": null
+   },
+   {
+    "t": 6.0,
+    "trigger": "baseline",
+    "persons_now": 0,
+    "max_persons": 1,
+    "person_frames_frac": 0.03,
+    "pair_contact": false,
+    "guard": null
    }
   ],
-  "calls_guarded": 2,
-  "guard_reasons": [
-   "detector_blind"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "w001_masked.avi",
@@ -1438,8 +1130,8 @@
   "frames_with_person": 52,
   "frames_with_2plus": 40,
   "frames_horizontal": 10,
-  "motion_mad_p50": 5.96,
-  "motion_mad_p90": 9.67,
+  "motion_mad_p50": 5.95,
+  "motion_mad_p90": 9.69,
   "gate_fires": [
    {
     "clip_t": 1.6,
@@ -1545,13 +1237,11 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 1,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "floor_sit.mp4",
@@ -1562,7 +1252,7 @@
   "frames_with_2plus": 200,
   "frames_horizontal": 0,
   "motion_mad_p50": 1.17,
-  "motion_mad_p90": 2.14,
+  "motion_mad_p90": 2.15,
   "gate_fires": [
    {
     "clip_t": 5.69,
@@ -1640,7 +1330,7 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 8.8,
@@ -1649,7 +1339,7 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 11.9,
@@ -1676,7 +1366,7 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
     "t": 19.0,
@@ -1685,13 +1375,11 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    }
   ],
-  "calls_guarded": 4,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "idle_60s.mp4",
@@ -1701,7 +1389,7 @@
   "frames_with_person": 600,
   "frames_with_2plus": 600,
   "frames_horizontal": 0,
-  "motion_mad_p50": 0.65,
+  "motion_mad_p50": 0.66,
   "motion_mad_p90": 1.34,
   "gate_fires": [
    {
@@ -1817,10 +1505,10 @@
     "max_persons": 3,
     "person_frames_frac": 1.0,
     "pair_contact": true,
-    "guard": "interaction"
+    "guard": null
    },
    {
-    "t": 37.8,
+    "t": 34.1,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1829,7 +1517,7 @@
     "guard": null
    },
    {
-    "t": 40.9,
+    "t": 37.2,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1838,7 +1526,7 @@
     "guard": null
    },
    {
-    "t": 44.0,
+    "t": 40.3,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1847,7 +1535,7 @@
     "guard": null
    },
    {
-    "t": 47.1,
+    "t": 43.4,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1856,7 +1544,7 @@
     "guard": null
    },
    {
-    "t": 50.2,
+    "t": 46.5,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1865,25 +1553,34 @@
     "guard": null
    },
    {
-    "t": 53.3,
+    "t": 49.6,
     "trigger": "baseline",
-    "persons_now": 4,
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 52.7,
+    "trigger": "baseline",
+    "persons_now": 3,
+    "max_persons": 3,
+    "person_frames_frac": 1.0,
+    "pair_contact": true,
+    "guard": null
+   },
+   {
+    "t": 55.8,
+    "trigger": "baseline",
+    "persons_now": 3,
     "max_persons": 4,
     "person_frames_frac": 1.0,
     "pair_contact": true,
     "guard": null
    },
    {
-    "t": 56.4,
-    "trigger": "baseline",
-    "persons_now": 3,
-    "max_persons": 4,
-    "person_frames_frac": 1.0,
-    "pair_contact": true,
-    "guard": null
-   },
-   {
-    "t": 59.5,
+    "t": 58.9,
     "trigger": "baseline",
     "persons_now": 3,
     "max_persons": 3,
@@ -1892,10 +1589,8 @@
     "guard": null
    }
   ],
-  "calls_guarded": 1,
-  "guard_reasons": [
-   "interaction"
-  ]
+  "calls_guarded": 0,
+  "guard_reasons": []
  },
  {
   "clip": "sample_bus.mp4",
@@ -1905,7 +1600,7 @@
   "frames_with_person": 150,
   "frames_with_2plus": 150,
   "frames_horizontal": 0,
-  "motion_mad_p50": 7.78,
+  "motion_mad_p50": 7.79,
   "motion_mad_p90": 11.51,
   "gate_fires": [],
   "calls": [

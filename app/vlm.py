@@ -22,16 +22,16 @@ V = CFG["vlm"]
 TABLE = [
     ("fire_smoke", "Visible flames or smoke", "NOT red/orange lights, sunsets, reflections, steam from cooking or a kettle",
      ["fire", "smoke"], "critical"),
-    ("fighting", "2+ people in physical aggression: punching, kicking, shoving, wrestling",
+    ("fighting", "2+ people in physical aggression: punching, kicking, shoving, wrestling, grappling, and aggressive physical restraint, not only punches or kicks. If two people are physically grappling aggressively, classify as fighting",
      "NOT hugging, handshakes, high-fives, sports, dancing, people simply standing close; NOT helping someone up, "
      "people working side by side, or a crowd running together", [], "critical"),
-    ("person_down", "A person lying or collapsed on the floor (fall, fainting)",
+    ("person_down", "A person lying or collapsed on the floor (fall, fainting). The subject's torso/back must be in direct contact with the floor. If supported by furniture (chair, sofa) or kneeling, output normal",
      "NOT sitting on the floor or a chair, kneeling, crouching or squatting, bending to pick something up, "
-     "lying on a bed/sofa/bench", [], "critical"),
+     "lying on a bed/sofa/bench, or supported by furniture", [], "critical"),
     ("crowd_incident", "Abnormally dense gathering or crush, or a crowd suddenly running, fleeing or dispersing",
      "NOT a normal queue, a seated audience, people walking through a busy area at normal pace", ["gathering", "running"], "high"),
     ("property_damage", "Damage to property or a hazardous object event, accidental or deliberate: a person kicking, "
-     "hitting, smashing or spraying a door, window, vehicle, wall or machine (vandalism); an object/debris falling, "
+     "hitting, striking, smashing or spraying a door, window, vehicle, wall or machine (vandalism); physical force applied to break, damage, or deface property; an object/debris falling, "
      "a structure collapsing, items knocked over and broken, shattered glass",
      "NOT someone carefully carrying, moving or placing objects; NOT already-broken items with nothing happening",
      ["falling_object", "collapse", "breakage", "vandalism"], "high"),
@@ -45,7 +45,8 @@ TABLE = [
 ]
 CATS = [r[0] for r in TABLE]
 SUBTYPES = {r[0]: r[3] for r in TABLE}
-GATE_CAT = {"person_down": "person_down", "fighting": "fighting", "tailgating": "tailgating"}  # gate rule -> category it supports
+GATE_CAT = {"person_down": "person_down", "fighting": "fighting", "tailgating": "tailgating",
+            "property_damage": "property_damage", "crowd_incident": "crowd_incident"}  # gate rule -> category it supports
 
 
 def severity(cat, subtype):
@@ -130,6 +131,118 @@ def track_crop(entry, track_ids, C=V["p1_crop"]):
     cx = min(max((x1 + x2) / 2, w / 2), W - w / 2)
     cy = min(max((y1 + y2) / 2, h / 2), H - h / 2)
     return img[int(cy - h / 2):int(cy + h / 2), int(cx - w / 2):int(cx + w / 2)]
+
+
+def build_focused_mosaic(buffer_frames, target_bbox, margin=0.35):
+    """Takes the bounding box that triggered the alert, expands it by margin (35%) in all directions
+    to ensure the floor and immediate surroundings are visible, crops the temporal frames to this exact region,
+    and stitches them into the 2x2 mosaic. Returns (grid, b64_jpeg)."""
+    tw, th = V["tile"]
+    extracted = []
+    for f in buffer_frames:
+        img = f[1] if isinstance(f, (tuple, list)) and len(f) >= 2 and isinstance(f[1], np.ndarray) else f
+        extracted.append(img)
+
+    if not extracted:
+        blank = np.full((th * 2, tw * 2, 3), 114, np.uint8)
+        return blank, base64.b64encode(cv2.imencode(".jpg", blank, [cv2.IMWRITE_JPEG_QUALITY, 85])[1]).decode()
+
+    # Determine crop coordinates with margin expansion on target_bbox: (x1, y1, x2, y2)
+    H, W = extracted[-1].shape[:2]
+    x1, y1, x2, y2 = target_bbox
+    bw, bh = max(1.0, float(x2 - x1)), max(1.0, float(y2 - y1))
+    dx, dy = bw * margin, bh * margin
+    crop_x1 = max(0, int(round(x1 - dx)))
+    crop_y1 = max(0, int(round(y1 - dy)))
+    crop_x2 = min(W, int(round(x2 + dx)))
+    crop_y2 = min(H, int(round(y2 + dy)))
+
+    # Ensure non-empty crop
+    if crop_x2 <= crop_x1 or crop_y2 <= crop_y1:
+        crop_x1, crop_y1, crop_x2, crop_y2 = 0, 0, W, H
+
+    tiles = []
+    for img in extracted[:4]:
+        cropped = img[crop_y1:crop_y2, crop_x1:crop_x2]
+        tiles.append(letterbox(cropped, tw, th))
+
+    tiles += [np.full((th, tw, 3), 114, np.uint8)] * (4 - len(tiles))
+    grid = np.vstack([np.hstack(tiles[:2]), np.hstack(tiles[2:4])])
+    return grid, base64.b64encode(cv2.imencode(".jpg", grid, [cv2.IMWRITE_JPEG_QUALITY, 85])[1]).decode()
+
+
+def build_interaction_mosaic(buffer_frames, bbox_a, bbox_b, margin=0.25):
+    """Crop the bounding union of interacting subjects expanded by margin,
+    preserving grappling context while maximizing pixel density on ceiling cameras.
+    Returns (grid, b64_jpeg)."""
+    tw, th = V["tile"]
+    extracted = []
+    for f in buffer_frames:
+        img = f[1] if isinstance(f, (tuple, list)) and len(f) >= 2 and isinstance(f[1], np.ndarray) else f
+        extracted.append(img)
+
+    if not extracted:
+        blank = np.full((th * 2, tw * 2, 3), 114, np.uint8)
+        return blank, base64.b64encode(cv2.imencode(".jpg", blank, [cv2.IMWRITE_JPEG_QUALITY, 85])[1]).decode()
+
+    H, W = extracted[-1].shape[:2]
+    u_x1 = min(bbox_a[0], bbox_b[0])
+    u_y1 = min(bbox_a[1], bbox_b[1])
+    u_x2 = max(bbox_a[2], bbox_b[2])
+    u_y2 = max(bbox_a[3], bbox_b[3])
+    bw, bh = max(1.0, float(u_x2 - u_x1)), max(1.0, float(u_y2 - u_y1))
+    dx, dy = bw * margin, bh * margin
+    crop_x1 = max(0, int(round(u_x1 - dx)))
+    crop_y1 = max(0, int(round(u_y1 - dy)))
+    crop_x2 = min(W, int(round(u_x2 + dx)))
+    crop_y2 = min(H, int(round(u_y2 + dy)))
+
+    if crop_x2 <= crop_x1 or crop_y2 <= crop_y1:
+        crop_x1, crop_y1, crop_x2, crop_y2 = 0, 0, W, H
+
+    tiles = []
+    for img in extracted[:4]:
+        cropped = img[crop_y1:crop_y2, crop_x1:crop_x2]
+        tiles.append(letterbox(cropped, tw, th))
+
+    tiles += [np.full((th, tw, 3), 114, np.uint8)] * (4 - len(tiles))
+    grid = np.vstack([np.hstack(tiles[:2]), np.hstack(tiles[2:4])])
+    return grid, base64.b64encode(cv2.imencode(".jpg", grid, [cv2.IMWRITE_JPEG_QUALITY, 85])[1]).decode()
+
+
+def disambiguate_vandalism(b64, timeout=3.0):
+    """1-step disambiguation question for property_damage vs suspicious_activity:
+    'Is physical force being applied to break, damage, or deface property, or is an object falling/collapsing?
+     If yes, classify as property_damage. Otherwise classify as suspicious_activity.'
+    """
+    prompt = (
+        "Is physical force being applied to break, damage, or deface property, or is an object falling/collapsing? "
+        "If yes, classify as property_damage. Otherwise classify as suspicious_activity. Reply only with the category name: "
+        "property_damage or suspicious_activity."
+    )
+    img_payload = b64 if isinstance(b64, list) else [b64]
+    body = {
+        "model": V["model"],
+        "stream": False,
+        "think": False,
+        "keep_alive": V["keep_alive"],
+        "options": {"temperature": 0.0, "num_predict": 10},
+        "messages": [
+            {"role": "user", "content": prompt, "images": img_payload}
+        ],
+    }
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            r = client.post(V["base_url"] + V["endpoint"], json=body)
+            if r.status_code == 200:
+                ans = r.json().get("message", {}).get("content", "").strip().lower()
+                if "property_damage" in ans or "yes" in ans:
+                    return "property_damage"
+                elif "suspicious_activity" in ans or "no" in ans:
+                    return "suspicious_activity"
+    except Exception:
+        pass
+    return None
 
 
 def mosaic(frames, track_ids=()):
@@ -255,7 +368,17 @@ def call(b64, hints, on_decide=None, stop_summary_at=None, cancel=None):
                 last = chunk
             if probs and not decided and (cat != "suspicious_activity" or re.search(r'"subtype"\s*:\s*("[^"]*"|null)', text)):
                 decided = True
-                if on_decide and on_decide(probs, cat, _field(text, "subtype"), t["t_category"]):
+                sub_now = _field(text, "subtype")
+                if (cat == "suspicious_activity" or (hints and ("property_damage" in hints.lower() or "striking" in hints.lower()))) and b64:
+                    target_b64 = b64 if isinstance(b64, str) else b64[0]
+                    disamb = disambiguate_vandalism(target_b64)
+                    if disamb == "property_damage":
+                        cat = "property_damage"
+                        sub_now = "vandalism"
+                        if probs:
+                            probs["property_damage"] = max(0.92, probs.get("property_damage", 0.0))
+                            probs["suspicious_activity"] = min(0.05, probs.get("suspicious_activity", 0.05))
+                if on_decide and on_decide(probs, cat, sub_now, t["t_category"]):
                     stopped = "category"
             summ = _field(text, "summary")
             lim = stop_summary_at() if stop_summary_at and summ else None
@@ -277,6 +400,15 @@ def call(b64, hints, on_decide=None, stop_summary_at=None, cancel=None):
                 "timing": t, "prompt_eval_count": last.get("prompt_eval_count"), "ok": False, "stopped": stopped, "raw": text}
     sub = out.get("subtype", _field(text, "subtype"))
     cat = cat or out["category"]
+    if (cat == "suspicious_activity" or (hints and ("property_damage" in hints.lower() or "striking" in hints.lower()))) and b64:
+        target_b64 = b64 if isinstance(b64, str) else b64[0]
+        disamb = disambiguate_vandalism(target_b64)
+        if disamb == "property_damage":
+            cat = "property_damage"
+            sub = "vandalism"
+            if probs:
+                probs["property_damage"] = max(0.92, probs.get("property_damage", 0.0))
+                probs["suspicious_activity"] = min(0.05, probs.get("suspicious_activity", 0.05))
     summary = out.get("summary") or (_field(text, "summary") if stopped == "summary" else None)
     if stopped == "summary" and summary:
         summary = " ".join(summary.split()[:lim]).rstrip(",;") + "…"

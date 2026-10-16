@@ -37,7 +37,7 @@ vlm:
   summary_every_n: 3             # confident-normal baselines stop at the category; every Nth writes a summary (D42)
   p1_crop: { enabled: false, max_box_frac: 0.4, expand: 1.75 }   # FR-9c, final, on only if the dev A/B wins (D45)
   trigger_max_age_s: 4
-  timeout_s: 6
+  timeout_s: 15
   relook: { c_low: 0.40, c_high: 0.70, margin: 0.20 }
   relook_span_s: 4.0             # a re-look mosaic covers the whole 4 s buffer (more context than the 2 s window)
   relook_max_age_s: 6.0          # a P4 re-look still waiting after this is dropped as stale (the alert stands)

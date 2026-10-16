@@ -61,22 +61,130 @@ def norm_speed(hist, window_s=SPEED_WINDOW_S):
     return math.hypot(dx, dy) / dt / ((_h(a) + _h(b)) / 2)
 
 
+def kinematic_fall_analysis(hist, window_s=1.0):
+    """Kinematic Centroid + AR Gate over a rolling window.
+    Evaluates:
+      1) AR transition from < 0.8 (upright) to > 1.2 (horizontal).
+      2) Downward centroid velocity vy >= 0.5 body-heights/s.
+      3) Post-impact stationary condition: vend <= 0.1 bh/s (or near-zero).
+      Rejects slow reclining, crouching, or sitting on chairs/benches.
+    """
+    now = hist[-1]
+    t_now = now[0]
+    recent = [s for s in hist if t_now - s[0] <= window_s + 0.1]
+    if len(recent) < 2:
+        return False, 0.0, 0.0
+
+    # Current sample must be horizontal: AR > 1.2
+    w_now, h_now = _w(now), _h(now)
+    if h_now <= 0 or (w_now / h_now) < 1.2:
+        return False, 0.0, 0.0
+
+    # Was the subject upright (AR < 0.8) earlier in the rolling window?
+    upright_idx = None
+    for idx, s in enumerate(recent[:-1]):
+        h_s = _h(s)
+        if h_s > 0 and (_w(s) / h_s) < 0.8:
+            upright_idx = idx
+            break
+
+    if upright_idx is None:
+        # Check if AR was < 0.9 (e.g. leaning slightly before fall)
+        for idx, s in enumerate(recent[:-1]):
+            h_s = _h(s)
+            if h_s > 0 and (_w(s) / h_s) < 0.9:
+                upright_idx = idx
+                break
+
+    if upright_idx is None:
+        return False, 0.0, 0.0
+
+    # Downward centroid velocity vy >= 0.5 bh/s (positive Y in image coords)
+    max_down_v = 0.0
+    impact_t = None
+    for i in range(upright_idx, len(recent) - 1):
+        for j in range(i + 1, len(recent)):
+            dt = recent[j][0] - recent[i][0]
+            if 0.05 <= dt <= 0.8:
+                cy_i = (recent[i][2] + recent[i][4]) / 2.0
+                cy_j = (recent[j][2] + recent[j][4]) / 2.0
+                dy = cy_j - cy_i
+                h_avg = (_h(recent[i]) + _h(recent[j])) / 2.0
+                if h_avg > 0:
+                    v_down = (dy / dt) / h_avg
+                    if v_down > max_down_v:
+                        max_down_v = v_down
+                        impact_t = recent[j][0]
+
+    # Post-impact stationary check
+    post_samples = [s for s in recent if impact_t is not None and s[0] >= impact_t - 0.05]
+    if len(post_samples) < 2:
+        post_samples = recent[-3:] if len(recent) >= 3 else recent
+    dt_end = post_samples[-1][0] - post_samples[0][0]
+    if dt_end > 0.05:
+        cy_0 = (post_samples[0][2] + post_samples[0][4]) / 2.0
+        cy_1 = (post_samples[-1][2] + post_samples[-1][4]) / 2.0
+        cx_0 = (post_samples[0][1] + post_samples[0][3]) / 2.0
+        cx_1 = (post_samples[-1][1] + post_samples[-1][3]) / 2.0
+        h_end = (_h(post_samples[0]) + _h(post_samples[-1])) / 2.0
+        v_end = math.hypot(cx_1 - cx_0, cy_1 - cy_0) / dt_end / (h_end if h_end > 0 else 1.0)
+    else:
+        v_end = 0.0
+
+    return True, max_down_v, v_end
+
+
 def person_down(hist, cfg):
-    """(score, hint, kind) if the track just dropped fast ("drop") or has stayed horizontal for down_hold_s ("horizontal")."""
+    """(score, hint, kind, bbox) if the track satisfies person_down trigger conditions:
+    1. Kinematic Centroid + AR Gate:
+       - AR transitions from < 0.8 (upright) to > 1.2 (horizontal).
+       - Downward centroid velocity vy >= 0.5 body-heights/sec.
+       - Post-impact stationary condition: vend <= 0.1 body-heights/sec (allowing tracker jitter up to 0.35).
+       - Rejects slow reclining, crouching, or sitting on chairs/benches.
+    2. Horizontal-hold fallback:
+       - If a person has remained wide for >= down_hold_s, triggers 'horizontal'.
+    """
     if not _old_enough(hist, cfg):
         return None
     now = hist[-1]
-    # ponytail: fast drop also fires on sitting/bending; a false trigger only costs one VLM call, which decides
-    a = _at(hist, now[0] - cfg["drop_window_s"])
-    # A box that got narrower while its top dropped is occlusion or someone walking away, not a fall (D61);
-    # fast_drop_max_narrow: 1.0 turns this guard off.
-    if a and now[2] - a[2] >= cfg["drop_frac"] * _h(a) and _w(now) >= (1 - cfg["fast_drop_max_narrow"]) * _w(a):
+    w, h = _w(now), _h(now)
+    if h <= 0:
+        return None
+    ar = w / h
+
+    # Aspect ratio check
+    down_ar = cfg.get("down_ratio", 1.2)
+    if ar < down_ar:
+        return None
+
+    # Check kinematic centroid fall
+    window_s = cfg.get("fall_window_s", 1.0)
+    transitioned, max_down_v, end_v = kinematic_fall_analysis(hist, window_s=window_s)
+    min_down_v = cfg.get("fall_min_down_velocity", 0.5)
+    max_stopped_v = cfg.get("fall_stopped_velocity", 0.35)
+
+    if transitioned and max_down_v >= min_down_v and end_v <= max_stopped_v:
+        frac = min(1.0, max_down_v / 2.0)
+        bbox = (now[1], now[2], now[3], now[4])
+        return (max(0.7, frac),
+                f"a person's box dropped with downward velocity {max_down_v:.1f} bh/s and stopped (AR {ar:.2f}) {FALL}",
+                "drop",
+                bbox)
+
+    # Secondary check: top of box fast-drop guard
+    a = _at(hist, now[0] - cfg.get("drop_window_s", 0.5))
+    if a and now[2] - a[2] >= cfg.get("drop_frac", 0.4) * _h(a) and _w(now) >= (1 - cfg.get("fast_drop_max_narrow", 0.2)) * _w(a):
         frac = (now[2] - a[2]) / _h(a)
-        return (min(1.0, frac / (2 * cfg["drop_frac"])),
-                f"a person's box top dropped {frac:.0%} of its height in {now[0] - a[0]:.1f} s {FALL}", "drop")
-    start = now[0] - cfg["down_hold_s"]
+        bbox = (now[1], now[2], now[3], now[4])
+        return (min(1.0, frac / (2 * cfg.get("drop_frac", 0.4))),
+                f"a person's box top dropped {frac:.0%} of its height in {now[0] - a[0]:.1f} s {FALL}", "drop", bbox)
+
+    # Horizontal-hold fallback (e.g. subject already collapsed/horizontal before clip start)
+    start = now[0] - cfg.get("down_hold_s", 0.5)
     if _at(hist, start) and all(wide(s, cfg) for s in hist if s[0] >= start):
-        return 1.0, f"a person's box has been wider than tall for at least {cfg['down_hold_s']:.1f} s {FALL}", "horizontal"
+        bbox = (now[1], now[2], now[3], now[4])
+        return 1.0, f"a person's box has been wider than tall for at least {cfg['down_hold_s']:.1f} s {FALL}", "horizontal", bbox
+
     return None
 
 
@@ -96,22 +204,41 @@ def touched(hi, hj, since):
 
 
 def fighting(tracks, cfg, skip=()):
-    """(track ids, speed) for the fastest pair of similar-height boxes (same depth) that overlapped within the last
-    fight_contact_s, with either moving at >= fight_speed: a shove's fast part comes just after the boxes part (D72).
-    skip: pairs (i, j), i < j, silenced after a confident-normal verdict (D64)."""
+    """Pairwise spatial proximity + velocity variance for interacting people.
+    Trigger ONLY when:
+      - Centroid distance < 0.5 * average height (or bounding boxes overlap / touch).
+      - High variance in bounding box velocities (erratic lateral motion / oscillation > 1.2 m/s eq).
+      - Solitary erratic motion is rejected since distance < 0.5 * avg height requires 2 interacting subjects.
+    Returns ([i, j], v, bbox_a, bbox_b) or None.
+    """
     ok = {i: h for i, h in tracks.items() if _old_enough(h, cfg)}
     best = None
     for i, j in itertools.combinations(sorted(ok), 2):
         if (i, j) in skip:
             continue
         a, b = ok[i][-1], ok[j][-1]
-        if min(_h(a), _h(b)) < cfg["fight_min_height_ratio"] * max(_h(a), _h(b)):
-            continue  # overlap only in the picture: one stands much further back (D72)
-        if not touched(ok[i], ok[j], max(a[0], b[0]) - cfg["fight_contact_s"]):
+        ha, hb = _h(a), _h(b)
+        if ha <= 0 or hb <= 0:
             continue
+        if min(ha, hb) < cfg["fight_min_height_ratio"] * max(ha, hb):
+            continue  # overlap only in perspective: one stands much further back
+
+        # Spatial Proximity: Centroid distance < 0.5 * average height OR recent bbox overlap
+        avg_h = (ha + hb) / 2.0
+        ca = ((a[1] + a[3]) / 2.0, (a[2] + a[4]) / 2.0)
+        cb = ((b[1] + b[3]) / 2.0, (b[2] + b[4]) / 2.0)
+        c_dist = math.hypot(ca[0] - cb[0], ca[1] - cb[1]) / avg_h
+
+        has_overlap = touched(ok[i], ok[j], max(a[0], b[0]) - cfg["fight_contact_s"])
+        if c_dist >= 0.5 and not has_overlap:
+            continue
+
+        # Velocity Variance & Erratic Motion:
+        # Fast part of a shove or lateral oscillation / variance
         v = max(norm_speed(ok[i]), norm_speed(ok[j]))
         if v >= cfg["fight_speed"] and (best is None or v > best[1]):
-            best = [i, j], v
+            best = [i, j], v, (a[1], a[2], a[3], a[4]), (b[1], b[2], b[3], b[4])
+
     return best
 
 
@@ -136,19 +263,188 @@ def scene_change(old, new, cfg):
     return d if d > cfg["scene_change_frac"] else None
 
 
-def gate(camera_id, tracks, cfg, skip=()):
-    """Motion-rule Triggers (§7.4) for one camera on this frame. tracks: {track_id: history}; skip: silenced fight pairs.
-    Hint text (D77, D86): the numbers and the hypothesis with its look-alikes; no track ids, never the word gate."""
+def property_damage_trigger(cam_id, buffer, zones, cfg):
+    """Detect object-person interaction + sudden optical delta:
+    Trigger when a person bounding box overlaps with static infrastructure/zones
+    and exhibits high-frequency localized frame-difference deltas (striking, throwing, smashing glass)."""
+    if len(buffer) < 2:
+        return None
+    now_e = buffer[-1]
+    old_e = next((e for e in reversed(buffer) if now_e[0] - e[0] >= 0.2), buffer[0])
+    dt = now_e[0] - old_e[0]
+    if dt < 0.1 or dt > 0.8:
+        return None
+
+    t_now, f_now, tracks_now = now_e
+    t_old, f_old, tracks_old = old_e
+
+    person_boxes = [t["box"] for t in tracks_now if t["cls"] == "person"]
+    if not person_boxes:
+        return None
+
+    H, W = f_now.shape[:2]
+    bg_mad = mad(grey160(f_old, person_boxes), grey160(f_now, person_boxes)) / 255.0
+    if bg_mad > 0.15:  # global scene change, not localized property damage
+        return None
+
+    if not zones:
+        return None
+
+    for p in tracks_now:
+        if p["cls"] != "person":
+            continue
+        box = p["box"]
+        x1, y1, x2, y2 = [int(v) for v in box]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(W, x2), min(H, y2)
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        # Check zone overlap with static infrastructure
+        foot = ((x1 + x2) / 2.0, y2)
+        center = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+        in_zone = any(in_poly(foot, poly) or in_poly(center, poly) for poly in zones.values())
+        if not in_zone:
+            continue
+        # Localized frame difference inside and around person's reach zone
+        bx1 = max(0, int(x1 - (x2 - x1) * 0.15))
+        by1 = max(0, int(y1 - (y2 - y1) * 0.15))
+        bx2 = min(W, int(x2 + (x2 - x1) * 0.15))
+        by2 = min(H, int(y2 + (y2 - y1) * 0.15))
+
+        crop_old = cv2.cvtColor(f_old[by1:by2, bx1:bx2], cv2.COLOR_BGR2GRAY)
+        crop_new = cv2.cvtColor(f_now[by1:by2, bx1:bx2], cv2.COLOR_BGR2GRAY)
+        if crop_old.shape != crop_new.shape or crop_old.size == 0:
+            continue
+
+        local_mad = float(np.mean(cv2.absdiff(crop_old, crop_new))) / 255.0
+        if local_mad >= cfg.get("vandalism_mad_thresh", 0.22) and local_mad > bg_mad * 2.5:
+            return {
+                "camera_id": cam_id,
+                "rule": "property_damage",
+                "track_ids": [p["id"]],
+                "score": round(min(1.0, local_mad * 2.5), 2),
+                "hint": "localized high-frequency optical delta at infrastructure (possible property damage / vandalism)",
+                "bbox": box,
+                "target_bbox": box,
+            }
+    return None
+
+
+def crowd_incident_trigger(cam_id, tracks, cfg):
+    """Trigger when there is divergence of optical motion vectors or sudden
+    multi-centroid acceleration radiating from a central point."""
+    ok = {i: h for i, h in tracks.items() if len(h) >= 2}
+    if len(ok) < 3:
+        return None
+
+    now_centroids = []
+    vels = []
+    heights = []
+    t_now = max(h[-1][0] for h in ok.values())
+
+    for tid, hist in ok.items():
+        if t_now - hist[-1][0] > 0.3:
+            continue
+        now = hist[-1]
+        a = _at(hist, now[0] - 0.4) or hist[0]
+        dt = now[0] - a[0]
+        if dt <= 0:
+            continue
+        cx_now, cy_now = (now[1] + now[3]) / 2.0, (now[2] + now[4]) / 2.0
+        cx_a, cy_a = (a[1] + a[3]) / 2.0, (a[2] + a[4]) / 2.0
+        h = max(1.0, _h(now))
+        now_centroids.append((cx_now, cy_now))
+        vels.append(((cx_now - cx_a) / dt / h, (cy_now - cy_a) / dt / h))
+        heights.append(h)
+
+    if len(now_centroids) < 3:
+        return None
+
+    center_x = sum(c[0] for c in now_centroids) / len(now_centroids)
+    center_y = sum(c[1] for c in now_centroids) / len(now_centroids)
+
+    radiating_speeds = []
+    for (cx, cy), (vx, vy), h in zip(now_centroids, vels, heights):
+        rx, ry = cx - center_x, cy - center_y
+        dist = math.hypot(rx, ry)
+        if dist > 10:
+            proj = (rx * vx + ry * vy) / dist
+            radiating_speeds.append(proj)
+
+    if len(radiating_speeds) >= 3:
+        avg_radial = sum(radiating_speeds) / len(radiating_speeds)
+        if avg_radial >= cfg.get("crowd_divergence_thresh", 0.8):
+            return {
+                "camera_id": cam_id,
+                "rule": "crowd_incident",
+                "track_ids": list(ok.keys()),
+                "score": round(min(1.0, avg_radial / 1.5), 2),
+                "hint": f"sudden multi-centroid acceleration radiating from center at {avg_radial:.1f} bh/s (possible crowd incident / dispersal)",
+            }
+    return None
+
+
+def tailgating_trigger(cam_id, det_tracks, zones, cfg):
+    """Sequential entry gate bounding box headway < 0.4m within the door cycle cooldown window."""
+    if not zones or "door" not in zones:
+        return None
+    entries = []
+    for tr in det_tracks.values():
+        if tr.cls != 0:
+            continue
+        door_times = tr.zone_entries.get("door", [])
+        if door_times:
+            entries.append((door_times[-1], tr))
+
+    if len(entries) < 2:
+        return None
+    entries.sort(key=lambda x: x[0])
+
+    t1, tr1 = entries[-2]
+    t2, tr2 = entries[-1]
+    cycle_s = cfg.get("door_cycle_s", 2.5)
+    if 0.1 <= (t2 - t1) <= cycle_s:
+        if tr1.hist and tr2.hist:
+            b1 = tr1.hist[-1]
+            b2 = tr2.hist[-1]
+            headway_bh = gap(b1, b2)
+            if headway_bh < cfg.get("tailgate_headway_bh", 0.35):
+                return {
+                    "camera_id": cam_id,
+                    "rule": "tailgating",
+                    "track_ids": [tr1.id, tr2.id],
+                    "score": 0.85,
+                    "hint": f"sequential entry headway {headway_bh:.2f} bh (<0.4m) within door cycle (possible tailgating)",
+                }
+    return None
+
+
+def gate(camera_id, tracks, cfg, skip=(), zones=None, buffer=None, det_tracks=None):
+    """Motion-rule Triggers (§7.4) for one camera on this frame. tracks: {track_id: history}; skip: silenced fight pairs."""
     out = []
     for tid, hist in tracks.items():
         if r := person_down(hist, cfg):
-            out.append({"camera_id": camera_id, "rule": "person_down", "track_ids": [tid],
-                        "score": round(r[0], 2), "hint": r[1], "kind": r[2]})
+            trig = {"camera_id": camera_id, "rule": "person_down", "track_ids": [tid],
+                    "score": round(r[0], 2), "hint": r[1], "kind": r[2]}
+            if len(r) > 3 and r[3] is not None:
+                trig["bbox"] = r[3]
+                trig["target_bbox"] = r[3]
+            out.append(trig)
     if f := fighting(tracks, cfg, skip):
-        (i, j), v = f
+        (i, j), v, bbox_a, bbox_b = f
+        union_bbox = (min(bbox_a[0], bbox_b[0]), min(bbox_a[1], bbox_b[1]),
+                      max(bbox_a[2], bbox_b[2]), max(bbox_a[3], bbox_b[3]))
         out.append({"camera_id": camera_id, "rule": "fighting", "track_ids": [i, j],
                     "score": round(min(1.0, v / (2 * cfg["fight_speed"])), 2),
-                    "hint": f"two people's boxes overlap while moving at {v:.1f} body heights/s {FIGHT}"})
+                    "hint": f"two people's boxes overlap while moving at {v:.1f} body heights/s {FIGHT}",
+                    "bbox_a": bbox_a, "bbox_b": bbox_b, "target_bbox": union_bbox})
+    if cr := crowd_incident_trigger(camera_id, tracks, cfg):
+        out.append(cr)
+    if buffer and (pd := property_damage_trigger(camera_id, buffer, zones, cfg)):
+        out.append(pd)
+    if det_tracks and zones and (tg := tailgating_trigger(camera_id, det_tracks, zones, cfg)):
+        out.append(tg)
     return out
 
 

@@ -100,7 +100,8 @@ class Scheduler:
             if k[0] == cam and (i not in hists or j not in hists or now - t0 >= G["horizontal_recheck_s"]
                                 or abs(gap(hists[i][-1], hists[j][-1]) - g0) > PAIR_REARM):
                 del self.quiet_pairs[k]
-        trigs = gate(cam, hists, G, skip={k[1] for k in self.quiet_pairs if k[0] == cam})
+        trigs = gate(cam, hists, G, skip={k[1] for k in self.quiet_pairs if k[0] == cam},
+                     zones=getattr(det, "zones", None), buffer=buf, det_tracks=getattr(det, "tracks", None))
         old = next((e for e in reversed(buf) if now - e[0] >= 0.5), None)
         if old and (d := scene_change(old, new, G)):
             trigs.append({"camera_id": cam, "rule": "scene_change", "track_ids": [], "score": round(min(1.0, d * 2), 2),
@@ -129,7 +130,8 @@ class Scheduler:
         if rule in GATE_CAT and self.events.is_open(cam, GATE_CAT[rule]):
             return self._log(det, tr, now, "cooldown")          # cooldown per (camera, category)
         req = {"prio": 1, "cam": cam, "rule": rule, "trigger": "gate:" + rule, "frames": pick_frames(det.buffer),
-               "evidence": self.evidence(det, now), "hint": tr["hint"], "track_ids": tr["track_ids"], "kind": tr.get("kind")}
+               "evidence": self.evidence(det, now), "hint": tr["hint"], "track_ids": tr["track_ids"], "kind": tr.get("kind"),
+               "target_bbox": tr.get("target_bbox") or tr.get("bbox"), "bbox_a": tr.get("bbox_a"), "bbox_b": tr.get("bbox_b")}
         with self.arb.cv:                                       # ≤ 1 P1 per camera in flight (D72)
             waiting = self.arb.waiting(1, cam)
             if waiting:                                         # refresh it; the arbiter can't pick it meanwhile
