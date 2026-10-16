@@ -45,6 +45,8 @@ SUBS: set[asyncio.Queue] = set()
 LAST_OBS, MOSAICS, O2A, S2C = {}, {}, [], []      # camera -> newest observation / mosaic jpeg; latency samples (ms)
 LABELS = load_labels()
 NEXT_ID, MODE = [0], ["clips"]
+SLOTS: dict[str, int] = {}                        # camera id -> dashboard column 1..N_SLOTS (v1.21, D82)
+N_SLOTS = 3
 SRC_LOCK = threading.Lock()                       # one source change at a time (double clicks, two tabs)
 
 
@@ -196,13 +198,31 @@ def need(mode):
 
 def stop_all():
     """Stop every source, then wait (≤ 1.5 s in all) for the capture threads to release their devices."""
-    cams = list(P.cams.values())
+    stop([c.id for c in P.cams.values()])
+
+
+def stop(ids):
+    cams = [P.cams[i] for i in ids if i in P.cams]
     for cam in cams:
         P.remove_camera(cam.id)
+        SLOTS.pop(cam.id, None)
         notify("camera_status", {"camera_id": cam.id, "status": "down"})
     deadline = time.time() + 1.5
     for cam in cams:
         cam.join(max(0, deadline - time.time()))
+
+
+def want_slot(v):
+    """A requested dashboard column: None (not given) or 1..N_SLOTS, else 400."""
+    if v is None:
+        return None
+    if type(v) is not int or not 1 <= v <= N_SLOTS:
+        raise HTTPException(400, f"slot must be 1-{N_SLOTS}")
+    return v
+
+
+def in_slot(slot):
+    return [cid for cid, k in SLOTS.items() if k == slot and cid in P.cams]
 
 
 def start(c, loop):
@@ -212,12 +232,16 @@ def start(c, loop):
     return {"id": cid, "name": c["name"], "status": cam.status}
 
 
-def play_clip(path, name):
-    """Clips mode: one clip at a time (3 busy sources push GPU duty > 90 % and alerts to seconds, P2b), played once."""
+def play_clip(path, name, slot=None):
+    """Clips mode, played once. v1.21 (D82): up to N_SLOTS clips side by side, one per dashboard column; a clip
+    started in a slot replaces the one there. No slot = the original one-at-a-time behaviour: every clip stops and
+    this one plays in slot 1. Measured cost: 3 busy clips at once push GPU duty > 90 % and alerts to seconds (P2b)."""
     with SRC_LOCK:
         need("clips")
-        stop_all()
-        return start({"name": name, "source": path}, loop=False)
+        stop(in_slot(slot)) if slot else stop_all()
+        out = start({"name": name, "source": path}, loop=False)
+        SLOTS[out["id"]] = slot or 1
+        return out | {"slot": slot or 1}
 
 
 def clip_list():
@@ -250,7 +274,7 @@ def play(body: dict):
     clip = next((c for c in clip_list() if c["path"] == body.get("path")), None)   # playlist files only
     if not clip:
         raise HTTPException(400, "not a playlist clip")
-    return play_clip(clip["path"], clip["name"])
+    return play_clip(clip["path"], clip["name"], want_slot(body.get("slot")))
 
 
 @app.get("/api/devices")
@@ -269,13 +293,22 @@ def add_source(body: dict):
     url = urlparse(src) if isinstance(src, str) else None
     if not ((type(src) is int and src >= 0) or (url and url.scheme in ("http", "https", "rtsp") and url.netloc)):
         raise HTTPException(400, "source must be a device index or an http, https or rtsp URL")
+    slot = want_slot(body.get("slot"))
     with SRC_LOCK:
         need("live")
-        if any(c.source == src for c in P.cams.values()):
+        if any(c.source == src and SLOTS.get(c.id) != slot for c in P.cams.values()) or \
+                any(c.source == src for c in P.cams.values()) and not slot:
             raise HTTPException(409, "already running")
+        if slot:                                  # v1.21 (D82): a source started in a slot replaces the one there
+            stop(in_slot(slot))
+        else:                                     # no slot asked: the first free column, if any
+            slot = next((k for k in range(1, N_SLOTS + 1) if not in_slot(k)), None)
         cfg = next((c for c in CFG["cameras"] if c["source"] == src), {})   # keeps its door/watch zone (E-16)
-        return start({"name": body.get("name") or cfg.get("name") or str(src), "source": src,
-                      "door_zone": cfg.get("door_zone"), "watch_zone": cfg.get("watch_zone")}, loop=True)
+        out = start({"name": body.get("name") or cfg.get("name") or str(src), "source": src,
+                     "door_zone": cfg.get("door_zone"), "watch_zone": cfg.get("watch_zone")}, loop=True)
+        if slot:
+            SLOTS[out["id"]] = slot
+        return out | {"slot": slot}
 
 
 @app.get("/api/cameras")
@@ -285,15 +318,17 @@ def cameras():
         label, onset = LABELS.get(Path(str(c.source)).name, (None, None)) if c.kind == "file" else (None, None)
         out.append({"id": cid, "name": c.name, "source_type": c.kind, "source": c.source, "status": c.status,
                     "fps": round(c.fps(), 1), "has_door_zone": bool(c.door_zone), "loop": c.loop,
-                    "t_first": c.t_first, "label": label, "onset_s": onset})   # P3b: clip result card
+                    "t_first": c.t_first, "label": label, "onset_s": onset,   # P3b: clip result card
+                    "slot": SLOTS.get(cid)})                                   # v1.21 (D82): dashboard column
     return out
 
 
 @app.post("/api/cameras/upload")
-async def upload(request: Request, name: str):
+async def upload(request: Request, name: str, slot: int = None):
     """FR-5 (v1.9): raw file body, ?name=; bare file name, mp4/mov/avi/mkv, ≤ 500 MB, written as it arrives.
-    P3b: Clips mode only; it replaces the clip that is playing."""
+    P3b: Clips mode only; it replaces the clip that is playing (v1.21: the one in ?slot=, if given)."""
     need("clips")
+    slot = want_slot(slot)
     name = Path(name).name
     if not name or Path(name).suffix.lower() not in UPLOAD_EXT:
         raise HTTPException(400, "file must be .mp4, .mov, .avi or .mkv")
@@ -311,7 +346,7 @@ async def upload(request: Request, name: str):
     if not n:
         path.unlink()
         raise HTTPException(400, "empty file")
-    return await asyncio.to_thread(play_clip, str(path), name)
+    return await asyncio.to_thread(play_clip, str(path), name, slot)
 
 
 @app.delete("/api/cameras/{cid}")
@@ -322,6 +357,7 @@ def remove(cid: str):
         if not cam:
             raise HTTPException(404)
         P.remove_camera(cid)
+        SLOTS.pop(cid, None)
         cam.join(1.5)
     notify("camera_status", {"camera_id": cid, "status": "down"})
     return {"id": cid, "removed": True}
@@ -604,6 +640,19 @@ def selfcheck():
         assert [x["id"] for x in c.get("/api/cameras").json()] == [new]               # the upload replaced cam1
         assert c.delete(f"/api/cameras/{new}").status_code == 200
         assert new not in [x["id"] for x in c.get("/api/cameras").json()]
+        # v1.21 (D82) slots: clips side by side, one per column; a slot replaces only its own clip; no slot = one at a time
+        other = next(x["path"] for x in c.get("/api/clips").json() if x["path"] != clip)
+        a = c.post("/api/clips/play", json={"path": clip, "slot": 1}).json()
+        b = c.post("/api/clips/play", json={"path": other, "slot": 2}).json()
+        assert (a["slot"], b["slot"]) == (1, 2) and {x["slot"] for x in c.get("/api/cameras").json()} == {1, 2}, (a, b)
+        a2 = c.post("/api/clips/play", json={"path": other, "slot": 1}).json()
+        now = {x["id"]: x["slot"] for x in c.get("/api/cameras").json()}
+        assert now == {a2["id"]: 1, b["id"]: 2}, now
+        for bad in (0, 4, "1", True):
+            assert c.post("/api/clips/play", json={"path": clip, "slot": bad}).status_code == 400, bad
+        assert c.post("/api/cameras/upload?name=a.mp4&slot=9", content=b"1").status_code == 400
+        solo = c.post("/api/clips/play", json={"path": clip}).json()
+        assert [(x["id"], x["slot"]) for x in c.get("/api/cameras").json()] == [(solo["id"], 1)]
         # P3b modes: switching stops every source, history stays; Live accepts device indices and stream URLs only
         c.post("/api/clips/play", json={"path": clip})
         n_obs = len(c.get("/api/observations?limit=500").json())
@@ -617,6 +666,10 @@ def selfcheck():
         dead = "rtsp://127.0.0.1:9/none"                                                # no server: stays connecting
         r = c.post("/api/cameras", json={"source": dead, "name": "dead"})
         assert r.status_code == 200 and c.post("/api/cameras", json={"source": dead}).status_code == 409, r.text
+        assert r.json()["slot"] == 1 and c.post("/api/cameras", json={"source": dead, "slot": 2}).status_code == 409
+        r2 = c.post("/api/cameras", json={"source": "rtsp://127.0.0.1:9/two", "slot": 1})       # replaces slot 1
+        assert [(x["source"], x["slot"]) for x in c.get("/api/cameras").json()] == [("rtsp://127.0.0.1:9/two", 1)], r2.text
+        r = r2
         assert c.get("/api/cameras").json()[0]["status"] in ("connecting", "reconnecting")
         t = time.time()
         assert c.delete(f"/api/cameras/{r.json()['id']}").status_code == 200 and c.get("/api/cameras").json() == []
