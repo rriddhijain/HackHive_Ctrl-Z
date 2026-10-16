@@ -1,2 +1,12 @@
 results_file,clip,recorded_label,reason
 ab_p5_dev.csv,desk_closeup.mp4,normal,"removed from the dev set and the demo playlist after this run (captain, 16 Oct 05:56 IST, REPORT.md section 3); the row is kept as measured and is part of the historical 0.641 (11 rows)"
+ab_test_base.csv,fall_a_view2.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_base.csv,fall_a_view5.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_base.csv,fall_a_view6.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_base.csv,fall_a_view7.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_base.csv,fall_b_view3.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_d86.csv,fall_a_view2.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_d86.csv,fall_a_view5.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_d86.csv,fall_a_view6.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_d86.csv,fall_a_view7.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
+ab_test_d86.csv,fall_b_view3.mp4,person_down,"Montreal fall set removed from the test split and replaced by three new person_down clips (captain, 17 Oct); the row is kept as measured"
