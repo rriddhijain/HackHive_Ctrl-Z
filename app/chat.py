@@ -598,7 +598,8 @@ if __name__ == "__main__":
 DIGEST_SYSTEM = ("You write the shift-handover note for the security operator taking over a control room, using ONLY the "
                  "incident rows given (times are IST). Most severe first; say plainly which incidents are still open or not "
                  "acknowledged. Every sentence must cite the rows it uses as [#id]. Restate only what the rows say: no "
-                 "guesses about causes, injuries or identities. At most 4 short sentences, no lists, no headings.")
+                 "guesses about causes, injuries or identities. Refer to incidents by what happened and where, never as rows. "
+                 "At most 4 short sentences, no lists, no headings.")
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2}
 
 
@@ -635,8 +636,10 @@ def digest(db, arb, names=None, hours=8.0, camera=None, now=None):
     shown = evs[:LIMIT["summary"]]
     if shown and arb:
         msgs = [{"role": "system", "content": DIGEST_SYSTEM}, {"role": "user", "content": (
-            f"Shift: {fmt(frm)} to {fmt(now)} IST. Still open or not acknowledged: "
-            + (", ".join(f"[#{e['id']}]" for e in follow) or "none") + ".\nRows:\n"
+            f"Shift: {fmt(frm)} to {fmt(now)} IST. Still open: "
+            + (", ".join(f"[#{e['id']}]" for e in follow if e["status"] == "open") or "none")
+            + ". Critical, closed but never acknowledged: "
+            + (", ".join(f"[#{e['id']}]" for e in follow if e["status"] != "open") or "none") + ".\nRows:\n"
             + "\n".join(f"[#{e['id']}] {fmt(e['start_ts'])}, {display(e['camera_id'], names)}, {e['severity']} "
                         f"{e['category'].replace('_', ' ')}, {e['status']}: {e['summary'] or 'no summary'}" for e in shown))}]
         r = ask_model(arb, msgs, t0, num_predict=200)
