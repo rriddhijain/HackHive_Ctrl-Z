@@ -326,10 +326,13 @@ class _NoDB:                                            # EventManager only inse
 
 
 def load_recs(tag):
-    """{clip: recording} for data/ab/<tag>/rec/*.json, each with its split from bench/labels.csv."""
-    split = {r["clip"]: r["split"] for r in csv.DictReader(open(ROOT / "bench" / "labels.csv"))}
+    """{clip: recording} for data/ab/<tag>/rec/*.json, with label, onset and split from bench/labels.csv as it is now
+    (a corrected label applies to old recordings); a clip no longer in labels.csv (removed, D88) is skipped."""
+    lab = {r["clip"]: r for r in csv.DictReader(open(ROOT / "bench" / "labels.csv", encoding="utf-8"))}
     recs = [json.loads(f.read_text()) for f in sorted((ROOT / "data" / "ab" / tag / "rec").glob("*.json"))]
-    return {r["clip"]: r | {"split": split.get(r["clip"], "dev")} for r in recs}
+    return {r["clip"]: r | {"label": lab[r["clip"]]["label"], "split": lab[r["clip"]]["split"],
+                            "onset_s": float(lab[r["clip"]]["onset_s"]) if lab[r["clip"]]["onset_s"] else None}
+            for r in recs if r["clip"] in lab}
 
 
 def replay(r, probs=None):
@@ -337,6 +340,7 @@ def replay(r, probs=None):
     probs: optional per-call probabilities replacing the recorded ones (a re-asked prompt variant).
     Same calls at the same times: a setting that would have changed which calls were made (a cooldown, a
     confident-normal silence) is approximated, which is why the chosen setting is confirmed by a real pass."""
+    from app import vlm
     from app.events import EventManager
     E, em, opened = CFG["events"], EventManager(_NoDB()), []
     for i, x in enumerate(c for c in r["calls"] if "cam" in c):
@@ -442,6 +446,7 @@ def reask(tag):
     """Every recorded mosaic re-classified with the CURRENT prompt (vlm.SYSTEM, e.g. after editing vlm.TABLE), same
     detector hints, stopped at the category (~1.3 s a call, GPU only, no YOLO, no playback).
     Returns {clip: {call index: probs}} for confusion() / evaluate(probs=...)."""
+    from app import vlm
     out = {}
     for clip, r in load_recs(tag).items():
         for i, x in enumerate(c for c in r["calls"] if "cam" in c):
