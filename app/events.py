@@ -10,7 +10,10 @@ import time
 from collections import defaultdict, deque
 
 from app.config import CFG
-from app.vlm import CATS, severity
+from app.vlm import CATS, GATE_CAT, severity
+
+# Categories no gate can corroborate open only through the window, so they get a lower window threshold (D77).
+UNGATED = set(CATS[:-1]) - set(GATE_CAT.values()) - {"fire_smoke"}
 
 E = CFG["events"]
 
@@ -55,7 +58,8 @@ class EventManager:
                 single = E["open_single_critical"] if sev == "critical" else E["open_single_other"]
                 corroborated = cat in triggers or cat == "fire_smoke"
                 S = sum(w[cat] for w in win) / len(win)
-                if (c[cat] >= single and corroborated) or (len(win) >= 2 and S >= E["open_window"]):
+                thr = E["open_window_ungated"] if cat in UNGATED else E["open_window"]
+                if (c[cat] >= single and corroborated) or (len(win) >= 2 and S >= thr):
                     ev = {"camera_id": cam, "camera_name": self.cam_names.get(cam, cam), "category": cat,
                           "subtype": subtype if cat == top else None, "severity": sev, "start_ts": ts, "end_ts": ts,
                           "peak_confidence": c[cat], "summary": None, "keyframe_paths": [], "track_ids": [],
@@ -131,6 +135,11 @@ if __name__ == "__main__":
     assert [e["category"] for e in em.decide("cam2", C(fighting=0.6), None, set(), 103, 103)[0]] == ["fighting"]
     # High category, uncorroborated, 0.9 once -> no alert (property damage needs 2 observations).
     assert em.decide("cam3", C(property_damage=0.9), "breakage", set(), 100, 100)[0] == []
+    # Ungated category after a normal observation: 0.0, 0.83, 0.73 (mean 0.52) opens at 0.50 (D77); 0.0, 0.40, 0.73 doesn't.
+    em.decide("cam5", C(), None, set(), 100, 100); em.decide("cam5", C(property_damage=0.83), None, set(), 103, 103)
+    assert [e["category"] for e in em.decide("cam5", C(property_damage=0.73), None, set(), 106, 106)[0]] == ["property_damage"]
+    em.decide("cam6", C(), None, set(), 100, 100); em.decide("cam6", C(property_damage=0.40), None, set(), 103, 103)
+    assert em.decide("cam6", C(property_damage=0.73), None, set(), 106, 106)[0] == []
     # suspicious_activity: loitering is medium (needs 0.85 + gate), weapon is critical but still needs corroboration.
     assert em.decide("cam4", C(suspicious_activity=0.8), "loitering", set(), 100, 100)[0] == []
     # Close rule: 2 non-supporting observations, but only 4 s since support -> stays open; at 8 s -> closes.

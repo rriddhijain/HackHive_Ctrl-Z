@@ -65,6 +65,7 @@ events:
   open_single_critical: 0.70
   open_single_other: 0.85
   open_window: 0.55
+  open_window_ungated: 0.50   # crowd, property damage, suspicious: no gate can corroborate them (D77)
   window_n: 3
   close_c: 0.40
   close_after_s: 8
