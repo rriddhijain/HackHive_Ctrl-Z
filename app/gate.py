@@ -15,6 +15,10 @@ import cv2
 import numpy as np
 
 SPEED_WINDOW_S = 0.3  # short enough that back-and-forth shoving doesn't cancel itself out
+# Hint hypotheses name the look-alikes too (D86): "(possible fight)" alone made the model call a crowd running, a helper
+# next to a fallen person and people talking a fight (base pass: 5/29 gate calls right; this wording 14/29, same fights).
+FALL = "(a fall, or someone kneeling, bending, crouching or sitting: judge from the frames)"
+FIGHT = "(a fight, or people hugging, helping someone up, working side by side, or a crowd moving: judge from the frames)"
 
 def wide(s, cfg):
     """Box (t, x1, y1, x2, y2) at least down_ratio times wider than tall."""
@@ -69,10 +73,10 @@ def person_down(hist, cfg):
     if a and now[2] - a[2] >= cfg["drop_frac"] * _h(a) and _w(now) >= (1 - cfg["fast_drop_max_narrow"]) * _w(a):
         frac = (now[2] - a[2]) / _h(a)
         return (min(1.0, frac / (2 * cfg["drop_frac"])),
-                f"a person's box top dropped {frac:.0%} of its height in {now[0] - a[0]:.1f} s (possible fall)", "drop")
+                f"a person's box top dropped {frac:.0%} of its height in {now[0] - a[0]:.1f} s {FALL}", "drop")
     start = now[0] - cfg["down_hold_s"]
     if _at(hist, start) and all(wide(s, cfg) for s in hist if s[0] >= start):
-        return 1.0, f"a person's box has been wider than tall for at least {cfg['down_hold_s']:.1f} s (possible person down)", "horizontal"
+        return 1.0, f"a person's box has been wider than tall for at least {cfg['down_hold_s']:.1f} s {FALL}", "horizontal"
     return None
 
 
@@ -134,7 +138,7 @@ def scene_change(old, new, cfg):
 
 def gate(camera_id, tracks, cfg, skip=()):
     """Motion-rule Triggers (§7.4) for one camera on this frame. tracks: {track_id: history}; skip: silenced fight pairs.
-    Hint text (D77): the numbers and a named hypothesis; no track ids, never the word gate (the model narrated them)."""
+    Hint text (D77, D86): the numbers and the hypothesis with its look-alikes; no track ids, never the word gate."""
     out = []
     for tid, hist in tracks.items():
         if r := person_down(hist, cfg):
@@ -144,7 +148,7 @@ def gate(camera_id, tracks, cfg, skip=()):
         (i, j), v = f
         out.append({"camera_id": camera_id, "rule": "fighting", "track_ids": [i, j],
                     "score": round(min(1.0, v / (2 * cfg["fight_speed"])), 2),
-                    "hint": f"two people's boxes overlap while moving at {v:.1f} body heights/s (possible fight)"})
+                    "hint": f"two people's boxes overlap while moving at {v:.1f} body heights/s {FIGHT}"})
     return out
 
 
@@ -163,9 +167,10 @@ if __name__ == "__main__":
     # Lying still for 0.6 s (no drop inside the window) → horizontal-hold path.
     lying = [(ti, 60, 240, 220, 300) for ti in t]
     assert person_down(lying, c)[2] == "horizontal" and "wider than tall" in person_down(lying, c)[1]
-    # D77 hint contract: no track ids, never the word gate/track (the model narrated "a track gate drops").
+    # D77/D86 hint contract: no track ids, never the word gate/track (the model narrated "a track gate drops"); the
+    # hypothesis names its look-alikes and leaves the call to the frames.
     for h in (tr[0]["hint"], person_down(lying, c)[1]):
-        assert not any(w in h.lower() for w in ("track", "gate")) and "(possible" in h, h
+        assert not any(w in h.lower() for w in ("track", "gate")) and h.endswith("judge from the frames)"), h
 
     # Occlusion: top drops 45 % but the box narrows 94 -> 60 px (sample_bus.mp4 track 3) -> no trigger; guard off -> fires.
     occl = standing[:8] + [(t[8], 100, 200, 180, 300), (t[9], 105, 230, 170, 300), (t[10], 110, 290, 170, 300)]

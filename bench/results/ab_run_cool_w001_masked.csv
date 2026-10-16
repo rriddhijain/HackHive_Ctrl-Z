@@ -1,0 +1,2 @@
+clip,label,pred,onset_s,confidence,top3,onset_to_alert_ms,onset_to_gate_ms,start_to_alert_ms,trigger_to_alert_ms,trigger_to_alert_p95,alerts,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+w001_masked.avi,fighting,fighting,0.5,1.0,fighting:1.00 person_down:0.00 fire_smoke:0.00,3116,1800,3616,1335,1335,1,fighting@2.3s,,data/ab/cool_w001_masked/w001_masked.jpg,1,1,0,18,18,0.956,Two individuals are physically engaging in an altercation inside a waiting area with chairs and a glass door.

@@ -1,0 +1,18 @@
+{
+ "wall_s": 4.5,
+ "gpu_duty": 0.925,
+ "model_tta_p50": 1441,
+ "call_ms_p50": 2967,
+ "gate_triggers": 1,
+ "skipped": 0,
+ "vlm_errors": 0,
+ "vetoes_logged": 1,
+ "vetoes_p_ge_0.3": 0,
+ "alerts": [
+  [
+   "cam1",
+   "fighting",
+   1386
+  ]
+ ]
+}

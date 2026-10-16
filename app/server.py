@@ -36,7 +36,8 @@ from app.scheduler import persons
 from scripts.list_cameras import names as device_names
 
 DATA, DIST = ROOT / "data", ROOT / "web" / "dist"
-UPLOAD_EXT, UPLOAD_MAX = {".mp4", ".mov", ".avi", ".mkv"}, 500 * 1024 * 1024   # FR-5
+UPLOAD_EXT = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm", ".mpg", ".mpeg", ".wmv", ".flv", ".3gp", ".ts", ".mts", ".m2ts"}   # FR-5; D86: any container OpenCV's FFmpeg reads (a judge's file)
+UPLOAD_MAX = 500 * 1024 * 1024
 R = CFG["events"]["rating"]
 
 P: Pipeline = None
@@ -248,7 +249,7 @@ def clip_list():
     files = sorted(DATA.glob("demo/*")) + sorted(DATA.glob("dev/*/*"))
     return [{"path": str(f.relative_to(ROOT)), "name": f.name, "folder": str(f.parent.relative_to(DATA)),
              "label": LABELS.get(f.name, (None, None))[0], "onset_s": LABELS.get(f.name, (None, None))[1]}
-            for f in files if f.suffix.lower() in UPLOAD_EXT]
+            for f in files if f.suffix.lower() in UPLOAD_EXT and f.is_file()]
 
 
 @app.post("/api/mode")
@@ -325,13 +326,13 @@ def cameras():
 
 @app.post("/api/cameras/upload")
 async def upload(request: Request, name: str, slot: int = None):
-    """FR-5 (v1.9): raw file body, ?name=; bare file name, mp4/mov/avi/mkv, ≤ 500 MB, written as it arrives.
+    """FR-5 (v1.9): raw file body, ?name=; bare file name, a video extension in UPLOAD_EXT, ≤ 500 MB, written as it arrives.
     P3b: Clips mode only; it replaces the clip that is playing (v1.21: the one in ?slot=, if given)."""
     need("clips")
     slot = want_slot(slot)
     name = Path(name).name
     if not name or Path(name).suffix.lower() not in UPLOAD_EXT:
-        raise HTTPException(400, "file must be .mp4, .mov, .avi or .mkv")
+        raise HTTPException(400, "file must be a video: " + ", ".join(sorted(UPLOAD_EXT)))
     if int(request.headers.get("content-length") or 0) > UPLOAD_MAX:
         raise HTTPException(413, "file is over 500 MB")
     path, n = DATA / "uploads" / str(time.time_ns()) / name, 0     # bare name kept: labels.csv matches it (onset)

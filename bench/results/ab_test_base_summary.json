@@ -1,0 +1,64 @@
+{
+ "base": {
+  "n": 15,
+  "right": 5,
+  "macro_f1": 0.357,
+  "labels_in_f1": [
+   "crowd_incident",
+   "fighting",
+   "fire_smoke",
+   "normal",
+   "person_down",
+   "property_damage",
+   "suspicious_activity"
+  ],
+  "incident_recall": 0.857,
+  "incident_precision": 0.923,
+  "false_alarms_normal": 1,
+  "start_to_alert_p50_p95": [
+   22670,
+   46568
+  ],
+  "trigger_to_alert_p50_p95": [
+   1497,
+   2099
+  ],
+  "onset_to_alert_p50_p95": [
+   6569,
+   16568
+  ],
+  "onset_to_alert_n": 4,
+  "onset_to_alert_mid_start_p50_p95": [
+   4397,
+   4397
+  ],
+  "onset_to_alert_mid_start_n": 1,
+  "errors": {
+   "person_down -> normal": [
+    "fall_a_view5.mp4 (None)"
+   ],
+   "person_down -> fighting": [
+    "fall_a_view7.mp4 (data/ab/base/fall_a_view7.jpg)",
+    "fall_b_view3.mp4 (data/ab/base/fall_b_view3.jpg)"
+   ],
+   "suspicious_activity -> fighting": [
+    "theft_atm.mp4 (data/ab/base/theft_atm.jpg)"
+   ],
+   "property_damage -> person_down": [
+    "vandal_001.mp4 (data/ab/base/vandal_001.jpg)"
+   ],
+   "property_damage -> suspicious_activity": [
+    "vandal_017.mp4 (data/ab/base/vandal_017.jpg)",
+    "vandal_026.mp4 (data/ab/base/vandal_026.jpg)",
+    "vandal_046.mp4 (data/ab/base/vandal_046.jpg)"
+   ],
+   "fighting -> normal": [
+    "fight_ucf002.mp4 (None)"
+   ],
+   "normal -> fighting": [
+    "normal_room.mp4 (data/ab/base/normal_room.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.628
+ }
+}

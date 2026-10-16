@@ -29,10 +29,10 @@ List theft,list,10,subtype
 Show weapons,list,15,subtype synonym
 Which camera had a person down?,list,8 19 23,category phrase
 Any glass broken near the barrier?,list,21,keyword + category
-Show all tailgating events from camera 2 today,list,none,brief example (PS3); camera number with no events -> No matching events + camera list
+Show all tailgating events from camera 2 today,list,20,brief example (PS3); camera 2 has none -> said so + the same kind on other cameras (D86)
 What incidents happened in the last 10 minutes?,list,22 23,SPEC §13 R1 question; time
 How many falls today?,count,19 23,SPEC §13 R1 question; synonym; today excludes #8 (yesterday)
-Show fights on cam4,list,none,SPEC §13 R1 question; camera id with no events -> No matching events + camera list
+Show fights on cam4,list,7 14 16,SPEC §13 R1 question; camera id with no events -> No matching events + camera list + the fights on other cameras (D86)
 Anyone in a red jacket?,list,none,SPEC §13 R1 keyword question; nothing red in the history -> No matching events (blue jacket not returned)
 Did anyone get pushed?,list,7,D74 paraphrase: stemming (pushed = push); filler words dropped
 Was someone pushing people?,list,7,D74 paraphrase: stemming (pushing = push)

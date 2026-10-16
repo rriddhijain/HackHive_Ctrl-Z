@@ -1,18 +1,35 @@
 "use client";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { sevTone } from "@/components/alert-bits";
 import { Card, Divider, Dot, Icon, Shape, SkeletonLines, StatusChip, type StatusVariant } from "@/components/m3";
 import { ms, pc, title } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Camera, Event } from "@/lib/types";
 
+/** A short clip can end while the model is still on its last frames: its alert may land seconds later (D86). */
+const GRACE_MS = 20_000;
+
 /** B-32 state word → chip variant (DESIGN §5.23). */
-function stateOf(done: boolean, c: Camera, evs: Event[], hit: Event | undefined): [StatusVariant, string] {
+function stateOf(done: boolean, finishing: boolean, c: Camera, evs: Event[], hit: Event | undefined): [StatusVariant, string] {
   if (!done) return ["pending", "Running"];
   if (!c.label) return ["neutral", "Unlabelled"];
-  if (c.label === "normal") return evs.length ? ["error", "False alarm"] : ["ok", "Correct"];
+  if (c.label === "normal") return evs.length ? ["error", "False alarm"] : finishing ? ["pending", "Finishing"] : ["ok", "Correct"];
   if (hit) return ["ok", "Detected"];
+  if (finishing) return ["pending", "Finishing"];
   return evs.length ? ["pending", "Wrong category"] : ["error", "Missed"];
+}
+
+/** True for GRACE_MS after `done` turns true (re-renders once when it runs out). */
+function useFinishing(done: boolean) {
+  const [endedAt, setEndedAt] = useState<number | null>(null);
+  const [, expire] = useState(0);
+  useEffect(() => { setEndedAt(done ? Date.now() : null); }, [done]);
+  useEffect(() => {
+    if (endedAt == null) return;
+    const t = setTimeout(() => expire((n) => n + 1), GRACE_MS);
+    return () => clearTimeout(t);
+  }, [endedAt]);
+  return endedAt != null && Date.now() - endedAt < GRACE_MS;
 }
 
 const Head = ({ chip }: { chip?: ReactNode }) => (
@@ -36,16 +53,17 @@ export function VerdictEmpty() {
 export function Verdict({ cam: c }: { cam: Camera }) {
   const { camStatus, camEvents } = useStore();
   const done = camStatus(c) === "ended";
+  const finishing = useFinishing(done);
   const evs = camEvents(c.id).filter((e) => e.status !== "dismissed");
   const at = (e: Event) => { const ts = e.alert?.t_stored ?? e.start_ts; return ts && c.t_first ? `${(ts - c.t_first).toFixed(1)} s` : "—"; };
   const hit = evs.find((e) => e.category === c.label);
   const o2a = hit?.alert?.onset_to_alert_ms;
-  const [variant, word] = stateOf(done, c, evs, hit);
+  const [variant, word] = stateOf(done, finishing, c, evs, hit);
   const hint = o2a != null ? `Alert at ${at(hit!)} in the clip, onset at ${c.onset_s} s`
     : hit ? `Alert at ${at(hit)} in the clip${c.onset_s == null ? "; no labelled onset" : ""}`
     : !c.label ? "Unlabelled clip: no onset to time from"
     : c.label === "normal" ? "Normal clip: no incident to time"
-    : done ? "No matching alert" : "Waiting for the alert";
+    : finishing ? "The model is still reviewing the last frames" : done ? "No matching alert" : "Waiting for the alert";
   const top = hit ?? evs[evs.length - 1];
   return (
     <Card as="section" radius="lg-plus" aria-label={`Verdict for ${c.name}`} className="@container flex flex-col gap-4 p-4">

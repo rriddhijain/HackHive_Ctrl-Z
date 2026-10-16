@@ -23,17 +23,21 @@ TABLE = [
     ("fire_smoke", "Visible flames or smoke", "NOT red/orange lights, sunsets, reflections, steam from cooking or a kettle",
      ["fire", "smoke"], "critical"),
     ("fighting", "2+ people in physical aggression: punching, kicking, shoving, wrestling",
-     "NOT hugging, handshakes, high-fives, sports, dancing, people simply standing close", [], "critical"),
+     "NOT hugging, handshakes, high-fives, sports, dancing, people simply standing close; NOT helping someone up, "
+     "people working side by side, or a crowd running together", [], "critical"),
     ("person_down", "A person lying or collapsed on the floor (fall, fainting)",
-     "NOT sitting on the floor or a chair, kneeling, bending to pick something up, lying on a bed/sofa/bench", [], "critical"),
-    ("crowd_incident", "Abnormally dense gathering, or a crowd suddenly running/dispersing",
+     "NOT sitting on the floor or a chair, kneeling, crouching or squatting, bending to pick something up, "
+     "lying on a bed/sofa/bench", [], "critical"),
+    ("crowd_incident", "Abnormally dense gathering or crush, or a crowd suddenly running, fleeing or dispersing",
      "NOT a normal queue, a seated audience, people walking through a busy area at normal pace", ["gathering", "running"], "high"),
-    ("property_damage", "Damage to property or a hazardous object event, accidental or deliberate: an object/debris falling, "
-     "a structure collapsing, items knocked over and broken, shattered glass, vandalism",
+    ("property_damage", "Damage to property or a hazardous object event, accidental or deliberate: a person kicking, "
+     "hitting, smashing or spraying a door, window, vehicle, wall or machine (vandalism); an object/debris falling, "
+     "a structure collapsing, items knocked over and broken, shattered glass",
      "NOT someone carefully carrying, moving or placing objects; NOT already-broken items with nothing happening",
      ["falling_object", "collapse", "breakage", "vandalism"], "high"),
     ("suspicious_activity", "Loitering, trespassing/climbing, theft/shoplifting, an abandoned object, a visible weapon",
-     "NOT people standing, waiting, talking or using a phone; NOT carrying bags normally; NOT tools used for work",
+     "NOT people standing, waiting, talking or using a phone; NOT carrying bags normally; NOT tools used for work; "
+     "NOT damaging property (that is property_damage)",
      ["weapon", "theft", "trespass", "loitering", "abandoned_object", "other"], "by_subtype"),
     ("tailgating", "A second person follows closely on foot through a door/gate on one opening",
      "NOT vehicles; NOT people near a car or bus; NOT anyone who is not passing through a door or gate", [], "medium"),

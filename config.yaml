@@ -31,8 +31,8 @@ vlm:
   mosaic_span_s: 2.0
   tile: [288, 160]               # 16:9 tiles, each frame letterboxed (fit + grey pad, never stretched) -> 576x320 grid (D44)
   baseline_interval_s: 3
-  empty_interval_s: 10
-  baseline_skip: { mad: 6, max_skip_s: 15 }   # skip a baseline if the scene hasn't changed since this camera's last call (D42)
+  empty_interval_s: 5            # D86 (was 10): a fire in an empty room waited up to 15 s for a look
+  baseline_skip: { mad: 6, max_skip_s: 8 }    # skip a baseline if nothing (pixels, people) changed since this camera's last call (D42, D86: was 15 s)
   duty_target: 0.55              # baselines back off (one per camera per 15 s) while GPU duty > this; P1s never throttled (D66)
   summary_every_n: 3             # confident-normal baselines stop at the category; every Nth writes a summary (D42)
   p1_crop: { enabled: false, max_box_frac: 0.4, expand: 1.75 }   # FR-9c, final, on only if the dev A/B wins (D45)
@@ -86,4 +86,4 @@ replay:
 chat:
   llm: true                 # D75: the model reads every question and writes the answer; false = chat v1 (rules + templates)
   base_url: "same-as-vlm"
-  model: "same-as-vlm"
+  model: "same-as-vlm"        # or any local Ollama model, e.g. "qwen3.5:2b": swapped independently of the VLM (D86)

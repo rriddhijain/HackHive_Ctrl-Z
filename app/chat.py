@@ -140,6 +140,8 @@ def parse(question, names, now):
         words = [w for w in re.findall(r"[a-z0-9]+", nm.lower()) if w not in GENERIC]
         phrases = {cid.lower(), cid.lower().replace("_", " "), " ".join(words)} | {w for w in words if len(w) >= 4 and not w.isdigit()}
         for p in sorted(filter(None, phrases), key=len, reverse=True):
+            if p in SYN:     # a clip called fire_bucket.mp4 must not turn "fire" into a camera filter (D86)
+                continue
             if m := re.search(rf"\b{re.escape(p)}\b", q):
                 f["cameras"].append(cid); cut(m)
                 for m2 in list(re.finditer(rf"\b{re.escape(p)}\b", q))[::-1]:
@@ -342,15 +344,22 @@ def understand(question, names, prev, arb, t0):
     return u
 
 
+# The chat model is swapped independently of the VLM (brief's workflow slide): chat.model / chat.base_url in config.yaml,
+# "same-as-vlm" = the vision model answers the questions too (one model in memory, the default).
+_same = lambda k: CFG["chat"].get(k, "same-as-vlm") in (None, "same-as-vlm")
+CHAT_MODEL = V["model"] if _same("model") else CFG["chat"]["model"]
+CHAT_URL = V["base_url"] if _same("base_url") else CFG["chat"]["base_url"]
+
+
 def _generate(messages, cancel, t0, fmt=None, num_predict=150):
     """One streamed text call (D38: same num_ctx as vision); fmt = a JSON schema for structured output.
     Returns (text or None if cancelled, first-token ms from t0)."""
-    body = {"model": V["model"], "stream": True, "think": V["think"], "keep_alive": V["keep_alive"], "messages": messages,
+    body = {"model": CHAT_MODEL, "stream": True, "think": V["think"], "keep_alive": V["keep_alive"], "messages": messages,
             "options": {"temperature": 0, "num_predict": num_predict, "num_ctx": V["num_ctx"]}}
     if fmt:
         body["format"] = fmt
     text, ttft = "", None
-    with httpx.stream("POST", V["base_url"] + V["endpoint"], json=body, timeout=MODEL_WAIT_S) as r:
+    with httpx.stream("POST", CHAT_URL + V["endpoint"], json=body, timeout=MODEL_WAIT_S) as r:
         r.raise_for_status()
         for raw in r.iter_lines():
             if not raw:
@@ -445,6 +454,12 @@ def answer(question, db, arb, names=None, now=None, session=None):
             if obs:
                 text += " Observations that mention it (not incidents): " + "; ".join(
                     f"{fmt(o['ts'])} {display(o['camera_id'], names)}: “{o['summary']}”" for o in obs) + "."
+            if set(f["cameras"]) - set(names) and not f["unknown_cameras"] and (f["categories"] or f["subtypes"] or f["keywords"]):
+                # D86: the camera alone emptied it (the brief's "tailgating events from camera 2 today"): same kind, same
+                # time, every other camera, listed and returned so the cards show their key frames
+                rows, _ = retrieve(db, f | {"cameras": [], "unknown_cameras": []})
+                if rows:
+                    text += f" The same on other cameras ({len(rows)}):\n" + "\n".join(line(e, names) for e in rows)
     elif arb and (CFG["chat"].get("llm", True) or f["intent"] == "summary"):   # D75: the model writes every answer
         # (chat.llm false: v1 = the model writes summaries only)     # the model answers (v1 rules: summary questions only)
         total = len(rows) if len(rows) < f["limit"] else len(retrieve(db, f | {"limit": 10000})[0])
@@ -520,6 +535,16 @@ if __name__ == "__main__":
     f = P("Find the man in the blue jacket")
     assert f["keywords"] == ["man", "blue", "jacket"] and f["intent"] == "list", f
     assert P("list theft")["subtypes"] == ["theft"] and P("fire or smoke")["subtypes"] == []
+    clips = {"cam7": "fire_bucket.mp4", "cam8": "fall_a_view2.mp4", "cam9": "theft_atm.mp4"}   # D86: clip names vs categories
+    for q, cat in (("show fire events", "fire_smoke"), ("any fall today", "person_down"), ("list theft", "suspicious_activity")):
+        g = parse(q, clips, NOW)
+        assert g["categories"] == [cat] and g["cameras"] == [], (q, g)
+    assert parse("events on fire bucket", clips, NOW)["cameras"] == ["cam7"]
+    # D86: the brief's example. Camera 2 has no tailgating -> said so, then the tailgating on other cameras (with cards)
+    r = answer("Show all tailgating events from camera 2 today", db, None, names, NOW)
+    assert r["answer"].startswith("No matching events") and "other cameras (1)" in r["answer"], r["answer"]
+    assert [e["category"] for e in r["events"]] == ["tailgating"] and r["events"][0]["camera_name"] == "Lobby", r["events"]
+    assert not answer("What happened on camera 2 today?", db, None, names, NOW)["events"]   # no kind asked: no fallback
     # 2. Templates: every returned event cited, dismissed excluded, traps answered plainly.
     A = lambda s: answer(s, db, None, {"cam1": "v011.avi"}, NOW)
     cited = lambda r: {int(i) for i in re.findall(r"\[#(\d+)\]", r["answer"])}

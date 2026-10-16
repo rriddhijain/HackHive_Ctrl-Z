@@ -1,0 +1,2 @@
+clip,label,pred,onset_s,confidence,top3,onset_to_alert_ms,onset_to_gate_ms,start_to_alert_ms,trigger_to_alert_ms,trigger_to_alert_p95,alerts,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+v006.avi,fighting,fighting,2.0,1.0,fighting:1.00 fire_smoke:0.00 crowd_incident:0.00,4947,-500,6947,2258,2258,1,fighting@1.5s fighting@4.7s,,data/ab/cool65_v006/v006.jpg,2,2,0,11,954,0.851,Multiple individuals in blue uniforms are physically engaging in a scuffle near conveyor belts in a warehouse setting.

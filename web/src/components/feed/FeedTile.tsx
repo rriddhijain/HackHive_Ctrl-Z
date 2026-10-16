@@ -64,7 +64,7 @@ export function FeedTile({ cam: c, empty, dropTarget, className = "" }: FeedTile
         <IconButton size="xs" icon="stop" tone="scrim" aria-label={`Stop ${c.name}`} tooltip="Stop and release this source" onClick={() => void removeSource(c.id)} />
       </div>
       <div className="absolute bottom-3 left-3 flex h-7 max-w-[calc(100%-24px)] items-center gap-2 rounded-full bg-scrim/56 px-3 text-label-m text-white">
-        <Dot tone={tone} /><span className="truncate">{c.name}</span><span className="whitespace-nowrap opacity-75">{label}</span>
+        <Dot tone={tone} /><span className="font-mono">{c.id}</span><span className="truncate">· {c.name}</span><span className="whitespace-nowrap opacity-75">{label}</span>
       </div>
       <motion.div aria-hidden="true" initial={false} animate={{ opacity: hot ? 1 : 0 }} transition={motionTokens.fast}
         className={`pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ${ring}`} />

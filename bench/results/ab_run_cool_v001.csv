@@ -1,0 +1,2 @@
+clip,label,pred,onset_s,confidence,top3,onset_to_alert_ms,onset_to_gate_ms,start_to_alert_ms,trigger_to_alert_ms,trigger_to_alert_p95,alerts,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+v001.avi,fighting,fighting,0.0,1.0,fighting:1.00 normal:0.00 suspicious_activity:0.00,2427,800,2427,1640,1640,1,fighting@0.8s,,data/ab/cool_v001/v001.jpg,1,2,0,298,298,0.82,Two men are physically grappling in an outdoor seating area while others watch.

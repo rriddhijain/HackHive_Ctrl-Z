@@ -1,0 +1,61 @@
+{
+ "d86": {
+  "n": 15,
+  "right": 6,
+  "macro_f1": 0.421,
+  "labels_in_f1": [
+   "crowd_incident",
+   "fighting",
+   "fire_smoke",
+   "normal",
+   "person_down",
+   "property_damage",
+   "suspicious_activity"
+  ],
+  "incident_recall": 0.643,
+  "incident_precision": 0.9,
+  "false_alarms_normal": 1,
+  "start_to_alert_p50_p95": [
+   15251,
+   39893
+  ],
+  "trigger_to_alert_p50_p95": [
+   1418,
+   3897
+  ],
+  "onset_to_alert_p50_p95": [
+   7967,
+   9893
+  ],
+  "onset_to_alert_n": 4,
+  "onset_to_alert_mid_start_p50_p95": [
+   6999,
+   7990
+  ],
+  "onset_to_alert_mid_start_n": 2,
+  "errors": {
+   "person_down -> normal": [
+    "fall_a_view5.mp4 (None)",
+    "fall_a_view7.mp4 (None)",
+    "fall_b_view3.mp4 (None)"
+   ],
+   "property_damage -> person_down": [
+    "vandal_001.mp4 (data/ab/d86/vandal_001.jpg)"
+   ],
+   "property_damage -> suspicious_activity": [
+    "vandal_017.mp4 (data/ab/d86/vandal_017.jpg)",
+    "vandal_026.mp4 (data/ab/d86/vandal_026.jpg)"
+   ],
+   "property_damage -> normal": [
+    "vandal_046.mp4 (None)"
+   ],
+   "fighting -> normal": [
+    "fight_ucf002.mp4 (None)"
+   ],
+   "normal -> person_down": [
+    "normal_room.mp4 (data/ab/d86/normal_room.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.696
+ }
+}

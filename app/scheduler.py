@@ -6,8 +6,10 @@ on_frame(det) runs in each camera's detector thread after every frame:
     At most ONE P1 per camera in flight (D72): a trigger while that camera's P1 waits refreshes it to the newest frames
     (same rule: also its hint and tracks); a trigger while it runs is merged into it (counted, not queued). So false
     triggers never build a backlog, and a camera's newest moment is what its next call sees.
-  - baseline: every 3 s (10 s with nobody in view) if no P1 waits anywhere -> a P3 request, unless change-gated:
-    no open event, newest frame vs the frame of the camera's last model call MAD < 6, same person track IDs, < 15 s.
+  - baseline: every 3 s (5 s with nobody in view) if no P1 waits anywhere -> a P3 request, unless change-gated:
+    no open event, newest frame vs the frame of the camera's last model call MAD < 6, same person track IDs and none
+    of their boxes moved or changed shape (D86: a small figure falling barely changes the MAD), < 8 s, and the last
+    call wasn't an incident reading (top c >= relook.c_low that opened nothing: look again, don't wait 8 s, D86).
     While measured GPU duty (60 s) is above vlm.duty_target, baselines back off to one per camera per 15 s (D66).
     Gate-triggered P1s are never throttled and the arbiter serves them before any queued baseline.
   - a track whose "horizontal" person_down trigger got a confident-normal verdict (someone on a sofa, a close-up) is
@@ -15,6 +17,7 @@ on_frame(det) runs in each camera's detector thread after every frame:
   - likewise a fight pair (people walking past each other): silenced until either track leaves, their centroid
     distance changes by > PAIR_REARM body heights, or horizontal_recheck_s passes (D64).
 """
+import math
 import time
 from collections import defaultdict, deque
 
@@ -27,6 +30,17 @@ PAIR_REARM = 0.5   # body heights; a pair that closes in or separates by this mu
 # A silenced wide track re-arms only once its box is clearly upright (< 0.8 × down_ratio wide per tall, D72): a seated
 # close-up hovers at ~1.2 and re-armed on every 1.17 frame (14 horizontal ①s/min on 2 webcams, all normal).
 UPRIGHT = 0.8
+# D86: a baseline is skipped only if no person moved since the camera's last call. fall_a_view5: a fall across the room
+# kept MAD < 6 and the same track ID, so 15 s passed with no look over the fall. A fall turns a tall box wide.
+MOVED, RESHAPED = 0.5, 0.25   # body heights the centroid moved; fraction the box height or width/height ratio changed
+
+
+def changed(a, b):
+    """Person box a (camera's last call) vs b (now), both (x1, y1, x2, y2) pixels: moved or reshaped enough to look."""
+    ha, hb = max(a[3] - a[1], 1), max(b[3] - b[1], 1)
+    move = math.hypot(a[0] + a[2] - b[0] - b[2], a[1] + a[3] - b[1] - b[3]) / 2 / ha
+    ra, rb = (a[2] - a[0]) / ha, (b[2] - b[0]) / hb
+    return move >= MOVED or abs(hb - ha) >= RESHAPED * ha or abs(rb - ra) >= RESHAPED * ra
 
 
 def upright(s):
@@ -42,7 +56,8 @@ class Scheduler:
         self.arb, self.events = arbiter, events
         self.recent = defaultdict(deque)   # camera -> recent triggers (for corroboration within the 4 s buffer)
         self.last_p1 = {}                  # camera -> time of its last P1 request
-        self.last_call = {}                # camera -> (time, grey160 of the call's newest frame, person id set)
+        self.last_call = {}                # camera -> (time, grey160 of the call's newest frame, {person id: box})
+        self.suspect = {}                  # camera -> its last call read an incident (top c >= c_low) (D86)
         self.last_skip = {}
         self.quiet = {}                    # (camera, track id) -> time its horizontal trigger was silenced (D61)
         self.quiet_pairs = {}              # (camera, (i, j)) -> (time silenced, gap then) (D64)
@@ -123,8 +138,11 @@ class Scheduler:
         if last and now - last[0] < V["baseline_skip"]["max_skip_s"]:
             new = det.buffer[-1]
             busy = self.arb.duty() > V["duty_target"]               # D66: back off while the GPU is saturated
-            if busy or (not self.events.has_open(cam) and {t["id"] for t in persons(new)} == last[2]
-                        and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"]):
+            boxes = {t["id"]: t["box"] for t in persons(new)}
+            still = last[2] is not None and boxes.keys() == last[2].keys() and not any(
+                changed(last[2][i], b) for i, b in boxes.items())
+            if not self.suspect.get(cam) and (busy or (not self.events.has_open(cam) and still
+                                                       and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"])):
                 if now - self.last_skip.get(cam, 0) >= interval:   # one skip counted per baseline slot
                     self.skipped += 1; self.skipped_by[cam] += 1; self.skipped_duty += busy
                     self.last_skip[cam] = now
@@ -143,7 +161,7 @@ class Scheduler:
 
     def note_call(self, cam, entry):
         """At dispatch: remember the frame this camera's model call sees (the change gate compares against it)."""
-        self.last_call[cam] = (entry[0], grey160(entry[1]), {t["id"] for t in persons(entry)})
+        self.last_call[cam] = (entry[0], grey160(entry[1]), {t["id"]: t["box"] for t in persons(entry)})
 
 
 if __name__ == "__main__":
@@ -174,19 +192,33 @@ if __name__ == "__main__":
     # First frame -> a baseline; dispatch it; an unchanged scene is then skipped (counted once per 3 s slot)...
     step(0.0); assert [r["trigger"] for r in arb.q] == ["baseline"]
     arb.q.clear(); s.note_call("cam1", det.buffer[-1])
-    for i in range(1, 100):
+    cap = V["baseline_skip"]["max_skip_s"]
+    for i in range(1, int(cap * 10)):
         step(i / 10)
-    assert arb.q == [] and s.skipped == 3, (arb.q, s.skipped)
-    # ...but never longer than 15 s.
-    for i in range(100, 151):
-        step(i / 10)
+    assert arb.q == [] and s.skipped == int((cap - 0.1) // 3), (arb.q, s.skipped)
+    # ...but never longer than max_skip_s.
+    step(cap)
     assert [r["trigger"] for r in arb.q] == ["baseline"], arb.q
-    arb.q.clear(); s.note_call("cam1", det.buffer[-1])
+    arb.q.clear(); s.note_call("cam1", det.buffer[-1]); t0 = cap
     # A new person appearing ends the skip at the next 3 s slot.
-    for i in range(151, 181):
-        step(i / 10, tracks=(walker, {"id": 2, "cls": "person", "box": (300, 100, 350, 300)}))
+    other = {"id": 2, "cls": "person", "box": (300, 100, 350, 300)}
+    for i in range(1, 31):
+        step(t0 + i / 10, tracks=(walker, other))
     assert [r["trigger"] for r in arb.q] == ["baseline"], arb.q
-    arb.q.clear()
+    arb.q.clear(); s.note_call("cam1", det.buffer[-1]); t0 += 3
+    # D86: so does the same person falling (same track ID, tall box -> wide box: MAD alone missed it)...
+    down = {"id": 1, "cls": "person", "box": (80, 220, 220, 300)}
+    assert changed(walker["box"], down["box"]) and not changed(walker["box"], (104, 96, 156, 300))
+    for i in range(1, 31):
+        step(t0 + i / 10, tracks=(down, other))
+    assert [r["trigger"] for r in arb.q] == ["baseline"], arb.q
+    arb.q.clear(); s.note_call("cam1", det.buffer[-1]); t0 += 3
+    # ...and a last call that read an incident without opening one: the camera is looked at again at the next slot.
+    s.suspect["cam1"] = True
+    for i in range(1, 31):
+        step(t0 + i / 10, tracks=(down, other))
+    assert [r["trigger"] for r in arb.q] == ["baseline"], arb.q
+    arb.q.clear(); s.suspect["cam1"] = False; s.note_call("cam1", (18.0, img, [walker]))   # last call at 18 s
     # A fall: the person_down gate fires -> P1 with frozen frames; repeat triggers are deduped while it waits.
     det.person_hists = lambda: {1: [(0.1 * i, 100, 100 + (i >= 8) * 100, 200, 300) for i in range(11)]}
     step(18.1); step(18.2)
@@ -221,10 +253,10 @@ if __name__ == "__main__":
     assert ("cam1", 3) not in s.quiet
     # Duty back-off (D66): GPU above duty_target -> a changing scene still gets only one baseline per 15 s.
     det.person_hists = lambda: {}; step(100.0); arb.q.clear(); arb.d = 0.9; s.note_call("cam1", det.buffer[-1])
-    for i in range(1001, 1150):
+    for i in range(1001, 1000 + int(cap * 10)):
         step(i / 10, frame=np.full((360, 640, 3), 100 + 20 * (i % 2), np.uint8))   # MAD 20: changing, no scene_change
-    assert not arb.waiting(3) and s.skipped_duty >= 4, s.skipped_duty   # one per 3 s slot over 15 s
-    step(115.0); assert arb.waiting(3), "max_skip_s still caps the back-off"
+    assert not arb.waiting(3) and s.skipped_duty >= 2, s.skipped_duty   # one per 3 s slot up to max_skip_s
+    step(100.0 + cap); assert arb.waiting(3), "max_skip_s still caps the back-off"
     arb.q.clear(); arb.d = 0.0
     # Two people walking past each other: fight trigger once; after a confident-normal verdict the pair stays quiet
     # while their distance holds, re-arms when they move apart or close in (D64).

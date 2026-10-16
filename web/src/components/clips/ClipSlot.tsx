@@ -63,12 +63,12 @@ export function ClipSlot({ slot: k, clips }: { slot: Slot; clips: Clips }) {
           onChange={(v) => (v === UPLOAD ? file.current?.click() : play(v))} />
         {inLibrary && <IconButton icon="replay" aria-label={`Play ${cam!.name} again`} tooltip="Play again from the start" disabled={busy} onClick={() => play(path!)} />}
       </div>
-      <input ref={file} type="file" hidden accept=".mp4,.mov,.avi,.mkv"
+      <input ref={file} type="file" hidden accept=".mp4,.mov,.avi,.mkv,.m4v,.webm,.mpg,.mpeg,.wmv,.flv,.3gp,.ts,.mts,.m2ts"
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) upload(f); }} />
       {msg && <p role="status" className={`mt-1.5 px-1 text-body-s ${msg.startsWith("Rejected") ? "text-critical-text" : "text-on-surface-variant"}`}>{msg}</p>}
       {clips && !clips.length && (
         <p className="mt-1.5 px-1 text-body-s text-on-surface-variant">
-          <span className="text-on-surface">No clips found</span> · Copy videos into data/demo/ or data/dev/&lt;category&gt;/, or upload one (mp4, mov, avi, mkv, up to 500 MB).
+          <span className="text-on-surface">No clips found</span> · Copy videos into data/demo/ or data/dev/&lt;category&gt;/, or upload any video (mp4, mov, avi, mkv, webm, mpg and more, up to 500 MB).
         </p>
       )}
     </div>

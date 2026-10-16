@@ -124,8 +124,9 @@ class EventManager:
             self.close(ev)
 
     def close(self, ev):
-        ev["status"] = "closed"
-        self.db.update("events", ev["id"], {"status": "closed", "end_ts": ev["end_ts"]})
+        if ev["status"] == "open":                      # an acknowledged event stays acknowledged when it ends (D86)
+            ev["status"] = "closed"
+        self.db.update("events", ev["id"], {"status": ev["status"], "end_ts": ev["end_ts"]})
         self.emit("event_close", ev)
 
 
@@ -165,6 +166,10 @@ if __name__ == "__main__":
     assert em.dismiss(op[0]["id"], now=200) and not em.is_open("cam7", "fighting") and not em.dismiss(op[0]["id"])
     assert em.decide("cam7", C(fighting=0.9), None, {"fighting"}, 230, 230)[0] == []
     assert [e["category"] for e in em.decide("cam7", C(fighting=0.9), None, {"fighting"}, 200 + E["dismiss_hold_s"] + 1, 0)[0]] == ["fighting"]
+    # Acknowledged while open (POST /ack sets it on the open event) -> still acknowledged after it closes.
+    op, _ = em.decide("cam8", C(fighting=0.8), None, {"fighting"}, 300, 300)
+    op[0]["status"] = "acknowledged"; em.close_all()
+    assert em.db.rows("SELECT status FROM events WHERE id=?", (op[0]["id"],))[0]["status"] == "acknowledged"
     rows = em.db.rows("SELECT camera_id, category, status, summary, keyframe_paths FROM events ORDER BY id")
     assert rows[0] == {"camera_id": "cam1", "category": "fighting", "status": "closed", "summary": "Two people shoving.",
                        "keyframe_paths": [f"k{rows and 1}"]}, rows[0]

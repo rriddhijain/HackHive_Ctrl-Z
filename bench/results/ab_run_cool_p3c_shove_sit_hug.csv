@@ -1,0 +1,2 @@
+clip,label,pred,onset_s,confidence,top3,onset_to_alert_ms,onset_to_gate_ms,start_to_alert_ms,trigger_to_alert_ms,trigger_to_alert_p95,alerts,gate_fired,vetoes,keyframe,calls_p1,calls_p3,baselines_skipped,queue_ms_p50,queue_ms_p95_p1,cam_duty,summary
+p3c_shove_sit_hug.mp4,fighting,fighting,5.6,1.0,fighting:1.00 person_down:0.00 fire_smoke:0.00,4239,0,9839,1190,1324,2,fighting@5.6s fighting@23.8s,,data/ab/cool_p3c_shove_sit_hug/p3c_shove_sit_hug.jpg,2,8,1,9,12,0.764,"Two men are physically fighting in a hallway, with one pushing the other and the victim falling to the floor."

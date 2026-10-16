@@ -148,6 +148,9 @@ class Pipeline:
             print(f"[vlm_error] {cam} P{req['prio']}: {e!r}", flush=True)
             return
         self.err_streak = 0
+        if "c" in st:   # D86: an incident reading that opened nothing keeps this camera's next baseline from being skipped
+            self.sched.suspect[cam] = st["top"] != "normal" and st["c"][st["top"]] >= V["relook"]["c_low"] and not any(
+                e["category"] == st["top"] for e in st["evs"])
         if req.get("kind") == "horizontal" and st.get("top") == "normal" and st["c"]["normal"] >= 0.80:
             self.sched.silence(cam, req["track_ids"], newest[0])   # D61: don't re-ask about the same wide box
         if req.get("rule") == "fighting" and st.get("top") == "normal" and st["c"]["normal"] >= 0.80:

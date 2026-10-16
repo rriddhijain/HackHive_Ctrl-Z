@@ -1,0 +1,56 @@
+{
+ "d86": {
+  "n": 16,
+  "right": 10,
+  "macro_f1": 0.369,
+  "labels_in_f1": [
+   "crowd_incident",
+   "fighting",
+   "fire_smoke",
+   "normal",
+   "person_down",
+   "property_damage",
+   "suspicious_activity"
+  ],
+  "incident_recall": 0.846,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   6739,
+   17513
+  ],
+  "trigger_to_alert_p50_p95": [
+   2137,
+   3054
+  ],
+  "onset_to_alert_p50_p95": [
+   4739,
+   11013
+  ],
+  "onset_to_alert_n": 4,
+  "onset_to_alert_mid_start_p50_p95": [
+   3547,
+   6618
+  ],
+  "onset_to_alert_mid_start_n": 3,
+  "errors": {
+   "fighting -> person_down": [
+    "v026.avi (data/ab/d86/v026.jpg)",
+    "w001_masked.avi (data/ab/d86/w001_masked.jpg)"
+   ],
+   "fire_smoke -> normal": [
+    "fire_printer.mp4 (None)"
+   ],
+   "property_damage -> suspicious_activity": [
+    "vandal_007.mp4 (data/ab/d86/vandal_007.jpg)"
+   ],
+   "property_damage -> normal": [
+    "vandal_024.mp4 (None)"
+   ],
+   "property_damage -> person_down": [
+    "vandal_037.mp4 (data/ab/d86/vandal_037.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.742
+ }
+}
