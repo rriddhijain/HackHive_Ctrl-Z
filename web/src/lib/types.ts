@@ -145,7 +145,7 @@ export interface ChatEntry {
 export interface Report {
   accuracy: null | {
     tag: string; run_at: number; n: number; right: number; macro_f1: number | null;
-    incident_recall: number | null; incident_precision: number | null; false_alarms_normal: number | null;
+    incident_recall: number | null; incident_precision: number | null; false_alarms_normal: number | null; false_alarms?: number | null;
     onset_to_alert_p50_p95: [number | null, number | null] | null; onset_to_alert_n: number;
     onset_to_alert_mid_start_p50_p95: [number | null, number | null] | null; onset_to_alert_mid_start_n: number;
     trigger_to_alert_p50_p95: [number | null, number | null] | null; gpu_duty_mean?: number | null;

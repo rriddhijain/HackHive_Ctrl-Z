@@ -1,8 +1,8 @@
 {
  "d86": {
   "n": 16,
-  "right": 10,
-  "macro_f1": 0.369,
+  "right": 9,
+  "macro_f1": 0.31,
   "labels_in_f1": [
    "crowd_incident",
    "fighting",
@@ -12,9 +12,10 @@
    "property_damage",
    "suspicious_activity"
   ],
-  "incident_recall": 0.846,
+  "incident_recall": 0.769,
   "incident_precision": 1.0,
   "false_alarms_normal": 0,
+  "false_alarms": 2,
   "start_to_alert_p50_p95": [
    6739,
    17513
@@ -27,30 +28,34 @@
    4739,
    11013
   ],
-  "onset_to_alert_n": 4,
+  "onset_to_alert_n": 3,
   "onset_to_alert_mid_start_p50_p95": [
    3547,
    6618
   ],
   "onset_to_alert_mid_start_n": 3,
   "errors": {
+   "crowd_incident -> normal": [
+    "crowd_timesq_a.mp4 (None)"
+   ],
    "fighting -> person_down": [
     "v026.avi (data/ab/d86/v026.jpg)",
     "w001_masked.avi (data/ab/d86/w001_masked.jpg)"
    ],
    "fire_smoke -> normal": [
-    "fire_printer.mp4 (None)"
+    "fire_printer.mp4 ()"
    ],
    "property_damage -> suspicious_activity": [
     "vandal_007.mp4 (data/ab/d86/vandal_007.jpg)"
    ],
    "property_damage -> normal": [
-    "vandal_024.mp4 (None)"
+    "vandal_024.mp4 ()"
    ],
    "property_damage -> person_down": [
     "vandal_037.mp4 (data/ab/d86/vandal_037.jpg)"
    ]
   },
-  "gpu_duty_mean": 0.742
+  "gpu_duty_mean": 0.742,
+  "scoring": "post-onset (an incident clip is judged on its alerts from onset - 1 s on); rescored offline from data/ab/d86/rec (bench.ab.replay)"
  }
 }

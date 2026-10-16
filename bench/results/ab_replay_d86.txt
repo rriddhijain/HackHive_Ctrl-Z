@@ -1,0 +1,43 @@
+dev  crowd_timesq_a.mp4       crowd_incident      -> normal              BAD o2a None  FA 1  alerts [('crowd_incident', 5.0, 0.9)]
+dev  crowd_timesq_b.mp4       crowd_incident      -> crowd_incident      ok  o2a 11013  FA 0  alerts [('crowd_incident', 15.8, 0.81)]
+dev  fire_printer.mp4         fire_smoke          -> normal              BAD o2a None  FA 0  alerts []
+dev  floor_sit.mp4            normal              -> normal              ok  o2a None  FA 0  alerts []
+dev  idle_60s.mp4             normal              -> normal              ok  o2a None  FA 0  alerts []
+dev  p3c_shove_sit_hug.mp4    fighting            -> fighting            ok  o2a 4516  FA 0  alerts [('fighting', 8.6, 1.0), ('fighting', 23.8, 0.82)]
+dev  sample_bus.mp4           normal              -> normal              ok  o2a None  FA 0  alerts []
+dev  v001.avi                 fighting            -> fighting            ok  o2a 3208  FA 0  alerts [('fighting', 1.3, 1.0)]
+dev  v003.avi                 fighting            -> fighting            ok  o2a 3547  FA 0  alerts [('fighting', 1.6, 1.0)]
+dev  v006.avi                 fighting            -> fighting            ok  o2a 4739  FA 0  alerts [('fighting', 4.6, 1.0)]
+dev  v011.avi                 fighting            -> fighting            ok  o2a 6618  FA 0  alerts [('fighting', 5.6, 1.0)]
+dev  v026.avi                 fighting            -> person_down         BAD o2a None  FA 0  alerts [('person_down', 3.1, 0.93)]
+dev  vandal_007.mp4           property_damage     -> suspicious_activity BAD o2a None  FA 0  alerts [('suspicious_activity', 20.0, 0.69)]
+dev  vandal_024.mp4           property_damage     -> normal              BAD o2a None  FA 0  alerts []
+dev  vandal_037.mp4           property_damage     -> person_down         BAD o2a None  FA 1  alerts [('person_down', 8.0, 0.9), ('person_down', 41.3, 0.84)]
+dev  w001_masked.avi          fighting            -> person_down         BAD o2a None  FA 0  alerts [('person_down', 1.7, 0.96)]
+dev {"n": 16, "right": 9, "macro_f1": 0.31, "per_label": {"crowd_incident": "1/2 o2a [11013]", "fighting": "5/7 o2a [3208, 3547, 4516, 4739, 6618]", "fire_smoke": "0/1", "normal": "3/3", "property_damage": "0/3"}, "incident_recall": "10/13", "incident_precision": "10/10", "false_alarms": 2, "fa_per_cam_hour": 38.2, "wrong_cat_alerts": 4, "o2a_p50_ms": 4516, "o2a_max_ms": 11013} 
+
+test crowd_loveparade.mp4     crowd_incident      -> crowd_incident      ok  o2a 6999  FA 0  alerts [('crowd_incident', 4.4, 0.91)]
+test fall_a_view2.mp4         person_down         -> fighting            BAD o2a None  FA 1  alerts [('person_down', 13.8, 1.0), ('fighting', 34.1, 1.0)]
+test fall_a_view5.mp4         person_down         -> normal              BAD o2a None  FA 0  alerts []
+test fall_a_view6.mp4         person_down         -> normal              BAD o2a None  FA 1  alerts [('person_down', 20.2, 0.64)]
+test fall_a_view7.mp4         person_down         -> normal              BAD o2a None  FA 0  alerts []
+test fall_b_view3.mp4         person_down         -> normal              BAD o2a None  FA 0  alerts []
+test fight_ucf002.mp4         fighting            -> normal              BAD o2a None  FA 0  alerts []
+test fire_bucket.mp4          fire_smoke          -> fire_smoke          ok  o2a 7967  FA 0  alerts [('fire_smoke', 23.0, 0.98)]
+test fire_room.mp4            fire_smoke          -> fire_smoke          ok  o2a 9893  FA 0  alerts [('fire_smoke', 38.5, 0.99)]
+test normal_room.mp4          normal              -> person_down         BAD o2a None  FA 1  alerts [('person_down', 33.0, 0.93)]
+test theft_atm.mp4            suspicious_activity -> suspicious_activity ok  o2a 7990  FA 0  alerts [('fighting', 1.5, 0.78), ('suspicious_activity', 5.4, 0.98)]
+test vandal_001.mp4           property_damage     -> person_down         BAD o2a None  FA 0  alerts [('person_down', 15.9, 1.0)]
+test vandal_017.mp4           property_damage     -> suspicious_activity BAD o2a None  FA 0  alerts [('suspicious_activity', 12.8, 0.87)]
+test vandal_026.mp4           property_damage     -> suspicious_activity BAD o2a None  FA 0  alerts [('suspicious_activity', 20.7, 0.98)]
+test vandal_046.mp4           property_damage     -> normal              BAD o2a None  FA 0  alerts []
+test {"n": 15, "right": 4, "macro_f1": 0.357, "per_label": {"crowd_incident": "1/1 o2a [6999]", "fighting": "0/1", "fire_smoke": "2/2 o2a [7967, 9893]", "normal": "0/1", "person_down": "0/5", "property_damage": "0/4", "suspicious_activity": "1/1 o2a [7990]"}, "incident_recall": "8/14", "incident_precision": "8/9", "false_alarms": 3, "fa_per_cam_hour": 40.0, "wrong_cat_alerts": 5, "o2a_p50_ms": 7990, "o2a_max_ms": 9893} 
+
+per-call confusion (true label -> model's top category):
+  crowd_incident      {'crowd_incident': 18, 'normal': 7, 'fighting': 2}
+  fighting            {'fighting': 9, 'normal': 7, 'person_down': 5, 'suspicious_activity': 1}
+  fire_smoke          {'fire_smoke': 9, 'normal': 5}
+  normal              {'normal': 99, 'person_down': 11, 'suspicious_activity': 7, 'crowd_incident': 5, 'fighting': 1}
+  person_down         {'normal': 9, 'person_down': 6, 'fighting': 1}
+  property_damage     {'normal': 26, 'suspicious_activity': 12, 'person_down': 3}
+  suspicious_activity {'suspicious_activity': 8, 'fighting': 1}

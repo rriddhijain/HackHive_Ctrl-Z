@@ -1,8 +1,8 @@
 {
  "base": {
   "n": 15,
-  "right": 5,
-  "macro_f1": 0.357,
+  "right": 3,
+  "macro_f1": 0.286,
   "labels_in_f1": [
    "crowd_incident",
    "fighting",
@@ -12,34 +12,37 @@
    "property_damage",
    "suspicious_activity"
   ],
-  "incident_recall": 0.857,
-  "incident_precision": 0.923,
+  "incident_recall": 0.714,
+  "incident_precision": 0.909,
   "false_alarms_normal": 1,
+  "false_alarms": 6,
   "start_to_alert_p50_p95": [
-   22670,
+   23569,
    46568
   ],
   "trigger_to_alert_p50_p95": [
-   1497,
-   2099
+   1323,
+   1497
   ],
   "onset_to_alert_p50_p95": [
    6569,
    16568
   ],
-  "onset_to_alert_n": 4,
+  "onset_to_alert_n": 2,
   "onset_to_alert_mid_start_p50_p95": [
    4397,
    4397
   ],
   "onset_to_alert_mid_start_n": 1,
   "errors": {
-   "person_down -> normal": [
-    "fall_a_view5.mp4 (None)"
-   ],
    "person_down -> fighting": [
-    "fall_a_view7.mp4 (data/ab/base/fall_a_view7.jpg)",
+    "fall_a_view2.mp4 (None)",
     "fall_b_view3.mp4 (data/ab/base/fall_b_view3.jpg)"
+   ],
+   "person_down -> normal": [
+    "fall_a_view5.mp4 ()",
+    "fall_a_view6.mp4 (None)",
+    "fall_a_view7.mp4 (None)"
    ],
    "suspicious_activity -> fighting": [
     "theft_atm.mp4 (data/ab/base/theft_atm.jpg)"
@@ -53,12 +56,13 @@
     "vandal_046.mp4 (data/ab/base/vandal_046.jpg)"
    ],
    "fighting -> normal": [
-    "fight_ucf002.mp4 (None)"
+    "fight_ucf002.mp4 ()"
    ],
    "normal -> fighting": [
     "normal_room.mp4 (data/ab/base/normal_room.jpg)"
    ]
   },
-  "gpu_duty_mean": 0.628
+  "gpu_duty_mean": 0.628,
+  "scoring": "post-onset (an incident clip is judged on its alerts from onset - 1 s on); rescored offline from data/ab/base/rec (bench.ab.replay)"
  }
 }

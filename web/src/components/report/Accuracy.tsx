@@ -46,7 +46,7 @@ function AccuracyBody({ a }: { a: Acc }) {
         <StatTile label="Clips right" value={`${a.right} / ${a.n}`} icon="check_circle" />
         <StatTile label="Incident recall" value={p(a.incident_recall)} icon="radar" />
         <StatTile label="Incident precision" value={p(a.incident_precision)} icon="target" />
-        <StatTile label="False alarms, normal clips" value={v(a.false_alarms_normal)} icon="report_off" />
+        <StatTile label="False alarms on normal footage" value={v(a.false_alarms ?? a.false_alarms_normal)} icon="report_off" />
         <StatTile label="Onset → alert p50 / p95" value={pair(a.onset_to_alert_p50_p95)} icon="timer" shape="pill" tone="latency" />
         <StatTile label="Trigger → alert p50 / p95" value={pair(a.trigger_to_alert_p50_p95)} icon="bolt" shape="pill" tone="latency" />
         <StatTile label="Onset → alert, clip starts mid-incident" value={pair(a.onset_to_alert_mid_start_p50_p95)} icon="hourglass_bottom" shape="pill" tone="latency" />
@@ -54,8 +54,9 @@ function AccuracyBody({ a }: { a: Acc }) {
       </div>
       <Caption>
         Each clip played once, alone, at real-time speed. Onset → alert over {a.onset_to_alert_n} clips whose incident starts after the
-        first 2 s; {a.onset_to_alert_mid_start_n} clips that start mid-incident also time the buffer filling and are shown apart. Thresholds were
-        tuned on these clips, so this is a training-set result; the held-out test split is reported separately.
+        first 2 s; {a.onset_to_alert_mid_start_n} clips that start mid-incident also time the buffer filling and are shown apart. A clip is
+        judged on its alerts from 1 s before the incident; an earlier alert, or any alert on a normal clip, is a false alarm. Thresholds and
+        prompts were tuned on these clips, so this is a training-set result; the test split is scored separately (REPORT.md).
       </Caption>
       <div className="mt-6 grid items-start gap-4 xl:grid-cols-12">
         <Card radius="lg-plus" className={`overflow-hidden py-2 ${errors.length ? "xl:col-span-8" : "xl:col-span-12"}`}>

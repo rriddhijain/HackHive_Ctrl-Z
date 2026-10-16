@@ -236,11 +236,17 @@ def run(paths, seconds=None, tag="run"):
         label, onset = labels.get(Path(str(c.source)).name, (None, None))
         evs = p.db.rows("SELECT * FROM events WHERE camera_id=? ORDER BY peak_confidence DESC", (cid,))
         obs = p.db.rows("SELECT * FROM observations WHERE camera_id=? ORDER BY ts", (cid,))
+        # same rule as replay(): an incident clip is judged on its alerts from onset - 1 s on; an earlier one (or any
+        # event on a normal clip) is a false alarm, never a hit
+        t_on = c.t_first + onset - 1 if label != "normal" and onset is not None and c.t_first else None
+        fa = sum(label == "normal" or (t_on is not None and e["start_ts"] < t_on) for e in evs)
+        evs = [e for e in evs if label == "normal" or t_on is None or e["start_ts"] >= t_on]
         best = evs[0] if evs else None
         pred = best["category"] if best else "normal"
         o = max((x for x in obs if x["probs"]), key=lambda x: x["probs"].get(pred, 0), default=None) or (obs[-1] if obs else None)
         probs = (o["probs"] or {}) if o else {}
-        hit = next((t for cam, cat, t, _ in p.alerts if cam == cid and cat == pred and pred != "normal"), None)
+        hit = next((t for cam, cat, t, e in p.alerts if cam == cid and cat == pred and pred != "normal"
+                    and (t_on is None or e["start_ts"] >= t_on)), None)
         calls = [x for x in p.calls if x["cam"] == cid]
         busy = sum(x["call_ms"] or 0 for x in calls if x.get("call_ms")) / 1000
         gates = [(tr[5:], round(t - c.t_first, 1)) for cam, tr, t in subs if cam == cid and tr.startswith("gate:") and c.t_first]
@@ -260,7 +266,7 @@ def run(paths, seconds=None, tag="run"):
                      "start_to_alert_ms": round((hit - c.t_first) * 1000) if hit and c.t_first else None,
                      "trigger_to_alert_ms": best["time_to_alert_ms"] if best else None,
                      "trigger_to_alert_p95": pct([e["time_to_alert_ms"] for cam, _, _, e in p.alerts if cam == cid], .95),
-                     "alerts": sum(cam == cid for cam, *_ in p.alerts),
+                     "alerts": sum(cam == cid for cam, *_ in p.alerts), "false_alarms": fa,
                      "gate_fired": " ".join(f"{r}@{t}s" for r, t in gates[:6]) or None,
                      "vetoes": " ".join(f"{v['category']}:{v['p_before']}" for v in p.vetoes
                                         if v["camera_id"] == cid and v["p_before"] >= 0.3) or None,
@@ -332,9 +338,11 @@ def replay(r, probs=None):
     pre = [e for e in opened if r["label"] == "normal" or (on is not None and e["start_ts"] - t0 < on - 1)]
     # an incident clip is judged on its alerts from onset - 1 s on: a look-alike alert earlier is a false alarm, never a hit
     scored = opened if r["label"] == "normal" else [e for e in opened if e not in pre]
-    pred = max(scored, key=lambda e: e["peak_confidence"])["category"] if scored else "normal"
+    best = max(scored, key=lambda e: e["peak_confidence"]) if scored else None
+    pred = best["category"] if best else "normal"
     hit = next((e for e in scored if e["category"] == r["label"]), None)
     return {"clip": r["clip"], "label": r["label"], "pred": pred, "split": r["split"],
+            "conf": round(best["peak_confidence"], 3) if best else None, "t2a_ms": best["time_to_alert_ms"] if best else None,
             "o2a_ms": round((hit["_t_alert"] - t0 - on) * 1000) if hit and on is not None and r["label"] != "normal" else None,
             "false_alarms": len(pre), "wrong_cat": sum(e["category"] != r["label"] for e in opened if e not in pre),
             "normal_s": r["duration_s"] if r["label"] == "normal" else (on or 0),
@@ -477,6 +485,8 @@ def score(rows):
             "incident_recall": round(tp / max(1, sum(inc(r["label"]) for r in rows)), 3),
             "incident_precision": round(tp / max(1, sum(inc(r["pred"]) for r in rows)), 3) if any(inc(r["pred"]) for r in rows) else None,
             "false_alarms_normal": sum(not inc(r["label"]) and inc(r["pred"]) for r in rows),
+            # events on normal footage: every event on a normal clip, and any before an incident's onset - 1 s
+            "false_alarms": sum(int(r.get("false_alarms") or 0) for r in rows),
             "start_to_alert_p50_p95": (pct(lat, .5), pct(lat, .95)), "trigger_to_alert_p50_p95": (pct(t2a, .5), pct(t2a, .95)),
             "onset_to_alert_p50_p95": (pct(steady, .5), pct(steady, .95)), "onset_to_alert_n": len(steady),
             "onset_to_alert_mid_start_p50_p95": (pct(mid, .5), pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid),
