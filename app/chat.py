@@ -592,3 +592,63 @@ if __name__ == "__main__":
     arb.stop()
     lat = [A(q)["latency_ms"] for q in ["Show all events today", "How many fights?", "Find the man in the blue jacket"] * 10]
     print(f"chat self-check ok: template latency max {max(lat)} ms")
+
+
+# ---- FR-17 shift-handover digest ----
+DIGEST_SYSTEM = ("You write the shift-handover note for the security operator taking over a control room, using ONLY the "
+                 "incident rows given (times are IST). Most severe first; say plainly which incidents are still open or not "
+                 "acknowledged. Every sentence must cite the rows it uses as [#id]. Restate only what the rows say: no "
+                 "guesses about causes, injuries or identities. At most 4 short sentences, no lists, no headings.")
+SEV_ORDER = {"critical": 0, "high": 1, "medium": 2}
+
+
+def digest(db, arb, names=None, hours=8.0, camera=None, now=None):
+    """FR-17: a shift-handover report for the last `hours` (all cameras, or one): incidents first (most severe, then
+    newest), what still needs follow-up, then notable normal activity per camera. The facts come straight from the DB;
+    the model only writes a short narrative, grounded like chat (D57), and the template stands in if it can't."""
+    t0 = time.time()
+    now, names = now or t0, cam_names(db, names)
+    frm = now - hours * 3600
+    cam = " AND camera_id=?" if camera else ""
+    args = (frm, now) + ((camera,) if camera else ())
+    evs = db.rows(f"SELECT * FROM events WHERE start_ts BETWEEN ? AND ? AND status != 'dismissed'{cam}", args)
+    evs.sort(key=lambda e: (SEV_ORDER.get(e["severity"], 3), -e["start_ts"]))
+    follow = [e for e in evs if e["status"] == "open" or (e["severity"] == "critical" and e["status"] != "acknowledged")]
+    dismissed = db.rows(f"SELECT COUNT(*) n FROM events WHERE start_ts BETWEEN ? AND ? AND dismiss_reason='operator'{cam}", args)[0]["n"]
+    obs = db.rows(f"SELECT camera_id, ts, summary, people_count FROM observations WHERE ts BETWEEN ? AND ? AND category='normal'"
+                  f" AND summary IS NOT NULL{cam} ORDER BY ts DESC", args)
+    activity = {}
+    for o in obs:                               # newest 2 summaries + peak people per camera
+        a = activity.setdefault(o["camera_id"], {"camera": display(o["camera_id"], names), "notes": [], "peak_people": 0})
+        if len(a["notes"]) < 2:
+            a["notes"].append(f"{fmt(o['ts'])}: {o['summary']}")
+        a["peak_people"] = max(a["peak_people"], o["people_count"] or 0)
+    by = {}
+    for e in evs:
+        by[e["category"]] = by.get(e["category"], 0) + 1
+    head = (f"Shift handover, {fmt(frm)}–{fmt(now)[-5:]} IST"
+            + (f", {display(camera, names)}" if camera else ", all cameras") + f": {len(evs)} incident"
+            + ("s" if len(evs) != 1 else "") + (" (" + ", ".join(f"{n} {c.replace('_', ' ')}" for c, n in
+                                                    sorted(by.items(), key=lambda kv: -kv[1])) + ")" if by else "")
+            + f"; {len(follow)} need{'s' if len(follow) == 1 else ''} follow-up; {dismissed} marked false alarm.")
+    how, narrative = {"mode": "template", "digest": True}, ""
+    shown = evs[:LIMIT["summary"]]
+    if shown and arb:
+        msgs = [{"role": "system", "content": DIGEST_SYSTEM}, {"role": "user", "content": (
+            f"Shift: {fmt(frm)} to {fmt(now)} IST. Still open or not acknowledged: "
+            + (", ".join(f"[#{e['id']}]" for e in follow) or "none") + ".\nRows:\n"
+            + "\n".join(f"[#{e['id']}] {fmt(e['start_ts'])}, {display(e['camera_id'], names)}, {e['severity']} "
+                        f"{e['category'].replace('_', ' ')}, {e['status']}: {e['summary'] or 'no summary'}" for e in shown))}]
+        r = ask_model(arb, msgs, t0, num_predict=200)
+        narrative, kept, dropped = ground(r[0], {e["id"] for e in shown}) if r else ("", 0, 0)
+        how = {"mode": "model", "digest": True, "rows": len(shown), "sentences": kept, "dropped": dropped}
+    if not narrative:
+        how["mode"] = "template"
+        narrative = (" ".join(f"Follow up {line(e, names).rstrip('.')}." for e in follow[:3]) if follow
+                     else ("No incident needs follow-up." if evs else "No incidents this shift."))
+    return {"from": frm, "to": now, "camera": camera, "headline": head, "narrative": narrative,
+            "incidents": [{"id": e["id"], "line": line(e, names), "status": e["status"], "severity": e["severity"],
+                           "seeded": e["seeded"]} for e in evs],
+            "follow_up": [e["id"] for e in follow], "activity": list(activity.values()),
+            "events": [e | {"camera_name": display(e["camera_id"], names)} for e in evs[:50]],
+            "how": how, "as_of": now, "latency_ms": round((time.time() - t0) * 1000)}

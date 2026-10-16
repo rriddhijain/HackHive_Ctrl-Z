@@ -226,10 +226,13 @@ def run(paths, seconds=None, tag="run"):
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / kf, dst)
             kf = str(dst.relative_to(ROOT))
-        rows.append({"clip": Path(str(c.source)).name, "label": label, "pred": pred,
+        # onset -> the first gate of the label's category (onset - 1 s on): how much of onset -> alert is the trigger
+        g_on = next((t for r, t in gates if vlm.GATE_CAT.get(r) == label and onset is not None and t >= onset - 1), None)
+        rows.append({"clip": Path(str(c.source)).name, "label": label, "pred": pred, "onset_s": onset,
                      "confidence": round(best["peak_confidence"] if best else probs.get("normal", 0), 3),
                      "top3": " ".join(f"{k}:{v:.2f}" for k, v in sorted(probs.items(), key=lambda kv: -kv[1])[:3]),
                      "onset_to_alert_ms": round((hit - c.t_first - onset) * 1000) if hit and onset is not None else None,
+                     "onset_to_gate_ms": round((g_on - onset) * 1000) if g_on is not None else None,
                      "start_to_alert_ms": round((hit - c.t_first) * 1000) if hit and c.t_first else None,
                      "trigger_to_alert_ms": best["time_to_alert_ms"] if best else None,
                      "trigger_to_alert_p95": pct([e["time_to_alert_ms"] for cam, _, _, e in p.alerts if cam == cid], .95),
@@ -270,12 +273,19 @@ def score(rows):
             errs.setdefault(f"{r['label']} -> {r['pred']}", []).append(f"{r['clip']} ({r['keyframe']})")
     lat = [r["start_to_alert_ms"] for r in rows if r["start_to_alert_ms"] is not None and r["pred"] == r["label"]]
     t2a = [r["trigger_to_alert_ms"] for r in rows if r["trigger_to_alert_ms"] is not None and r["pred"] == r["label"]]
+    # Onset -> alert, split: a clip whose incident starts before the first full mosaic (mosaic_span_s) also times the
+    # buffer filling, which never happens on a running camera; the headline is the steady-state group.
+    o2a = [(r["onset_to_alert_ms"], r["onset_s"]) for r in rows if r.get("onset_to_alert_ms") is not None and r["pred"] == r["label"]]
+    steady = [ms for ms, on in o2a if on >= V["mosaic_span_s"]]
+    mid = [ms for ms, on in o2a if on < V["mosaic_span_s"]]
     return {"n": len(rows), "right": sum(r["label"] == r["pred"] for r in rows), "macro_f1": round(statistics.mean(f1s), 3),
             "labels_in_f1": labs,
             "incident_recall": round(tp / max(1, sum(inc(r["label"]) for r in rows)), 3),
             "incident_precision": round(tp / max(1, sum(inc(r["pred"]) for r in rows)), 3) if any(inc(r["pred"]) for r in rows) else None,
             "false_alarms_normal": sum(not inc(r["label"]) and inc(r["pred"]) for r in rows),
             "start_to_alert_p50_p95": (pct(lat, .5), pct(lat, .95)), "trigger_to_alert_p50_p95": (pct(t2a, .5), pct(t2a, .95)),
+            "onset_to_alert_p50_p95": (pct(steady, .5), pct(steady, .95)), "onset_to_alert_n": len(steady),
+            "onset_to_alert_mid_start_p50_p95": (pct(mid, .5), pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid),
             "errors": errs}
 
 

@@ -58,7 +58,8 @@ def seed(db, now):
         dismissed = i == 23
         eid = db.insert("events", {"camera_id": cam, "category": cat, "subtype": sub, "severity": severity(cat, sub),
                                    "start_ts": t, "end_ts": t + dur, "peak_confidence": conf, "summary": summ,
-                                   "status": "dismissed" if dismissed else "closed",
+                                   # an earlier shift's alerts were acknowledged; the last hour's are not yet (FR-17 follow-up)
+                                   "status": "dismissed" if dismissed else "acknowledged" if ago > 60 else "closed",
                                    "dismiss_reason": "operator" if dismissed else None, "n_obs": 1, "seeded": 1})
         db.insert("observations", {"camera_id": cam, "ts": t, "category": cat, "subtype": sub, "confidence": conf,
                                    "summary": summ, "event_id": eid, "seeded": 1})

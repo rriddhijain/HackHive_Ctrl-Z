@@ -1,0 +1,39 @@
+{
+ "p6b": {
+  "n": 10,
+  "right": 9,
+  "macro_f1": 0.641,
+  "labels_in_f1": [
+   "fighting",
+   "normal",
+   "person_down"
+  ],
+  "incident_recall": 1.0,
+  "incident_precision": 1.0,
+  "false_alarms_normal": 0,
+  "start_to_alert_p50_p95": [
+   3007,
+   7026
+  ],
+  "trigger_to_alert_p50_p95": [
+   1317,
+   1764
+  ],
+  "onset_to_alert_p50_p95": [
+   810,
+   1294
+  ],
+  "onset_to_alert_n": 2,
+  "onset_to_alert_mid_start_p50_p95": [
+   3788,
+   6026
+  ],
+  "onset_to_alert_mid_start_n": 4,
+  "errors": {
+   "fighting -> person_down": [
+    "v026.avi (data/ab/p6b/v026.jpg)"
+   ]
+  },
+  "gpu_duty_mean": 0.779
+ }
+}

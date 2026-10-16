@@ -19,3 +19,4 @@ export const Alert = I(<><path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 
 export const Send = I(<><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>);
 export const Video = I(<><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11" /><rect x="2" y="6" width="14" height="12" rx="2" /></>);
 export const Chevron = I(<path d="m9 18 6-6-6-6" />);
+export const Clock = I(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>);

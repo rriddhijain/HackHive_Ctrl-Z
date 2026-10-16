@@ -601,7 +601,7 @@ function EventDialog({ e, camName, onAck, onDismiss, onClose }) {
 }
 
 // Chat (§7.5): every [#id] is a chip that opens that event; the line under each answer says how it was made.
-const how = (h) => (!h ? "" : (h.read_by === "model" ? `question read by the model (${h.read_ms} ms) · ` : "question read by rules · ")
+const how = (h) => (!h ? "" : (h.digest ? "shift-handover digest · " : h.read_by === "model" ? `question read by the model (${h.read_ms} ms) · ` : "question read by rules · ")
   + (h.mode === "template" ? "template answer"
     : `model answer, ${h.rows} rows, ${h.dropped} sentence${h.dropped === 1 ? "" : "s"} dropped${h.fallback ? " → template" : ""}`));
 const SESSION = Math.random().toString(36).slice(2);   // one conversation per page load: follow-ups use the last 3 turns
@@ -625,6 +625,22 @@ function Chat({ onOpen, inputRef }) {
       setQ("");
     } catch {
       setLog((l) => [...l, { question, answer: "Could not reach the server", events: [], error: true }].slice(-20));
+    } finally { setBusy(null); }
+  };
+  const [hours, setHours] = useState(8);
+  const handover = async () => {   // FR-17: incidents first, follow-ups, then notable normal activity per camera
+    const question = `Shift handover · last ${hours} h · all cameras`;
+    if (busy) return;
+    setBusy(question);
+    try {
+      const d = await getJSON(`/api/digest?hours=${hours}`);
+      const parts = [d.headline, d.narrative];
+      if (d.incidents.length) parts.push("Incidents, most severe first:\n" + d.incidents.slice(0, 15).map((x) => x.line).join("\n")
+        + (d.incidents.length > 15 ? `\n… and ${d.incidents.length - 15} more` : ""));
+      if (d.activity.length) parts.push("Notable normal activity:\n" + d.activity.map((c) => `${c.camera}: ${c.notes.join(" · ")}`).join("\n"));
+      setLog((l) => [...l, { question, answer: parts.join("\n\n"), events: d.events, how: d.how, as_of: d.as_of, latency_ms: d.latency_ms }].slice(-20));
+    } catch {
+      setLog((l) => [...l, { question, answer: "Could not build the handover report", events: [], error: true }].slice(-20));
     } finally { setBusy(null); }
   };
   return (
@@ -652,7 +668,12 @@ function Chat({ onOpen, inputRef }) {
         </div>
         <div ref={end} />
       </div>
-      <form onSubmit={(x) => { x.preventDefault(); ask(q); }} className="shrink-0 border-t border-line p-3">
+      <div className="flex shrink-0 items-center gap-2 border-t border-line px-3 pt-3">
+        <Button size="sm" disabled={!!busy} onClick={handover} title="Shift-handover report: incidents first, what needs follow-up, then notable activity">
+          <Ic.Clock size={14} />Shift handover</Button>
+        <Segmented label="Handover window" value={hours} options={[[1, "1 h"], [8, "8 h"], [24, "24 h"]]} onChange={setHours} />
+      </div>
+      <form onSubmit={(x) => { x.preventDefault(); ask(q); }} className="shrink-0 p-3">
         <div className="flex items-center gap-2 rounded border border-line-strong bg-surface pl-3 pr-1 focus-within:border-accent-fg">
           <input ref={inputRef} value={q} onChange={(x) => setQ(x.target.value)} aria-label="Ask about incidents" placeholder="Ask about incidents"
             className="h-9 min-w-0 flex-1 bg-transparent text-13 text-fg outline-none placeholder:text-fg-3" />
@@ -862,12 +883,14 @@ function Report() {
               {[["Clips right", `${a.right} / ${a.n}`], ["Incident recall", p(a.incident_recall)],
                 ["Incident precision", p(a.incident_precision)], ["False alarms, normal clips", v(a.false_alarms_normal)],
                 ["Onset → alert p50 / p95", pair(a.onset_to_alert_p50_p95)], ["Trigger → alert p50 / p95", pair(a.trigger_to_alert_p50_p95)],
+                ["Onset → alert, clip starts mid-incident", pair(a.onset_to_alert_mid_start_p50_p95)], ["GPU duty, mean", p(a.gpu_duty_mean)],
               ].map(([k, val]) => (
                 <div key={k} className="bg-surface px-3 py-2"><dt className="truncate text-11 text-fg-3">{k}</dt><dd className="font-mono text-15 text-fg">{val}</dd></div>
               ))}
             </dl>
             <p className="mt-2 text-11 text-fg-3">
-              Each clip played once, alone, at real-time speed. Onset → alert over {a.onset_to_alert_n} labelled clips. Thresholds were
+              Each clip played once, alone, at real-time speed. Onset → alert over {a.onset_to_alert_n} clips whose incident starts after the
+              first 2 s; {a.onset_to_alert_mid_start_n} clips that start mid-incident also time the buffer filling and are shown apart. Thresholds were
               tuned on these clips, so this is a training-set result; the held-out test split is reported separately.
             </p>
             <table className="mt-3 w-full table-fixed text-12">

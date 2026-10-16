@@ -412,9 +412,16 @@ def report():
         csvp = dev[-1].with_name(f"ab_dev_{tag}.csv")
         keep = ("clip", "label", "pred", "confidence", "onset_to_alert_ms", "trigger_to_alert_ms", "summary")
         clips = [{k: r[k] for k in keep} for r in csv.DictReader(csvp.open())] if csvp.exists() else []
-        o2a = [float(r["onset_to_alert_ms"]) for r in clips if r["onset_to_alert_ms"] and r["pred"] == r["label"]]
+        # same split as bench.ab score(): an incident that starts before the first full mosaic also times the buffer
+        # filling, which a running camera never does; the headline is the steady-state group
+        span, steady, mid = CFG["vlm"]["mosaic_span_s"], [], []
+        for r in clips:
+            on = (LABELS.get(r["clip"]) or (None, None))[1]
+            if r["onset_to_alert_ms"] and r["pred"] == r["label"] and on is not None:
+                (steady if on >= span else mid).append(float(r["onset_to_alert_ms"]))
         acc = {"tag": tag, "run_at": dev[-1].stat().st_mtime, **summ, "clips": clips,
-               "onset_to_alert_p50_p95": (pct(o2a, .5), pct(o2a, .95)), "onset_to_alert_n": len(o2a)}
+               "onset_to_alert_p50_p95": (pct(steady, .5), pct(steady, .95)), "onset_to_alert_n": len(steady),
+               "onset_to_alert_mid_start_p50_p95": (pct(mid, .5), pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid)}
     ev = P.db.rows("SELECT category, status, dismiss_reason, COUNT(*) n FROM events WHERE seeded=0 GROUP BY 1, 2, 3")
     fa = sum(r["n"] for r in ev if r["dismiss_reason"] == "operator")
     hours = camera_hours()
@@ -466,6 +473,14 @@ def chat(body: dict):
     if not q or len(q) > 500:
         raise HTTPException(400, "question: 1-500 characters")
     return chatbot.answer(q, P.db, P.arb, dict(P.events.cam_names), session=str(body.get("session_id") or "")[:64] or None)
+
+
+@app.get("/api/digest")
+def digest(hours: float = 8, camera: str = None):
+    """FR-17 shift-handover report for the last `hours` (≤ 24), all cameras or one. Sync: waits on the model in the threadpool."""
+    if not 0 < hours <= 24:
+        raise HTTPException(400, "hours: more than 0, at most 24")
+    return chatbot.digest(P.db, P.arb, dict(P.events.cam_names), hours=hours, camera=camera)
 
 
 @app.get("/api/metrics")
@@ -574,6 +589,9 @@ def selfcheck():
             rep = c.get("/api/report").json()
             assert rep["operator"]["false_alarms"] >= 1 and "onset_to_alert_ms" in rep["latency"], rep
             assert c.get("/api/report/feedback.csv").text.startswith("event_id,camera_id")
+            dg = c.get("/api/digest?hours=24").json()
+            assert dg["headline"].startswith("Shift handover") and dg["narrative"] and "how" in dg, dg
+            assert c.get("/api/digest?hours=0").status_code == 400
         finally:
             with P.db.lock:
                 P.db.con.execute("DELETE FROM events WHERE id=?", (eid,))
