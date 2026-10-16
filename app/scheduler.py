@@ -141,8 +141,8 @@ class Scheduler:
             boxes = {t["id"]: t["box"] for t in persons(new)}
             still = last[2] is not None and boxes.keys() == last[2].keys() and not any(
                 changed(last[2][i], b) for i, b in boxes.items())
-            if not self.suspect.get(cam) and (busy or (not self.events.has_open(cam) and still
-                                                       and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"])):
+            if busy or (not self.suspect.get(cam) and not self.events.has_open(cam) and still
+                        and mad(grey160(new[1]), last[1]) < V["baseline_skip"]["mad"]):
                 if now - self.last_skip.get(cam, 0) >= interval:   # one skip counted per baseline slot
                     self.skipped += 1; self.skipped_by[cam] += 1; self.skipped_duty += busy
                     self.last_skip[cam] = now

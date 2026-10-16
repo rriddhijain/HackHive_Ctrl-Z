@@ -56,7 +56,8 @@ class Camera(threading.Thread):
                 self._halt.wait(BACKOFF[min(attempt, len(BACKOFF) - 1)]); attempt += 1; self.reconnects += 1
                 continue
             attempt, self.status = 0, "live"
-            frame_dt = 1.0 / (cap.get(cv2.CAP_PROP_FPS) or 25) if self.kind == "file" else 0
+            fps = cap.get(cv2.CAP_PROP_FPS)   # a .webm/.flv with no rate reports 1000: treat as unknown (D86)
+            frame_dt = 1.0 / (fps if 1 <= fps <= 240 else 25) if self.kind == "file" else 0
             next_t = time.time()
             while not self._halt.is_set():
                 ok, frame = cap.read()

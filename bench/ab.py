@@ -329,9 +329,11 @@ def replay(r, probs=None):
         em.tick(now=x["t_alert"])
         opened += em.decide(x["cam"], c, x["sub"], ev["triggers"], x["ts"], x["t_ref"], x["t_alert"])[0]
     t0, on = r["t_first"], r["onset_s"]
-    pred = max(opened, key=lambda e: e["peak_confidence"])["category"] if opened else "normal"
-    hit = next((e for e in opened if e["category"] == r["label"]), None)
     pre = [e for e in opened if r["label"] == "normal" or (on is not None and e["start_ts"] - t0 < on - 1)]
+    # an incident clip is judged on its alerts from onset - 1 s on: a look-alike alert earlier is a false alarm, never a hit
+    scored = opened if r["label"] == "normal" else [e for e in opened if e not in pre]
+    pred = max(scored, key=lambda e: e["peak_confidence"])["category"] if scored else "normal"
+    hit = next((e for e in scored if e["category"] == r["label"]), None)
     return {"clip": r["clip"], "label": r["label"], "pred": pred, "split": r["split"],
             "o2a_ms": round((hit["_t_alert"] - t0 - on) * 1000) if hit and on is not None and r["label"] != "normal" else None,
             "false_alarms": len(pre), "wrong_cat": sum(e["category"] != r["label"] for e in opened if e not in pre),

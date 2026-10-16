@@ -19,17 +19,18 @@ function stateOf(done: boolean, finishing: boolean, c: Camera, evs: Event[], hit
   return evs.length ? ["pending", "Wrong category"] : ["error", "Missed"];
 }
 
-/** True for GRACE_MS after `done` turns true (re-renders once when it runs out). */
+/** True for GRACE_MS after `done` turns true while this Verdict is mounted; a clip that had already ended when the page
+ *  loaded is final at once (reload, coming back from another tab). Re-renders once when the window runs out. */
 function useFinishing(done: boolean) {
-  const [endedAt, setEndedAt] = useState<number | null>(null);
+  const [s, setS] = useState({ done, at: 0 });               // at = when this mount saw done turn true
+  if (s.done !== done) setS({ done, at: done ? Date.now() : 0 });   // derived state, set during render
   const [, expire] = useState(0);
-  useEffect(() => { setEndedAt(done ? Date.now() : null); }, [done]);
   useEffect(() => {
-    if (endedAt == null) return;
-    const t = setTimeout(() => expire((n) => n + 1), GRACE_MS);
+    if (!s.at) return;
+    const t = setTimeout(() => expire((n) => n + 1), Math.max(0, s.at + GRACE_MS - Date.now()));
     return () => clearTimeout(t);
-  }, [endedAt]);
-  return endedAt != null && Date.now() - endedAt < GRACE_MS;
+  }, [s.at]);
+  return s.at > 0 && Date.now() - s.at < GRACE_MS;
 }
 
 const Head = ({ chip }: { chip?: ReactNode }) => (
@@ -96,7 +97,7 @@ export function Verdict({ cam: c }: { cam: Camera }) {
               <span className="truncate text-body-l text-on-surface">{title(e.category)}</span>
               <span className="ml-auto whitespace-nowrap font-mono text-body-s text-on-surface-variant">{pc(e.alert?.confidence ?? e.peak_confidence)} · {at(e)}</span>
             </dd>
-          )) : <dd className="mt-1 text-body-l text-on-surface-variant">{done ? "No incidents" : "Nothing yet"}</dd>}
+          )) : <dd className="mt-1 text-body-l text-on-surface-variant">{done && !finishing ? "No incidents" : "Nothing yet"}</dd>}
         </div>
       </dl>
 
