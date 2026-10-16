@@ -12,6 +12,8 @@
    "property_damage",
    "suspicious_activity"
   ],
+  "observed_label_macro_f1": 0.31,
+  "metric_note": "macro_f1 = observed-label dev diagnostic; see fixed.final_metric_valid for the 8-label target",
   "incident_recall": 0.769,
   "incident_precision": 1.0,
   "false_alarms_normal": 0,
@@ -34,9 +36,10 @@
    6618
   ],
   "onset_to_alert_mid_start_n": 3,
+  "timing_warnings": [],
   "errors": {
    "crowd_incident -> normal": [
-    "crowd_timesq_a.mp4 (None)"
+    "crowd_timesq_a.mp4 ()"
    ],
    "fighting -> person_down": [
     "v026.avi (data/ab/d86/v026.jpg)",
@@ -53,6 +56,208 @@
    ],
    "property_damage -> person_down": [
     "vandal_037.mp4 (data/ab/d86/vandal_037.jpg)"
+   ]
+  },
+  "fixed": {
+   "labels": [
+    "fire_smoke",
+    "fighting",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "tailgating",
+    "normal"
+   ],
+   "n": 16,
+   "per_class": [
+    {
+     "label": "fire_smoke",
+     "support": 1,
+     "tp": 0,
+     "fp": 0,
+     "fn": 1,
+     "precision": null,
+     "recall": 0.0,
+     "f1": 0.0
+    },
+    {
+     "label": "fighting",
+     "support": 7,
+     "tp": 5,
+     "fp": 0,
+     "fn": 2,
+     "precision": 1.0,
+     "recall": 0.714,
+     "f1": 0.833
+    },
+    {
+     "label": "person_down",
+     "support": 0,
+     "tp": 0,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.0,
+     "recall": null,
+     "f1": 0.0
+    },
+    {
+     "label": "crowd_incident",
+     "support": 2,
+     "tp": 1,
+     "fp": 0,
+     "fn": 1,
+     "precision": 1.0,
+     "recall": 0.5,
+     "f1": 0.667
+    },
+    {
+     "label": "property_damage",
+     "support": 3,
+     "tp": 0,
+     "fp": 0,
+     "fn": 3,
+     "precision": null,
+     "recall": 0.0,
+     "f1": 0.0
+    },
+    {
+     "label": "suspicious_activity",
+     "support": 0,
+     "tp": 0,
+     "fp": 1,
+     "fn": 0,
+     "precision": 0.0,
+     "recall": null,
+     "f1": 0.0
+    },
+    {
+     "label": "tailgating",
+     "support": 0,
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null,
+     "f1": null
+    },
+    {
+     "label": "normal",
+     "support": 3,
+     "tp": 3,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.5,
+     "recall": 1.0,
+     "f1": 0.667
+    }
+   ],
+   "zero_support_classes": [
+    "person_down",
+    "suspicious_activity",
+    "tailgating"
+   ],
+   "macro_f1_supported": 0.433,
+   "supported_classes": [
+    "fire_smoke",
+    "fighting",
+    "crowd_incident",
+    "property_damage",
+    "normal"
+   ],
+   "macro_f1_all8": 0.271,
+   "weighted_f1": 0.573,
+   "incident_precision": 1.0,
+   "incident_recall": 0.769,
+   "confusion": {
+    "fire_smoke": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 1
+    },
+    "fighting": {
+     "fire_smoke": 0,
+     "fighting": 5,
+     "person_down": 2,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "person_down": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "crowd_incident": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 1,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 1
+    },
+    "property_damage": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 1,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 1,
+     "tailgating": 0,
+     "normal": 1
+    },
+    "suspicious_activity": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "tailgating": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "normal": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 3
+    }
+   },
+   "split": "dev",
+   "final_metric_valid": false,
+   "final_metric_invalid_reasons": [
+    "split is dev, not test",
+    "no test support for: person_down, suspicious_activity, tailgating",
+    "clips used for tuning: crowd_timesq_a.mp4, crowd_timesq_b.mp4, fire_printer.mp4, floor_sit.mp4, idle_60s.mp4, p3c_shove_sit_hug.mp4, sample_bus.mp4, v001.avi, v003.avi, v006.avi, v011.avi, v026.avi, vandal_007.mp4, vandal_024.mp4, vandal_037.mp4, w001_masked.avi",
+    "run metadata missing"
    ]
   },
   "gpu_duty_mean": 0.742,

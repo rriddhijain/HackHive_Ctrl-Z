@@ -12,6 +12,8 @@
    "property_damage",
    "suspicious_activity"
   ],
+  "observed_label_macro_f1": 0.357,
+  "metric_note": "macro_f1 = observed-label dev diagnostic; see fixed.final_metric_valid for the 8-label target",
   "incident_recall": 0.571,
   "incident_precision": 0.889,
   "false_alarms_normal": 1,
@@ -34,13 +36,14 @@
    7990
   ],
   "onset_to_alert_mid_start_n": 2,
+  "timing_warnings": [],
   "errors": {
    "person_down -> fighting": [
-    "fall_a_view2.mp4 (None)"
+    "fall_a_view2.mp4 ()"
    ],
    "person_down -> normal": [
     "fall_a_view5.mp4 ()",
-    "fall_a_view6.mp4 (None)",
+    "fall_a_view6.mp4 ()",
     "fall_a_view7.mp4 ()",
     "fall_b_view3.mp4 ()"
    ],
@@ -61,7 +64,209 @@
     "normal_room.mp4 (data/ab/d86/normal_room.jpg)"
    ]
   },
+  "fixed": {
+   "labels": [
+    "fire_smoke",
+    "fighting",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "tailgating",
+    "normal"
+   ],
+   "n": 15,
+   "per_class": [
+    {
+     "label": "fire_smoke",
+     "support": 2,
+     "tp": 2,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0,
+     "f1": 1.0
+    },
+    {
+     "label": "fighting",
+     "support": 1,
+     "tp": 0,
+     "fp": 1,
+     "fn": 1,
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0
+    },
+    {
+     "label": "person_down",
+     "support": 5,
+     "tp": 0,
+     "fp": 2,
+     "fn": 5,
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0
+    },
+    {
+     "label": "crowd_incident",
+     "support": 1,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0,
+     "f1": 1.0
+    },
+    {
+     "label": "property_damage",
+     "support": 4,
+     "tp": 0,
+     "fp": 0,
+     "fn": 4,
+     "precision": null,
+     "recall": 0.0,
+     "f1": 0.0
+    },
+    {
+     "label": "suspicious_activity",
+     "support": 1,
+     "tp": 1,
+     "fp": 2,
+     "fn": 0,
+     "precision": 0.333,
+     "recall": 1.0,
+     "f1": 0.5
+    },
+    {
+     "label": "tailgating",
+     "support": 0,
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null,
+     "f1": null
+    },
+    {
+     "label": "normal",
+     "support": 1,
+     "tp": 0,
+     "fp": 6,
+     "fn": 1,
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0
+    }
+   ],
+   "zero_support_classes": [
+    "tailgating"
+   ],
+   "macro_f1_supported": 0.357,
+   "supported_classes": [
+    "fire_smoke",
+    "fighting",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "normal"
+   ],
+   "macro_f1_all8": 0.312,
+   "weighted_f1": 0.233,
+   "incident_precision": 0.889,
+   "incident_recall": 0.571,
+   "confusion": {
+    "fire_smoke": {
+     "fire_smoke": 2,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "fighting": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 1
+    },
+    "person_down": {
+     "fire_smoke": 0,
+     "fighting": 1,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 4
+    },
+    "crowd_incident": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 1,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "property_damage": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 1,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 2,
+     "tailgating": 0,
+     "normal": 1
+    },
+    "suspicious_activity": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 1,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "tailgating": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 0,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    },
+    "normal": {
+     "fire_smoke": 0,
+     "fighting": 0,
+     "person_down": 1,
+     "crowd_incident": 0,
+     "property_damage": 0,
+     "suspicious_activity": 0,
+     "tailgating": 0,
+     "normal": 0
+    }
+   },
+   "split": "test",
+   "final_metric_valid": false,
+   "final_metric_invalid_reasons": [
+    "no test support for: tailgating",
+    "clips used for tuning: crowd_loveparade.mp4, fall_a_view2.mp4, fall_a_view5.mp4, fall_a_view6.mp4, fall_a_view7.mp4, fall_b_view3.mp4, fight_ucf002.mp4, fire_bucket.mp4, fire_room.mp4, normal_room.mp4, theft_atm.mp4, vandal_001.mp4, vandal_017.mp4, vandal_026.mp4, vandal_046.mp4",
+    "run metadata missing"
+   ]
+  },
   "gpu_duty_mean": 0.696,
-  "scoring": "post-onset (an incident clip is judged on its alerts from onset - 1 s on); rescored offline from data/ab/d86/rec (bench.ab.replay)"
+  "scoring": "post-onset (an incident clip is judged on its alerts from onset - 1 s on); rescored offline from data/ab/d86/rec (bench.ab.replay)",
+  "test_seen": "not fully held out: the base pass's test errors were read before the D86 fixes were chosen, and the hint variants were scored on all 29 gate calls, 12 of them test (DECISIONS D86 (6))"
  }
 }

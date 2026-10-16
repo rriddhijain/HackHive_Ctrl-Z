@@ -1,0 +1,13 @@
+D86 hint/layout experiments: the base pass's recorded mosaics re-asked (model only, data/ab/base/reask_<variant>.json).
+A call is right when its top category equals its true label (bench.ab.call_truth: the clip's label once the
+newest frame is past the onset, else normal). Splits from bench/labels.csv; choice made on dev.
+
+Gate-triggered calls (the hint is only sent with these):
+  recorded, old hint '(possible fight)' / '(possible person down)'                     all   5/29  dev   4/17  test   1/12
+  no hypothesis (the rule's numbers only)                                              all   8/29  dev   5/17  test   3/12
+  look-alike hint (adopted): hypothesis + its look-alikes, 'judge from the frames'     all  14/29  dev  10/17  test   4/12
+  look-alike hint + the new 6.1 wording, every call re-asked                           all  13/29  dev   9/17  test   4/12
+
+Calls with nobody in view (not adopted):
+  recorded: the 2x2 grid of 4 frames                                                   all  24/31  dev   8/13  test  16/18
+  the newest frame alone at 576x320                                                    all  23/31  dev   7/13  test  16/18
