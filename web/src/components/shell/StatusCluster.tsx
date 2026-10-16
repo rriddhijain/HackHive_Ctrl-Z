@@ -27,36 +27,54 @@ function Clock() {
   return <span className="whitespace-nowrap font-mono text-label-m text-on-surface">{t ? `${ist(t)} IST` : "—"}</span>;
 }
 
+function formatModel(raw?: string | null): string {
+  if (!raw) return "—";
+  if (raw.toLowerCase().includes("qwen")) {
+    if (raw.includes("2.5")) return "Qwen2.5-VL 4B";
+    if (raw.includes("3.5")) return "Qwen3.5 4B";
+    return "Qwen-VL";
+  }
+  return raw.split(":")[0];
+}
+
 /** Status cluster (B-12..B-17, DESIGN §5.2) plus the sound and theme toggles. Below 1680 px the Model / GPU / onset labels move into the tooltips; values and the connection text stay. */
 export function StatusCluster() {
   const { sound, armSound, theme, toggleTheme } = useStore();
   const { m, conn } = useLive();
   const x = m?.vlm, o2a = m?.latency?.onset_to_alert_ms;
+  const modelDisplay = formatModel(x?.model);
   return (
     <div className="flex shrink-0 items-center gap-1">
       <div className="flex h-10 items-center rounded-full bg-surface-container p-1">
-        <Item icon="neurology" label="Model" terse wideIcon value={x?.model ?? "—"} tip="Vision-language model, running in Ollama on this machine" />
+        <Item icon="neurology" label="Model" terse wideIcon value={<span className="max-w-[120px] 2xl:max-w-none truncate inline-block align-bottom">{modelDisplay}</span>} tip={`Model: ${x?.model ?? "—"} (Vision-language model, running locally)`} />
         <Divider vertical inset />
         <Item icon="memory" label="GPU" terse value={x?.gpu_duty_pct == null ? "—" : `${Math.round(x.gpu_duty_pct)}%`}
           tip="Share of the last 60 s the model was busy. Target ≤ 60 % average with 3 cameras." />
-        <Divider vertical inset />
-        <Item icon="timer" label="onset→alert p50" terse value={o2a?.n ? ms(o2a.p50) : "—"}
-          tip="Labelled incident onset in the clip → alert (§12), p50. Only for labelled clips played once." />
-        <Divider vertical inset />
-        <Item label={conn ? "Local · offline" : "Reconnecting"} lead={<Dot tone={conn ? "ok" : "critical"} size={8} />}
-          className={conn ? "" : "bg-critical-container text-on-critical-container"}
-          tip={conn ? "Connected to the local server; no network needed" : "Lost the local server; retrying"} />
-        <Divider vertical inset />
-        <span className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-on-surface-variant cluster:px-2.5">
-          <span className="hidden cluster:inline-flex"><Icon name="schedule" size={18} /></span><Clock />
+        <Divider vertical inset className="hidden sm:block" />
+        <div className="hidden sm:flex items-center">
+          <Item icon="timer" label="onset→alert p50" terse value={o2a?.n ? ms(o2a.p50) : "—"}
+            tip="Labelled incident onset in the clip → alert (§12), p50. Only for labelled clips played once." />
+        </div>
+        <Divider vertical inset className="hidden lg:block" />
+        <div className="hidden lg:flex items-center">
+          <Item label={conn ? "Local · offline" : "Reconnecting"} lead={<Dot tone={conn ? "ok" : "critical"} size={8} />}
+            className={conn ? "" : "bg-critical-container text-on-critical-container"}
+            tip={conn ? "Connected to the local server; no network needed" : "Lost the local server; retrying"} />
+        </div>
+        <Divider vertical inset className="hidden xl:block" />
+        <span className="hidden xl:inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-on-surface-variant cluster:px-2.5">
+          <Icon name="schedule" size={18} /><Clock />
         </span>
       </div>
-      <div className="ml-1 flex items-center">
-        {sound
-          ? <IconButton icon="notifications_active" selected aria-label="Alert sound on, click to test" onClick={armSound} />
-          : <Button variant="filled" size="s" icon="notifications_off" onClick={armSound}>Arm sound</Button>}
+      <div className="ml-1 flex items-center shrink-0">
+        <IconButton
+          icon={sound ? "notifications_active" : "notifications"}
+          selected={sound}
+          aria-label={sound ? "Alert sound on, click to test" : "Arm alert sound"}
+          onClick={armSound}
+        />
       </div>
-      <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={toggleTheme} />
+      <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={toggleTheme} className="shrink-0" />
     </div>
   );
 }

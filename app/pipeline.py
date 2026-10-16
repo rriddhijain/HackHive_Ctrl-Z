@@ -259,8 +259,19 @@ def pct(xs, q):
 def load_labels():
     """bench/labels.csv -> {clip file name: (label, onset_s or None)} (FR-21)."""
     lf = ROOT / "bench" / "labels.csv"
-    return {Path(r["clip"]).name: (r["label"], float(r["onset_s"]) if r.get("onset_s") else None)
-            for r in csv.DictReader(open(lf, encoding="utf-8", newline=""))} if lf.exists() else {}
+    if not lf.exists():
+        return {}
+    out = {}
+    with open(lf, encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            name = Path(r["clip"]).name
+            onset = float(r["onset_s"]) if r.get("onset_s") and r["onset_s"].strip() else 0.0
+            lab = r["label"]
+            out[name] = (lab, onset)
+            # Normalize narrow non-breaking spaces / standard spaces
+            out[name.replace("\u202f", " ")] = (lab, onset)
+            out[name.replace(" ", "\u202f")] = (lab, onset)
+    return out
 
 
 def main():

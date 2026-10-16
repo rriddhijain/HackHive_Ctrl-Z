@@ -40,22 +40,22 @@ export function AppBar() {
         <span className="text-title-l-em text-on-surface">HackHive</span>
         <span className="hidden text-body-m text-on-surface-variant min-[2000px]:inline">Incident console</span>
       </Link>
-      <nav aria-label="Main" className="flex min-w-0 items-center gap-0.5 cluster:gap-1">
+      <nav aria-label="Main" className="flex shrink-0 items-center gap-1 xl:gap-1.5">
         {TABS.map((t) => {
           const on = path.startsWith(`/${t.key}`);
           return (
-            <div key={t.key} className="relative">
+            <div key={t.key} className="relative shrink-0">
               <Link href={`/${t.key}/`} aria-current={on ? "page" : undefined} aria-keyshortcuts={t.key === "ask" ? "/" : undefined}
-                className={`state-layer relative flex h-10 items-center gap-1.5 rounded-full px-2.5 cluster:gap-2 cluster:px-4 ${on ? "text-label-l-em text-on-secondary-container" : "text-label-l text-on-surface-variant"}`}>
+                className={`state-layer relative flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 transition-colors ${on ? "text-label-l-em text-on-secondary-container" : "text-label-l text-on-surface-variant hover:text-on-surface"}`}>
                 {on && <motion.span layoutId="nav-pill" transition={motionTokens.default} className="absolute inset-0 -z-[1] rounded-full bg-secondary-container" />}
-                <span className={`relative ${t.key === "alerts" && nOpen > 0 ? "mr-1.5" : ""}`}>
+                <span className={`relative shrink-0 flex items-center ${t.key === "alerts" && nOpen > 0 ? "mr-1" : ""}`}>
                   <Icon name={t.icon} size={20} fill={on} />
                   {t.key === "alerts" && <Badge count={nOpen} tone={anyOpenCritical ? "critical" : "primary"} className="absolute -right-2.5 -top-1.5" />}
                   {(t.key === "clips" || t.key === "live") && mode === t.key && <Badge className="absolute -right-0.5 -top-0.5" />}
                 </span>
-                <span className="relative">{t.label}</span>
+                <span className="relative whitespace-nowrap select-none">{t.label}</span>
                 {t.key === "ask" && !on && (   // B-94: the "/" key is always visible
-                  <kbd aria-hidden="true" className="relative -mr-1 inline-grid h-5 min-w-5 place-items-center rounded-xs border border-outline-variant px-1 font-mono text-label-s text-on-surface-variant">/</kbd>
+                  <kbd aria-hidden="true" className="relative -mr-1 hidden sm:inline-grid h-5 min-w-5 place-items-center rounded-xs border border-outline-variant px-1 font-mono text-label-s text-on-surface-variant">/</kbd>
                 )}
                 {t.key === "alerts" && nOpen > 0 && <span className="sr-only">{`, ${nOpen} open`}</span>}
               </Link>
@@ -63,7 +63,7 @@ export function AppBar() {
           );
         })}
       </nav>
-      <div className="ml-auto shrink-0"><StatusCluster /></div>
+      <div className="ml-auto flex min-w-0 shrink items-center justify-end overflow-hidden"><StatusCluster /></div>
     </header>
   );
 }

@@ -3,12 +3,16 @@ v001.avi,fighting,dev,0.0
 v003.avi,fighting,dev,0.0
 v006.avi,fighting,dev,2.0
 v011.avi,fighting,dev,1.0
-v026.avi,fighting,dev,0.0
+v026.avi,person_down,dev,0.0
 w001_masked.avi,fighting,dev,0.5
-sample_bus.mp4,normal,dev,
+sample_bus.mp4,normal,dev,0.0
 p3c_shove_sit_hug.mp4,fighting,dev,5.6
-idle_60s.mp4,normal,dev,
-floor_sit.mp4,normal,dev,
+idle_60s.mp4,normal,dev,0.0
+floor_sit.mp4,normal,dev,0.0
+Screen Recording 2026-10-17 at 1.39.34 AM.mov,person_down,dev,0.0
+bucket11.mp4,fire_smoke,dev,17.0
+Screen Recording 2026-10-16 at 10.21.00 PM.mov,crowd_incident,dev,0.0
+Screen Recording 2026-10-17 at 3.37.34 AM.mov,fire_smoke,dev,0.0
 theft_atm.mp4,suspicious_activity,test,0.0
 vandal_001.mp4,property_damage,test,7.0
 vandal_007.mp4,property_damage,dev,9.0
@@ -21,7 +25,7 @@ fight_ucf002.mp4,fighting,test,2.0
 fire_bucket.mp4,fire_smoke,test,17.0
 fire_printer.mp4,fire_smoke,dev,18.0
 fire_room.mp4,fire_smoke,test,30.0
-normal_room.mp4,normal,test,
+normal_room.mp4,normal,test,0.0
 crowd_timesq_a.mp4,crowd_incident,dev,22.0
 crowd_timesq_b.mp4,crowd_incident,dev,6.5
 crowd_loveparade.mp4,crowd_incident,test,0.0
