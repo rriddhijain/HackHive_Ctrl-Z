@@ -13,3 +13,8 @@ dependencies = [
     "ultralytics>=8.4.177",
     "uvicorn[standard]>=0.54.0",
 ]
+
+# The suite is stdlib unittest (`uv run python -m unittest discover -s tests -t .`); pytest is not a dependency.
+# If someone runs pytest anyway, it collects tests/ only, not bench/latency_test.py (a script that needs the model).
+[tool.pytest.ini_options]
+testpaths = ["tests"]

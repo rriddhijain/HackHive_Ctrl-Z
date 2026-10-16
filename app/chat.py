@@ -47,6 +47,9 @@ SYN = {  # question word(s) -> (category, subtype or None); two-word phrases are
     "weapon": ("suspicious_activity", "weapon"), "weapons": ("suspicious_activity", "weapon"),
     "knife": ("suspicious_activity", "weapon"), "gun": ("suspicious_activity", "weapon"),
     "abandoned": ("suspicious_activity", "abandoned_object"), "unattended": ("suspicious_activity", "abandoned_object"),
+    "injured": ("person_down", None), "injury": ("person_down", None), "hurt": ("person_down", None),
+    "break in": ("suspicious_activity", "trespass"), "break ins": ("suspicious_activity", "trespass"),
+    "burglary": ("suspicious_activity", "trespass"), "intrusion": ("suspicious_activity", "trespass"),
     "tailgating": ("tailgating", None), "tailgate": ("tailgating", None), "piggybacking": ("tailgating", None),
     **{c: (c, None) for c in CATS if c != "normal"}, **{c.replace("_", " "): (c, None) for c in CATS if c != "normal"},
 }
@@ -59,7 +62,8 @@ footage recorded record details detail info information involving involve involv
 many much count number often latest last recent most newest summary summarise summarize overview recap brief describe
 report time times today yesterday ago since before after between until up out over just also only again more
 someone somebody anyone anybody everyone everybody person persons people individual individuals guy guys
-one two three four being got""".split())   # D74: filler words are never required keywords
+one two three four being got
+everything everywhere anywhere nothing total overall altogether ever far left""".split())   # D74: filler words are never required keywords
 GENERIC = {"camera", "cam", "live", "recorded", "webcam", "video", "room", "area", "view", "the", "avi", "mp4", "mov", "mkv"}
 CLK = r"(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?"
 

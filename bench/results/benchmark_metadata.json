@@ -1,0 +1,179 @@
+{
+ "what": "Benchmark asset inventory and data coverage snapshot (bench.validate). Regenerate: uv run python -m bench.validate --json bench/results/benchmark_metadata.json",
+ "generated_on": {
+  "tag": "metadata-snapshot",
+  "split": "n/a",
+  "repetitions": 1,
+  "timestamp": "2026-10-16T13:26:01+0000",
+  "epoch": 1792157161.0244446,
+  "commit": "22920020d6cd5b9648333c7a60cafc4af9503b26",
+  "dirty": true,
+  "config_sha256": "4edd286d1d4a0dad",
+  "model": "qwen3.5:4b-mlx",
+  "model_digest": null,
+  "machine": {
+   "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+   "machine": "x86_64",
+   "processor": "x86_64",
+   "python": "3.12.3",
+   "node": "vm"
+  }
+ },
+ "excluded_from_git": {
+  "data/": "videos (dev clips, demo clips), key frames, DB: gitignored (CLAUDE.md). Copy data/dev and data/demo from the dev Mac.",
+  "models/yolo26n.pt": "detector weights, gitignored. sha256 of the copy used for this snapshot: 9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef (verify it matches the dev Mac: shasum -a 256 models/yolo26n.pt)",
+  "models/yolo26n-pose.pt": "pose weights for the FR-6a A/B only, gitignored",
+  "Ollama model qwen3.5:4b-mlx": "pulled into ~/.ollama/models on the Mac; record its digest with `ollama show qwen3.5:4b-mlx` (run_meta() asks Ollama for it on every dev pass)"
+ },
+ "historical_runs": {
+  "ab_p5_dev, ab_dev_p6, ab_dev_p6b": "no run metadata was recorded (commit, config hash, model digest, machine): final_metric_valid is false for them by construction; they remain dev diagnostics"
+ },
+ "data_validation": {
+  "n_labelled": 10,
+  "splits": {
+   "dev": 10
+  },
+  "coverage": {
+   "train": {
+    "fire_smoke": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "fighting": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "person_down": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "crowd_incident": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "property_damage": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "suspicious_activity": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "tailgating": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "normal": {
+     "clips": 0,
+     "minutes": 0.0
+    }
+   },
+   "dev": {
+    "fire_smoke": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "fighting": {
+     "clips": 7,
+     "minutes": 1.16
+    },
+    "person_down": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "crowd_incident": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "property_damage": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "suspicious_activity": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "tailgating": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "normal": {
+     "clips": 3,
+     "minutes": 1.53
+    }
+   },
+   "test": {
+    "fire_smoke": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "fighting": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "person_down": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "crowd_incident": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "property_damage": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "suspicious_activity": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "tailgating": {
+     "clips": 0,
+     "minutes": 0.0
+    },
+    "normal": {
+     "clips": 0,
+     "minutes": 0.0
+    }
+   }
+  },
+  "classes_without_clips": {
+   "train": [
+    "fire_smoke",
+    "fighting",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "tailgating",
+    "normal"
+   ],
+   "dev": [
+    "fire_smoke",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "tailgating"
+   ],
+   "test": [
+    "fire_smoke",
+    "fighting",
+    "person_down",
+    "crowd_incident",
+    "property_damage",
+    "suspicious_activity",
+    "tailgating",
+    "normal"
+   ]
+  },
+  "normal_minutes": 1.53,
+  "normal_minutes_target": 30.0,
+  "final_metric_possible": false,
+  "errors": [],
+  "warnings": [
+   "sample_bus.mp4: 2 files with this name: ['data/dev/normal/sample_bus.mp4', 'data/demo/sample_bus.mp4']",
+   "ab_p5_dev.csv: desk_closeup.mp4 has no label now; explicitly marked in bench/unlabelled_rows.csv (recorded label 'normal')"
+  ]
+ }
+}

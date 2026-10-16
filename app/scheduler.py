@@ -16,13 +16,17 @@ on_frame(det) runs in each camera's detector thread after every frame:
     silenced until its box is clearly upright (D72), the track leaves, or horizontal_recheck_s passes (D61).
   - likewise a fight pair (people walking past each other): silenced until either track leaves, their centroid
     distance changes by > PAIR_REARM body heights, or horizontal_recheck_s passes (D64).
+gate_log keeps every gate fire with its outcome (submitted / merged / cooldown / silenced / too_soon) and the frame
+index, detector time, clip time, rule, track ids, person count and score, so offline replay and live runs can be
+compared fire by fire. evidence() also reports how often the detector saw anyone (detector_blind) and whether two
+person boxes touched in the buffer (pair_contact), for the person_down second look (events.down_guard).
 """
 import math
 import time
 from collections import defaultdict, deque
 
 from app.config import CFG
-from app.gate import gap, gate, grey160, mad, scene_change, wide
+from app.gate import gap, gate, grey160, mad, overlap, scene_change, wide
 from app.vlm import GATE_CAT, pick_frames
 
 G, V, D = CFG["gate"], CFG["vlm"], CFG["detector"]
@@ -65,6 +69,7 @@ class Scheduler:
         self.skipped_by = defaultdict(int)  # camera -> baselines skipped (change gate or duty back-off)
         self.skipped_duty = 0
         self.n_triggers = self.merged = 0
+        self.gate_log = deque(maxlen=5000)  # every gate fire + outcome (P5 timing diagnostics)
 
     def evidence(self, det, now):
         """Detector evidence for the cross-check (E-7): person counts = max over the 4 s buffer (D46)."""
@@ -72,8 +77,14 @@ class Scheduler:
         door_entries = sum(1 for tr in list(det.tracks.values()) if tr.cls == 0
                            for t in tr.zone_entries.get("door", []) if now - t <= D["buffer_s"])
         trig = {GATE_CAT[t["rule"]] for t in self.recent[det.cam.id] if t["rule"] in GATE_CAT and now - t["t"] <= D["buffer_s"]}
-        return {"max_persons": max((len(persons(e)) for e in buf), default=0), "door": "door" in det.zones_norm,
-                "door_entries": door_entries, "triggers": trig}
+        seen = [len(persons(e)) for e in buf]
+        frac = sum(n > 0 for n in seen) / len(seen) if seen else 0.0
+        contact = any(overlap((0, *a["box"]), (0, *b["box"])) for e in buf
+                      for i, a in enumerate(persons(e)) for b in persons(e)[i + 1:])
+        return {"max_persons": max(seen, default=0), "door": "door" in det.zones_norm,
+                "door_entries": door_entries, "triggers": trig,
+                "person_frames_frac": round(frac, 2), "pair_contact": contact,
+                "detector_blind": frac < CFG["events"].get("down_guard", {}).get("blind_frac", 0.5)}
 
     def on_frame(self, det):
         cam, buf = det.cam.id, det.buffer
@@ -103,13 +114,20 @@ class Scheduler:
             self.trigger(det, tr, now)
         self.baseline(det, now)
 
+    def _log(self, det, tr, now, outcome):
+        t_first = getattr(det.cam, "t_first", None)
+        self.gate_log.append({"frame_idx": getattr(det, "_last_idx", None), "t_detector": round(now, 3),
+                              "clip_t": round(now - t_first, 2) if t_first else round(now, 2), "rule": tr["rule"],
+                              "kind": tr.get("kind"), "track_ids": tr["track_ids"], "score": tr.get("score"),
+                              "persons": len(persons(det.buffer[-1])) if det.buffer else 0, "outcome": outcome})
+
     def trigger(self, det, tr, now):
         cam, rule = det.cam.id, tr["rule"]
         if tr.get("kind") == "horizontal" and all(now - self.quiet.get((cam, i), -1e9) < G["horizontal_recheck_s"]
                                                   for i in tr["track_ids"]):
-            return                                              # silenced after a confident-normal verdict (D61)
+            return self._log(det, tr, now, "silenced")          # silenced after a confident-normal verdict (D61)
         if rule in GATE_CAT and self.events.is_open(cam, GATE_CAT[rule]):
-            return                                              # cooldown per (camera, category)
+            return self._log(det, tr, now, "cooldown")          # cooldown per (camera, category)
         req = {"prio": 1, "cam": cam, "rule": rule, "trigger": "gate:" + rule, "frames": pick_frames(det.buffer),
                "evidence": self.evidence(det, now), "hint": tr["hint"], "track_ids": tr["track_ids"], "kind": tr.get("kind")}
         with self.arb.cv:                                       # ≤ 1 P1 per camera in flight (D72)
@@ -119,11 +137,12 @@ class Scheduler:
             run = self.arb.running
             if waiting or (run and run["prio"] == 1 and run["cam"] == cam):
                 self.merged += 1
-                return
+                return self._log(det, tr, now, "merged")
         if now - self.last_p1.get(cam, 0) < 1.0:
-            return                                              # < 1 s since this camera's last P1
+            return self._log(det, tr, now, "too_soon")          # < 1 s since this camera's last P1
         self.last_p1[cam] = now
         self.n_triggers += 1
+        self._log(det, tr, now, "submitted")
         self.arb.submit(req | {"created": time.time()})
 
     def baseline(self, det, now):

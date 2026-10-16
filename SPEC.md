@@ -520,3 +520,4 @@ Face recognition, identity tracking across cameras, cloud deployment, training m
 9. Tailgating gate: built only if a door camera is used in the demo (D55).
 10. Track-crop tile (FR-9c): adopted only if the dev A/B wins (D45).
 11. Does Ollama's MLX engine use the M5's GPU neural accelerators? Answered by the M5 latency run (D47).
+12. **D87 (ported from branch `fix/benchmark-metrics-v026`, off by default until the dev A/B)**: person_down second look, alert-first (`events.down_guard`; §8 `events.related_event_id`; E-9 re-checked cards stay in the feed), `GET /api/arbiter`, and the fixed 8-label metric with `final_metric_valid`. Adopt after the `--down-guard` dev A/B on the Mac; needs a version bump of §9/§10 on merge.

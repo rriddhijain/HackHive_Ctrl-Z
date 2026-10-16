@@ -442,23 +442,8 @@ def camera_hours():
 def report():
     """FR-20 report tab: the newest dev-set pass (bench/results/ab_dev_*), plus live operator numbers from the DB."""
     dev = sorted((ROOT / "bench" / "results").glob("ab_dev_*_summary.json"), key=lambda p: p.stat().st_mtime)
-    acc = None
-    if dev:
-        tag = dev[-1].name[len("ab_dev_"):-len("_summary.json")]
-        summ = next(iter(json.loads(dev[-1].read_text()).values()))
-        csvp = dev[-1].with_name(f"ab_dev_{tag}.csv")
-        keep = ("clip", "label", "pred", "confidence", "onset_to_alert_ms", "trigger_to_alert_ms", "summary")
-        clips = [{k: r[k] for k in keep} for r in csv.DictReader(csvp.open())] if csvp.exists() else []
-        # same split as bench.ab score(): an incident that starts before the first full mosaic also times the buffer
-        # filling, which a running camera never does; the headline is the steady-state group
-        span, steady, mid = CFG["vlm"]["mosaic_span_s"], [], []
-        for r in clips:
-            on = (LABELS.get(r["clip"]) or (None, None))[1]
-            if r["onset_to_alert_ms"] and r["pred"] == r["label"] and on is not None:
-                (steady if on >= span else mid).append(float(r["onset_to_alert_ms"]))
-        acc = {"tag": tag, "run_at": dev[-1].stat().st_mtime, **summ, "clips": clips,
-               "onset_to_alert_p50_p95": (pct(steady, .5), pct(steady, .95)), "onset_to_alert_n": len(steady),
-               "onset_to_alert_mid_start_p50_p95": (pct(mid, .5), pct(mid, .95)), "onset_to_alert_mid_start_n": len(mid)}
+    from bench import metrics as bm                           # pure, unit-tested in tests/test_report.py
+    acc = bm.dev_report(dev[-1], {c: on for c, (_, on) in LABELS.items()}, CFG["vlm"]["mosaic_span_s"]) if dev else None
     ev = P.db.rows("SELECT category, status, dismiss_reason, COUNT(*) n FROM events WHERE seeded=0 GROUP BY 1, 2, 3")
     fa = sum(r["n"] for r in ev if r["dismiss_reason"] == "operator")
     hours = camera_hours()
@@ -482,7 +467,7 @@ def save_feedback(eid):
                      "WHERE e.id=? ORDER BY o.ts", (eid,))
     FEEDBACK.parent.mkdir(parents=True, exist_ok=True)
     new = not FEEDBACK.exists()
-    with FEEDBACK.open("a", newline="") as fh:
+    with FEEDBACK.open("a", encoding="utf-8", newline="") as fh:
         w = csv.DictWriter(fh, FB_COLS)
         if new:
             w.writeheader()
@@ -493,7 +478,7 @@ def save_feedback(eid):
 def feedback_csv():
     """Every operator-marked false alarm so far, one row per observation with its probabilities, for threshold
     calibration on the dev set (P8)."""
-    body = FEEDBACK.read_text() if FEEDBACK.exists() else ",".join(FB_COLS) + "\n"
+    body = FEEDBACK.read_text(encoding="utf-8") if FEEDBACK.exists() else ",".join(FB_COLS) + "\n"
     return Response(body, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=operator_false_alarms.csv"})
 
 
@@ -523,6 +508,14 @@ def digest(hours: float = 8, camera: str = None):
 @app.get("/api/metrics")
 def get_metrics():
     return metrics()
+
+
+@app.get("/api/arbiter")
+def arbiter_stats(window: float = 60.0):
+    """Model-slot instrumentation (D87): queue wait / run time by priority, cancellations, stale drops, per-camera
+    starvation, GPU duty per 10 s, and the person_down second-look log."""
+    return P.arb.stats(window=window) | {"held_log": [list(x) for x in P.events.held_log][-50:],
+                                         "relooks": [list(x) for x in getattr(P, "relooks", [])][-50:]}
 
 
 @app.post("/api/ui/latency")

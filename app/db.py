@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, camera_id TEXT NOT NULL, category TEXT NOT NULL, subtype TEXT, severity TEXT,
   start_ts REAL NOT NULL, end_ts REAL, peak_confidence REAL, summary TEXT, keyframe_paths TEXT,
   track_ids TEXT, status TEXT DEFAULT 'open', dismiss_reason TEXT, n_obs INTEGER DEFAULT 1,
-  time_to_alert_ms INTEGER, latency_ms INTEGER, seeded INTEGER DEFAULT 0);
+  time_to_alert_ms INTEGER, latency_ms INTEGER, seeded INTEGER DEFAULT 0, related_event_id INTEGER);
 CREATE INDEX IF NOT EXISTS idx_evt_cam_ts ON events(camera_id, start_ts);
 CREATE VIRTUAL TABLE IF NOT EXISTS events_fts USING fts5(summary, category, content='events', content_rowid='id', tokenize='porter unicode61');   -- D74: push = pushed = pushing
 CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(summary, content='observations', content_rowid='id', tokenize='porter unicode61');
@@ -43,7 +43,8 @@ JSON_COLS = {"probs", "track_ids", "timing", "keyframe_paths"}
 OBS_COLS = ["camera_id", "ts", "category", "subtype", "confidence", "probs", "summary", "people_count", "trigger",
             "track_ids", "thumb_path", "event_id", "model", "timing", "seeded"]
 EVT_COLS = ["camera_id", "category", "subtype", "severity", "start_ts", "end_ts", "peak_confidence", "summary",
-            "keyframe_paths", "track_ids", "status", "dismiss_reason", "n_obs", "time_to_alert_ms", "latency_ms", "seeded"]
+            "keyframe_paths", "track_ids", "status", "dismiss_reason", "n_obs", "time_to_alert_ms", "latency_ms", "seeded",
+            "related_event_id"]   # D87: a re-look re-label links the original alert and its replacement both ways
 
 
 class DB:
@@ -54,6 +55,10 @@ class DB:
         old = self.con.execute("SELECT sql FROM sqlite_master WHERE name='events_fts'").fetchone()
         if old and "porter" not in old[0]:          # a pre-D74 DB: recreate the FTS tables with the stemmer (rebuilt below)
             self.con.executescript("DROP TABLE events_fts; DROP TABLE observations_fts;")
+        if self.con.execute("SELECT name FROM sqlite_master WHERE name='events'").fetchone():
+            cols = {r[1] for r in self.con.execute("PRAGMA table_info(events)")}
+            if "related_event_id" not in cols:      # a pre-D87 DB file: add the column, keep every row
+                self.con.execute("ALTER TABLE events ADD COLUMN related_event_id INTEGER")
         self.con.executescript(SCHEMA)
         self.lock = threading.Lock()
 
