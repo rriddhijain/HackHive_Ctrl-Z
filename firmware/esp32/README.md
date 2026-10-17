@@ -4,8 +4,8 @@ A bare ESP32 DevKit on USB is the operator's hardware stopwatch and alarm light.
 server when `console.enabled` in `config.yaml`) finds it as `/dev/cu.usbserial-*`; no board = nothing changes.
 
 **Use:** press **BOOT** when an incident starts → the LED stays on → the first alert stops it and the dashboard's
-Console chip shows onset → alert in ms. Every alert blinks the LED (fast = critical) until you press BOOT again,
-which acknowledges it like the dashboard button. Idle = a blip every 2 s; double blink = no link to the server.
+Console chip shows onset → alert in ms. Every alert pulses the LED (300 ms on / 100 ms off = critical, 600/400 = other) until you press BOOT again,
+which acknowledges it like the dashboard button. Idle = dark; double blink = no link to the server.
 
 **Flash** (Arduino IDE installed with the ESP32 core 3.3.x; nothing else needed):
 

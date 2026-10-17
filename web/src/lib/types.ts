@@ -93,7 +93,7 @@ export interface Metrics {
   system: { mem_used_pct: number | null; uptime_s: number | null };
   /** ESP32 guard console (D89); null when switched off in config.yaml. */
   console?: {
-    connected: boolean; port: string | null; timing: boolean;
+    connected: boolean; port: string | null; timing: boolean; board_alarm: number | null;
     last: { event_id: number; category: string | null; ms: number; ts: number } | null;
   } | null;
 }
