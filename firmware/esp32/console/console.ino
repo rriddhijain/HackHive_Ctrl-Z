@@ -1,7 +1,7 @@
 // HackHive guard console (D89): a bare ESP32 DevKit as the operator's hardware stopwatch and alarm light.
 // BOOT button (GPIO0) + onboard LED (GPIO2); USB serial 115200 to app/console.py, one text line per message.
 //
-//   laptop -> board   PING <id> <severity> | PING -  every 1 s: the link watchdog AND the alarm the server still
+//   laptop -> board   PING <id> <severity> | PING -  every 3 s: the link watchdog AND the alarm the server still
 //                                                 wants acknowledged (newest), so a lost CLEAR or a restart self-heals
 //                     ALERT <id> <severity> <cat>   an alert was sent to the dashboard
 //                     CLEAR <id>                    acknowledged or dismissed on the dashboard
@@ -10,12 +10,16 @@
 //                     MARK                          button pressed with no alarm: stopwatch started (incident onset)
 //                     LAT <id> <ms>                 first ALERT after a MARK: onset -> alert as the operator saw it
 //                     ACK <id>                      button pressed during an alarm: acknowledge it
+//   both ways         ~~~~ (filler lines)           alarm bursts, ignored by the reader (see below)
 //
+// The light: this board has no user LED on GPIO2 (it is driven anyway, for boards that do); the LED that shows is the
+// USB-UART's data-activity light. So the alarm pulse is made of data: during an alarm's "on" phase both sides send
+// filler lines and the light glows; idle is quiet except the PING every 3 s (one short blip).
 // LED: alarm = bold pulse, 300/100 ms (critical) or 600/400 ms (other), until acknowledged; stopwatch running = solid;
 // idle = dark (acknowledged means silent); no PING for 5 s (server down, cable out) = double blink.
 
 const int BTN = 0, LED = 2;
-const uint32_t LINK_MS = 5000, MARK_MS = 30000, DEBOUNCE_MS = 40;
+const uint32_t LINK_MS = 8000, MARK_MS = 30000, DEBOUNCE_MS = 40;
 
 uint32_t lastLine = 0, markAt = 0, lastEdge = 0;
 bool marking = false, wasDown = false, critical = false;
@@ -24,6 +28,7 @@ String line;
 
 void onLine(const String &s) {
   lastLine = millis();
+  if (s[0] == '~') return;                                  // the laptop's alarm burst
   int a = s.indexOf(' '), b = s.indexOf(' ', a + 1);
   if (s.startsWith("PING")) {
     if (a > 0 && s.substring(a + 1) == "-") alertId = -1;
@@ -83,5 +88,8 @@ void loop() {
     if (down) onPress();
   }
   if (marking && t - markAt > MARK_MS) marking = false;   // nobody's alert came: drop the stale mark
-  digitalWrite(LED, led(t));
+  bool on = led(t);
+  digitalWrite(LED, on);
+  if (on && alertId >= 0 && Serial.availableForWrite() >= 64)   // never blocks: only when the UART has room
+    Serial.println("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
 }

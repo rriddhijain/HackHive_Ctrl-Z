@@ -4,9 +4,11 @@ The board (firmware/esp32/console) is a hardware stopwatch and alarm light. Pres
 (MARK); the first alert after that comes back as LAT <id> <ms>: onset -> alert as the operator saw it, measured on the
 board's own clock (D50: the number a judge times). Every alert is sent as ALERT <id> <severity> <category> and blinks
 the LED until acknowledged; a press during an alarm sends ACK <id>, which acknowledges it exactly like the dashboard
-button. PING every second is the link watchdog (the board double-blinks when the server or the cable is gone) and
+button. PING every 3 s is the link watchdog (the board double-blinks when the server or the cable is gone) and
 carries the newest alert still waiting for an acknowledgement, so the LED follows the server even after a lost
 message, a second alert or a restart; the board's PONG says what it shows (state["board_alarm"]).
+The visible light on our board is the USB-UART's data-activity LED, so while an alert waits for its acknowledgement
+both sides send filler lines ("~...") in the pulse's on phase; idle traffic is one PING every 3 s.
 
 The port is found by name (macOS USB-UART bridges) and reopened after an unplug; no board = the console stays idle and
 nothing else changes. state is read by the server's metrics() for the dashboard's Console chip.
@@ -22,7 +24,9 @@ import threading
 import time
 
 PATTERNS = ("/dev/cu.usbserial-*", "/dev/cu.SLAB_USBtoUART*", "/dev/cu.wchusbserial*")
-ALIVE_S = 3.0
+ALIVE_S, PING_S = 7.0, 3.0
+CRIT, OTHER = (0.3, 0.4), (0.6, 1.0)                          # alarm burst: (on s, period s), like the firmware
+FILL = b"~" * 63 + b"\n"
 
 
 def find_port():
@@ -73,8 +77,23 @@ class Console:
         newest = list(self.pending.items())[-1:]
         self.send(f"PING {newest[0][0]} {newest[0][1]}" if newest else "PING -")
 
+    def burst(self, now):
+        """During an unacknowledged alert's on phase, keep the cable busy so the board's data light glows."""
+        newest = list(self.pending.values())[-1:]
+        if not newest:
+            return
+        on, period = CRIT if newest[0] == "critical" else OTHER
+        if now % period < on:
+            with self.lock:
+                try:
+                    os.write(self.fd, FILL * 4)
+                except (BlockingIOError, OSError, TypeError):
+                    pass                                        # full buffer or no port: skip this beat
+
     def handle(self, line):
         self.seen = time.time()
+        if line.startswith("~"):
+            return                                              # the board's alarm burst
         word, *args = line.split()
         if word == "MARK":
             self.mark_ts = self.seen
@@ -110,8 +129,9 @@ class Console:
             try:
                 while True:
                     now = time.time()
-                    if now - last_ping >= 1:
+                    if now - last_ping >= PING_S:
                         self.ping(); last_ping = now
+                    self.burst(now)
                     if select.select([fd], [], [], 0.05)[0]:
                         chunk = os.read(fd, 256)
                         if not chunk:
@@ -134,12 +154,17 @@ class Console:
             time.sleep(1)
 
 
-def _readline(fd, timeout=2.0):
-    buf, end = b"", time.time() + timeout
-    while time.time() < end and b"\n" not in buf:
-        if select.select([fd], [], [], 0.05)[0]:
-            buf += os.read(fd, 1)
-    return buf.decode().strip()
+def _readline(fd, timeout=4.0):
+    """Next non-burst line the bridge wrote to the simulated board."""
+    end = time.time() + timeout
+    while time.time() < end:
+        buf = b""
+        while time.time() < end and b"\n" not in buf:
+            if select.select([fd], [], [], 0.05)[0]:
+                buf += os.read(fd, 1)
+        if not buf.startswith(b"~"):
+            return buf.decode().strip()
+    return ""
 
 
 def selfcheck():
@@ -176,7 +201,19 @@ def selfcheck():
     assert ln == "CLEAR 8", ln
     while (ln := _readline(board)) != "PING -":                # nothing left to acknowledge: the board goes dark
         assert ln, "no PING - after the last clear"
-    print("console self-check ok: PING watchdog + alarm state, MARK -> LAT 1234 ms, ACK, bad ACK survived, CLEAR")
+    def raw(seconds):
+        got, end = b"", time.time() + seconds
+        while time.time() < end:
+            if select.select([board], [], [], 0.05)[0]:
+                got += os.read(board, 4096)
+        return got
+    c.alert({"id": 9, "severity": "critical", "category": "fighting"})
+    assert raw(0.8).count(FILL) >= 4, "no alarm burst while alert 9 waits"   # the board's data light glows
+    c.clear(9)
+    time.sleep(0.1); raw(0.1)
+    assert FILL not in raw(1.0), "burst kept going after the clear"            # acknowledged = quiet
+    print("console self-check ok: PING watchdog + alarm state, MARK -> LAT 1234 ms, ACK, bad ACK survived, CLEAR, "
+          "alarm burst on/off")
 
 
 def board_check():
