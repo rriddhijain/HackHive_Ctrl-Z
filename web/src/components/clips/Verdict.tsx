@@ -102,7 +102,7 @@ export function Verdict({ cam: c }: { cam: Camera }) {
       </dl>
 
       {top && (top.summary
-        ? <p className="line-clamp-2 rounded-md bg-surface-container-high px-3 py-2 text-body-m text-on-surface" title={top.summary}>{top.summary}</p>
+        ? <p className="rounded-md bg-surface-container-high px-3 py-2 text-body-m text-on-surface">{top.summary}</p>
         : <div aria-busy="true" className="rounded-md bg-surface-container-high px-3 py-3"><SkeletonLines lines={2} /></div>)}
 
       <div className="truncate font-mono text-body-s text-on-surface-variant">{`${c.name} · played once`}</div>

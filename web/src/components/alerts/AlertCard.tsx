@@ -56,7 +56,7 @@ export function AlertCard({ event: e, selected, onOpen }: AlertCardProps) {
       </div>
       {e.summary == null
         ? <SkeletonLines lines={2} className="mt-3" />
-        : <p className="mt-2 line-clamp-2 text-body-m">{e.summary}</p>}
+        : <p className="mt-2 text-body-m">{e.summary}</p>}
       <Top3Bar top3={top3} className="mt-3" />
       <div className="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
         <div className="mr-auto flex flex-wrap gap-1.5">
