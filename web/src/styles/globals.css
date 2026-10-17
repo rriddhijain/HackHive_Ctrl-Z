@@ -164,6 +164,49 @@
 @keyframes hh-indet { from { left: -40%; } to { left: 100%; } }
 .hh-indet { animation: hh-indet 1.5s linear infinite; }
 
+/* Incident report (D92, IncidentReport.tsx): never shown on screen. While an Alerts report is open, printing the
+   page prints this document alone: page 1 the prefilled form, page 2 the evidence log. Paper colours, not M3 roles. */
+.hh-doc { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm 13mm 13mm; }
+  html:has(.hh-doc), html:has(.hh-doc) body { background: #fff; min-height: 0; }
+  body:has(.hh-doc) #root { display: none; }
+  .hh-doc { display: block; color: #1f1f1f; font-size: 9.5pt; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.hh-doc section + section { break-before: page; }
+.hh-doc-head { display: flex; justify-content: space-between; padding-bottom: 1.5mm; border-bottom: 1.2pt solid #1f1f1f; font-size: 8pt; letter-spacing: .04em; text-transform: uppercase; }
+.hh-doc h1 { display: flex; align-items: center; gap: 3mm; margin: 4mm 0 1mm; font-size: 18pt; font-weight: 700; }
+.hh-doc h2 { margin: 4.5mm 0 1.5mm; padding-bottom: .8mm; border-bottom: .5pt solid #b0b0b0; font-size: 10.5pt; font-weight: 700; break-after: avoid; }
+.hh-doc h2 small { margin-left: 1.5mm; font-size: 8pt; font-weight: 400; color: #5f6368; }
+.hh-doc-lede { color: #3c4043; }
+.hh-doc-sev { padding: .4mm 2.4mm; border-radius: 1mm; background: #d93025; color: #fff; font-size: 8.5pt; font-weight: 700; }
+.hh-doc-sev[data-sev="high"] { background: #f9ab00; color: #202124; }
+.hh-doc-sev[data-sev="medium"] { background: #e8eaed; color: #202124; }
+.hh-doc-ai { margin-left: 1.2mm; padding: 0 .9mm; border: .6pt solid #1a73e8; border-radius: .8mm; color: #1a73e8; font-size: 6.5pt; font-weight: 700; vertical-align: .3mm; }
+.hh-doc-fields { display: grid; grid-template-columns: 1fr 1fr; margin: 0; border-top: .5pt solid #b0b0b0; border-left: .5pt solid #b0b0b0; }
+.hh-doc-fields > div { padding: 1.2mm 2.2mm; border-right: .5pt solid #b0b0b0; border-bottom: .5pt solid #b0b0b0; }
+.hh-doc-fields dt { color: #5f6368; font-size: 7.5pt; }
+.hh-doc-fields dd { margin: 0; font-weight: 500; }
+.hh-doc-summary { padding: 2mm 2.6mm; border: .5pt solid #b0b0b0; font-size: 10.5pt; }
+.hh-doc-checks { display: flex; flex-wrap: wrap; gap: 1.5mm 6mm; margin: 1mm 0 2mm; }
+.hh-doc-checks i { display: inline-block; width: 3mm; height: 3mm; margin-right: 1.5mm; border: .8pt solid #1f1f1f; vertical-align: -.4mm; }
+.hh-doc-write { margin-top: 1.5mm; color: #5f6368; font-size: 8pt; }
+.hh-doc-rule { height: 6.5mm; border-bottom: .5pt solid #80868b; }
+.hh-doc-sign { display: grid; grid-template-columns: 2fr 2fr 1.3fr; gap: 0 5mm; color: #5f6368; font-size: 7.5pt; }
+.hh-doc-sign .hh-doc-rule { height: 8mm; margin-bottom: .6mm; }
+.hh-doc-foot { margin-top: 4mm; color: #5f6368; font-size: 7.5pt; }
+.hh-doc-frames { display: grid; grid-template-columns: 3fr 2fr; gap: 4mm; align-items: start; }
+.hh-doc figure { margin: 3mm 0 0; break-inside: avoid; }
+.hh-doc img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.hh-doc figcaption { margin-top: 1mm; color: #3c4043; font-size: 7.5pt; overflow-wrap: anywhere; }
+.hh-doc code { display: block; font-family: var(--font-mono, ui-monospace, monospace); font-size: 7pt; overflow-wrap: anywhere; }
+.hh-doc li code { display: inline; }
+.hh-doc table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+.hh-doc th { padding: .8mm 1.2mm; border-bottom: .8pt solid #1f1f1f; text-align: left; font-weight: 700; }
+.hh-doc td { padding: .9mm 1.2mm; border-bottom: .5pt solid #dadce0; vertical-align: top; }
+.hh-doc tr { break-inside: avoid; }
+.hh-doc ul { margin: 0; padding-left: 4.5mm; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; animation-iteration-count: 1 !important; }
   .hh-skeleton { animation: none; background-image: none; }

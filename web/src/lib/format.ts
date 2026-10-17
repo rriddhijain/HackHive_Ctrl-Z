@@ -3,6 +3,9 @@ import type { ChatHow, Event } from "./types";
 
 export const ist = (ts: number | null | undefined): string =>
   ts ? new Date(ts * 1000).toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour12: false }) : "—";
+/** IST calendar date, `17 Oct 2026` (incident report, D92). */
+export const istDate = (ts: number | null | undefined): string =>
+  ts ? new Date(ts * 1000).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "—";
 export const media = (p: string): string => "/" + p.replace(/^data\//, "media/");
 export const v = (x: unknown, unit = ""): string => (x == null ? "—" : `${x}${unit}`);
 export const ms = (x: number | null | undefined): string => (x == null ? "—" : `${Math.round(x).toLocaleString("en-US")} ms`);

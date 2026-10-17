@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertActions, SeverityChip, Top3Bar, sevTone, useTop3 } from "@/components/alert-bits";
-import { Button, Card, Divider, Dot, EmptyState, IconButton, Skeleton, SkeletonLines, StatusChip } from "@/components/m3";
+import { Button, Card, Divider, Dot, EmptyState, IconButton, Skeleton, SkeletonLines, StatusChip, Tooltip } from "@/components/m3";
 import { api } from "@/lib/api";
 import { conf, ist, media, ms, pc, startTs, statusWord, title } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import type { Event, Observation } from "@/lib/types";
 import { HistoryChip } from "./AlertCard";
+import { IncidentReport, useIncidentPrint } from "./IncidentReport";
 
 /** Report surface: surface-container-low, 32 px corners (DESIGN §6.3). */
 function Surface({ children, id }: { children: ReactNode; id?: number }) {
@@ -42,8 +43,7 @@ function useObservations(e: Event): Observation[] | null | false {
   return obs?.id === e.id ? obs.rows : null;
 }
 
-function Timeline({ event }: { event: Event }) {
-  const obs = useObservations(event);
+function Timeline({ event, obs }: { event: Event; obs: Observation[] | null | false }) {
   return (
     <section aria-label="Observations" aria-busy={obs === null || undefined}>
       <h3 className="text-title-s-em text-on-surface">Observations</h3>
@@ -86,6 +86,8 @@ function Timeline({ event }: { event: Event }) {
 export function AlertReport({ event: e, onClose }: { event: Event; onClose: () => void }) {
   const { camName } = useStore();
   const top3 = useTop3(e);
+  const obs = useObservations(e);
+  const { hashes, print } = useIncidentPrint(e, obs);
   const box = useRef<HTMLDivElement>(null);
   const [frame, mosaic] = e.keyframe_paths ?? [];
   // B-64: the close control takes focus when a report opens (without scrolling the page).
@@ -99,7 +101,12 @@ export function AlertReport({ event: e, onClose }: { event: Event; onClose: () =
           <SeverityChip severity={e.severity} />
           <span className="font-mono text-title-s text-on-surface-variant">#{e.id}</span>
           {!!e.seeded && <HistoryChip />}
-          <div className="-mr-2 ml-auto"><IconButton icon="close" aria-label="Close" onClick={onClose} /></div>
+          <div className="-mr-2 ml-auto flex shrink-0 items-center gap-1">
+            <Tooltip content="A prefilled incident form and the evidence log; choose Save as PDF in the print dialog">
+              <Button variant="tonal" size="xs" icon="print" onClick={print}>Print report</Button>
+            </Tooltip>
+            <IconButton icon="close" aria-label="Close" onClick={onClose} />
+          </div>
         </header>
 
         {frame ? (
@@ -128,12 +135,13 @@ export function AlertReport({ event: e, onClose }: { event: Event; onClose: () =
         </div>
 
         <Divider className="my-6" />
-        <Timeline event={e} />
+        <Timeline event={e} obs={obs} />
 
         <div className="mt-6 flex justify-end">
           <AlertActions event={e} size="s" />
         </div>
       </Surface>
+      <IncidentReport event={e} obs={obs} top3={top3} camera={camName(e)} hashes={hashes} />
     </div>
   );
 }
