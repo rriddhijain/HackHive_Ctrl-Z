@@ -27,7 +27,7 @@ import time
 from app.config import CFG
 
 C = CFG.get("whatsapp") or {}
-API = "https://graph.facebook.com/v23.0"
+API = "https://graph.facebook.com/v25.0"
 TITLE = {"fire_smoke": "🔥 FIRE / SMOKE", "fighting": "🚨 FIGHT", "person_down": "🚑 PERSON DOWN",
          "crowd_incident": "👥 CROWD INCIDENT", "property_damage": "⚠️ PROPERTY DAMAGE",
          "suspicious_activity": "👀 SUSPICIOUS ACTIVITY", "tailgating": "🚪 TAILGATING"}
