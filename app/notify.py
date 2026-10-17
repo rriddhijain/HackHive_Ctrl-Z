@@ -68,25 +68,36 @@ class Notifier(threading.Thread):
             if conf < float(self.cfg.get("min_confidence", 0.6)) or ev.get("seeded"):
                 return False
             key, now = (ev.get("camera_id"), cat), time.time()
-            if now - self.last_sent.get(key, 0) < float(self.cfg.get("cooldown_s", 60)):
+            prev = self.last_sent.get(key, 0)
+            if now - prev < float(self.cfg.get("cooldown_s", 60)):
                 return False
-            self.last_sent[key] = now
+            self.last_sent[key] = now                        # held now so one incident queues once; released in send()
             msg = {"event_id": ev.get("id"), "category": cat, "camera": camera_name or ev.get("camera_id"), "confidence": conf,
                    "ts": ev.get("_t_alert") or now, "summary": ev.get("summary") if self.cfg.get("include_summary") else None,
-                   "queued": now}
-            try:
-                self.q.put_nowait(msg)
-            except queue.Full:                               # keep the newest: drop the oldest
-                try:
-                    self.q.get_nowait()
-                except queue.Empty:
-                    pass
-                self.dropped += 1
-                self.q.put_nowait(msg)
+                   "queued": now, "key": key, "prev": prev}      # if nothing was delivered (no phone yet)
+            self.enqueue(msg)
             return True
         except Exception as e:                               # a notification problem must never touch the alert
             print(f"[notify] skipped: {e!r}", flush=True)
             return False
+
+    def enqueue(self, msg):
+        """Never blocks, never raises: when full, the oldest message is dropped so the newest goes out."""
+        while True:
+            try:
+                self.q.put_nowait(msg); return
+            except queue.Full:
+                try:
+                    self.q.get_nowait(); self.dropped += 1
+                except queue.Empty:
+                    pass
+
+    def test(self):
+        """The dashboard's test button: one message to every channel, even while switched off (a manual check that a
+        phone is listening before notifications are turned on). Never an incident, never sets a cooldown."""
+        now = time.time()
+        self.enqueue({"event_id": 0, "category": "fire_smoke", "camera": "TEST: no incident", "confidence": 1.0, "ts": now,
+                      "queued": now, "test": True})
 
     def status(self):
         return {"enabled": self.enabled, "channels": self.channels(), "queued": self.q.qsize(), "dropped": self.dropped,
@@ -114,13 +125,15 @@ class Notifier(threading.Thread):
             post = httpx.post
         title, body = self.text(m)
         timeout = float(self.cfg.get("timeout_s", 3))
+        delivered = False
         for ch in self.channels():
-            t0, ok, err = time.time(), False, None
+            ok, err = False, None
             try:
                 if ch == "pager":                            # local network, no internet: straight to open phone pages
                     n = self.pager.push({"title": title, "camera": m["camera"], "ts": m["ts"], "confidence": m["confidence"],
                                          "event_id": m["event_id"]})
                     ok, err = n > 0, None if n else "no phone connected"
+                    delivered |= ok
                     self.log.append((time.time(), m["event_id"], ch, ok, round((time.time() - m["queued"]) * 1000), err))
                     continue
                 if ch == "ntfy":
@@ -134,15 +147,21 @@ class Notifier(threading.Thread):
                 err = None if ok else f"HTTP {r.status_code}"
             except Exception as e:                           # offline, DNS, timeout: logged, never raised
                 err = type(e).__name__
+            delivered |= ok
             self.log.append((time.time(), m["event_id"], ch, ok, round((time.time() - m["queued"]) * 1000), err))
             if not ok:
                 print(f"[notify] {ch} failed for event #{m['event_id']}: {err}", flush=True)
+        if not delivered and m.get("key") is not None and self.last_sent.get(m["key"]) == m["queued"]:
+            self.last_sent[m["key"]] = m.get("prev", 0)      # nobody got it: the next alert from this camera may go out
+        return delivered
 
     def run(self):
         while not self._halt:
             m = self.q.get()
             if m is None:
                 break
+            if not self.enabled and not m.get("test"):       # switched off while queued: drop, do not send
+                continue
             self.send(m)
 
 

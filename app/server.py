@@ -562,11 +562,11 @@ def notify_set(body: dict):
 
 @app.post("/api/notify/test")
 def notify_test():
-    """D89: one test message to every configured channel, through the same worker (returns at once)."""
+    """D89: one test message to every configured channel, through the same worker (returns at once). Works while
+    notifications are off, on purpose: it checks a phone is listening before they are switched on."""
     if NOTIFY is None or not NOTIFY.channels():
         raise HTTPException(409, "no channel configured")
-    NOTIFY.q.put_nowait({"event_id": 0, "category": "fire_smoke", "camera": "TEST: no incident", "confidence": 1.0,
-                         "ts": time.time(), "queued": time.time()})
+    NOTIFY.test()                                 # drop-oldest when full: never a 500
     return {"queued": True}
 
 

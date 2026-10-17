@@ -99,7 +99,7 @@ def lan_ips():
 
 class Pager:
     def __init__(self, port=None, token=None, host="0.0.0.0"):
-        self.port = int(port or C.get("port", 8100))
+        self.port = int(port if port is not None else C.get("port", 8100))   # 0 = any free port (tests)
         self.token = token or os.environ.get("HONEYVIEW_PAGER_TOKEN") or secrets.token_urlsafe(6)
         self.host, self.subs, self.lock = host, set(), threading.Lock()
         pager = self
@@ -143,6 +143,7 @@ class Pager:
 
         self.httpd = ThreadingHTTPServer((host, self.port), H)
         self.httpd.daemon_threads = True
+        self.port = self.httpd.server_address[1]
 
     def start(self):
         threading.Thread(target=self.httpd.serve_forever, daemon=True, name="pager").start()
@@ -174,7 +175,7 @@ class Pager:
 def selfcheck():
     import http.client
     p = Pager(port=0, token="t0k", host="127.0.0.1")
-    p.port = p.httpd.server_address[1]
+    assert p.port != 0 and p.port != C.get("port", 8100), "port=0 must bind a free port, never the real pager's"
     p.start()
     c = http.client.HTTPConnection("127.0.0.1", p.port, timeout=5)
     c.request("GET", "/?k=wrong"); r = c.getresponse(); r.read()
