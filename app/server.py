@@ -34,6 +34,7 @@ from app.console import Console
 from app.ingest import source_type
 from app.pipeline import Pipeline, load_labels, ms, pct
 from app.scheduler import persons
+from app.whatsapp import WhatsApp
 from scripts.list_cameras import names as device_names
 
 DATA, DIST = ROOT / "data", ROOT / "web" / "dist"
@@ -43,6 +44,7 @@ R = CFG["events"]["rating"]
 
 P: Pipeline = None
 CON: Console = None                               # ESP32 guard console (D89); None = off
+WA: WhatsApp = None                               # WhatsApp alerts (D90); None = no Twilio keys in the environment
 LOOP: asyncio.AbstractEventLoop = None
 SUBS: set[asyncio.Queue] = set()
 LAST_OBS, MOSAICS, O2A, S2C = {}, {}, [], []      # camera -> newest observation / mosaic jpeg; latency samples (ms)
@@ -88,6 +90,8 @@ def emit(kind, d):
                    ("event_open", clean(d))]
             if CON:
                 CON.alert(d)                      # the board blinks too; a pending stopwatch mark stops here
+            if WA:
+                WA.alert(d)                       # D90: a queue put; a slow or missing network never delays the alert
         elif kind in ("event_update", "event_close"):
             out = [(kind, clean(d))]
         elif kind == "observation":
@@ -553,11 +557,15 @@ if DIST.exists():
 
 def serve(port=8000):
     import uvicorn
-    global P, CON
+    global P, CON, WA
     P = Pipeline([], emit=emit)                  # P3b: nothing runs at boot; config.yaml cameras are Live presets
     P.start()
     if CFG.get("console", {}).get("enabled"):   # D89: idles until a board is plugged in
         CON = Console(on_ack=lambda eid: ack_event(eid, out=notify), port=CFG["console"].get("port")).start()
+    wa = WhatsApp()
+    if wa.configured():                           # D90: opt-in, the keys are environment variables only
+        WA = wa.start()
+        print(f"WhatsApp alerts on: {len(wa.to)} phone(s), severities {', '.join(wa.cfg.get('severities', []))}", flush=True)
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")   # no auth: never on venue Wi-Fi
     finally:
