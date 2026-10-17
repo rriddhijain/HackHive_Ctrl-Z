@@ -1,18 +1,19 @@
-"""WhatsApp alerts (D90): critical and high-severity alerts sent to the team's phones through Twilio's WhatsApp API.
+"""WhatsApp alerts (D90): critical and high-severity alerts sent to the team's phone through Meta's WhatsApp Cloud API.
 
-Opt-in: idle unless TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and WHATSAPP_TO are set in the environment (never in
+Opt-in: idle unless WHATSAPP_TOKEN, WHATSAPP_PHONE_ID and WHATSAPP_TO are set in the environment (never in
 config.yaml or git), so the system runs fully offline without them. Inference stays on this machine; what leaves it is
 metadata only: category, camera name, IST time, confidence, event id. Never frames, never the model's summary.
 
 Never on the alert path: alert() checks the severity and a per-camera + category cooldown, then puts the text on a
-queue. One worker thread makes the HTTPS calls (5 s timeout, at most one message every 3 s: the sandbox's limit); a
-failure (no internet, a phone that hasn't joined the sandbox) is printed and counted, never raised.
+queue. One worker thread makes the HTTPS calls (5 s timeout); a failure (no internet, an expired token) is printed and
+counted, never raised.
 
-  WHATSAPP_TO     phone numbers with country code, comma-separated: +919812345678,+919876543210
-  WHATSAPP_FROM   sender, default whatsapp:+14155238886 (Twilio's shared sandbox number)
+  WHATSAPP_TOKEN     access token (Meta app > WhatsApp > API Setup lasts 24 h; a system user's token can be permanent)
+  WHATSAPP_PHONE_ID  "Phone number ID" of the sending number (same page)
+  WHATSAPP_TO        recipients with country code, comma-separated: +919812345678
 
-Sandbox rules (Twilio docs): each phone first sends "join <your code>" to +1 415 523 8886; free-form messages reach a
-phone only within 24 h of its last message to the sandbox (message it again on the day), and a join lapses after 3 days.
+WhatsApp's rules (Meta docs): free text reaches a phone only within 24 h of that phone's last message to the sending
+number (send it "hi" on the day); Meta's test number sends only to recipients added and verified on API Setup.
 
   uv run python -m app.whatsapp          self-check with a fake endpoint (no internet, no keys)
   uv run python -m app.whatsapp --test   one real test message to every WHATSAPP_TO phone (needs the keys + internet)
@@ -26,11 +27,13 @@ import time
 from app.config import CFG
 
 C = CFG.get("whatsapp") or {}
-SANDBOX = "whatsapp:+14155238886"
-GAP_S = 3.0                                         # Twilio sandbox: one message every 3 s
+API = "https://graph.facebook.com/v23.0"
 TITLE = {"fire_smoke": "🔥 FIRE / SMOKE", "fighting": "🚨 FIGHT", "person_down": "🚑 PERSON DOWN",
          "crowd_incident": "👥 CROWD INCIDENT", "property_damage": "⚠️ PROPERTY DAMAGE",
          "suspicious_activity": "👀 SUSPICIOUS ACTIVITY", "tailgating": "🚪 TAILGATING"}
+HINT = {190: "the access token expired or is wrong: generate a new one on API Setup",
+        131030: "this phone isn't an allowed recipient: add and verify it under API Setup > To",
+        131047: "outside WhatsApp's 24 h window: send any message from this phone to the sending number"}
 
 
 def ist(ts):
@@ -46,7 +49,8 @@ def text(ev):
 
 def reason(r):
     try:
-        return f"HTTP {r.status_code}: {r.json().get('message')}"
+        e = r.json()["error"]
+        return f"HTTP {r.status_code}: {e.get('message')}" + (f" ({HINT[e['code']]})" if e.get("code") in HINT else "")
     except Exception:
         return f"HTTP {r.status_code}"
 
@@ -56,15 +60,13 @@ class WhatsApp:
         """env: os.environ (tests pass a dict); post: httpx.post (tests pass a fake); cfg: config.yaml's whatsapp block."""
         env = os.environ if env is None else env
         self.cfg = C if cfg is None else cfg
-        self.sid, self.token = env.get("TWILIO_ACCOUNT_SID"), env.get("TWILIO_AUTH_TOKEN")
-        self.sender = env.get("WHATSAPP_FROM") or SANDBOX
-        self.to = [n.strip() for n in (env.get("WHATSAPP_TO") or "").split(",") if n.strip()]
-        self.post, self.gap, self.next_ok = post, GAP_S, 0.0
-        self.q, self.last = queue.Queue(maxsize=50), {}
+        self.token, self.phone_id = env.get("WHATSAPP_TOKEN"), env.get("WHATSAPP_PHONE_ID")
+        self.to = [d for d in ("".join(filter(str.isdigit, n)) for n in (env.get("WHATSAPP_TO") or "").split(",")) if d]
+        self.post, self.q, self.last = post, queue.Queue(maxsize=50), {}
         self.state = {"sent": 0, "failed": 0, "dropped": 0, "last_error": None}
 
     def configured(self):
-        return bool(self.cfg.get("enabled", True) and self.sid and self.token and self.to)
+        return bool(self.cfg.get("enabled", True) and self.token and self.phone_id and self.to)
 
     def start(self):
         threading.Thread(target=self.run, daemon=True, name="whatsapp").start()
@@ -94,9 +96,9 @@ class WhatsApp:
             post = httpx.post
         t0 = time.time()
         try:
-            r = post(f"https://api.twilio.com/2010-04-01/Accounts/{self.sid}/Messages.json", auth=(self.sid, self.token),
-                     data={"From": self.sender, "To": to if to.startswith("whatsapp:") else "whatsapp:" + to, "Body": body},
-                     timeout=5)
+            r = post(f"{API}/{self.phone_id}/messages", headers={"Authorization": f"Bearer {self.token}"}, timeout=5,
+                     json={"messaging_product": "whatsapp", "recipient_type": "individual", "to": to, "type": "text",
+                           "text": {"body": body}})
             err = None if 200 <= r.status_code < 300 else reason(r)
         except Exception as e:                          # offline, DNS, timeout
             err = type(e).__name__
@@ -110,33 +112,29 @@ class WhatsApp:
         while True:
             body = self.q.get()
             for to in self.to:
-                time.sleep(max(0.0, self.next_ok - time.time()))
                 self.send(to, body)
-                self.next_ok = time.time() + self.gap
 
 
 def selfcheck():
-    """Fake Twilio endpoint, no internet: idle without keys, severity filter, cooldown, payload, pacing, a queue put
-    only (a dead network can't block the caller), failures counted and never raised."""
+    """Fake Cloud API endpoint, no internet: idle without keys, severity filter, cooldown, payload, a queue put only (a
+    dead network can't block the caller), failures counted and never raised, Meta's error explained."""
     class R:
-        def __init__(self, code, msg=None):
-            self.status_code, self.msg = code, msg
+        def __init__(self, code, body=None):
+            self.status_code, self.body = code, body or {}
 
         def json(self):
-            return {"message": self.msg}
+            return self.body
     calls = []
 
     def fake_post(url, **kw):
-        calls.append((time.time(), url, kw))
-        return R(201)
-    keys = {"TWILIO_ACCOUNT_SID": "ACtest", "TWILIO_AUTH_TOKEN": "tok", "WHATSAPP_TO": "+919800000001, +919800000002"}
+        calls.append((url, kw))
+        return R(200, {"messages": [{"id": "wamid.test"}]})
+    keys = {"WHATSAPP_TOKEN": "tok", "WHATSAPP_PHONE_ID": "123", "WHATSAPP_TO": "+91 98000 00001, +919800000002"}
     cfg = {"enabled": True, "severities": ["critical", "high"], "cooldown_s": 60}
     assert not WhatsApp(env={}, cfg=cfg).configured(), "no keys = idle"
     assert not WhatsApp(env=keys, cfg=dict(cfg, enabled=False)).configured(), "config can switch it off"
-    w = WhatsApp(env=keys, post=fake_post, cfg=cfg)
-    w.gap = 0.3
-    w.start()
-    assert w.configured() and w.to == ["+919800000001", "+919800000002"]
+    w = WhatsApp(env=keys, post=fake_post, cfg=cfg).start()
+    assert w.configured() and w.to == ["919800000001", "919800000002"], w.to
     ev = {"id": 41, "camera_id": "cam1", "camera_name": "Lobby", "category": "fire_smoke", "subtype": "fire",
           "severity": "critical", "peak_confidence": 0.934, "_t_alert": time.time()}
     assert w.alert(ev)
@@ -144,17 +142,15 @@ def selfcheck():
     assert not w.alert(dict(ev, camera_id="cam2", severity="medium")), "severity filter"
     assert w.alert(dict(ev, id=43, camera_id="cam2", category="fighting", subtype=None))
     t0 = time.time()
-    while len(calls) < 4 and time.time() - t0 < 5:
+    while len(calls) < 4 and time.time() - t0 < 3:
         time.sleep(0.02)
     assert len(calls) == 4, calls
-    _, url, kw = calls[0]
-    assert url == "https://api.twilio.com/2010-04-01/Accounts/ACtest/Messages.json" and kw["auth"] == ("ACtest", "tok")
-    assert [c[2]["data"]["To"] for c in calls] == ["whatsapp:+919800000001", "whatsapp:+919800000002"] * 2
-    body = kw["data"]["Body"]
-    assert kw["data"]["From"] == SANDBOX and "*🔥 FIRE / SMOKE* (fire) at Lobby" in body and "93%" in body and "#41" in body, body
-    assert "*🚨 FIGHT* at Lobby" in calls[2][2]["data"]["Body"] and "#43" in calls[2][2]["data"]["Body"]
-    gaps = [b[0] - a[0] for a, b in zip(calls, calls[1:])]
-    assert min(gaps) >= 0.29, gaps                  # paced: the sandbox takes one message every 3 s
+    url, kw = calls[0]
+    assert url == f"{API}/123/messages" and kw["headers"] == {"Authorization": "Bearer tok"}, (url, kw)
+    assert [c[1]["json"]["to"] for c in calls] == ["919800000001", "919800000002"] * 2
+    body = kw["json"]["text"]["body"]
+    assert kw["json"]["type"] == "text" and "*🔥 FIRE / SMOKE* (fire) at Lobby" in body and "93%" in body and "#41" in body, body
+    assert "*🚨 FIGHT* at Lobby" in calls[2][1]["json"]["text"]["body"] and "#43" in calls[2][1]["json"]["text"]["body"]
     idle = WhatsApp(env=keys, post=fake_post, cfg=cfg)  # worker not started: alert() is only a queue put
     t0 = time.time()
     for i in range(80):
@@ -165,23 +161,23 @@ def selfcheck():
     def down(url, **kw):
         raise OSError("network unreachable")
     f = WhatsApp(env=keys, post=down, cfg=cfg)
-    assert not f.send("+919800000001", "x") and f.state == {"sent": 0, "failed": 1, "dropped": 0, "last_error": "OSError"}
-    e = WhatsApp(env=keys, post=lambda url, **kw: R(400, "not in the sandbox"), cfg=cfg)
-    assert not e.send("+919800000001", "x") and e.state["last_error"] == "HTTP 400: not in the sandbox"
-    print(f"whatsapp self-check ok: idle without keys, filters, cooldown, payload, paced, 80 alerts queued in "
-          f"{caller_ms:.1f} ms with no network call, failures counted not raised")
+    assert not f.send("919800000001", "x") and f.state == {"sent": 0, "failed": 1, "dropped": 0, "last_error": "OSError"}
+    e = WhatsApp(env=keys, post=lambda url, **kw: R(401, {"error": {"message": "Session has expired", "code": 190}}), cfg=cfg)
+    assert not e.send("919800000001", "x") and e.state["last_error"] == f"HTTP 401: Session has expired ({HINT[190]})"
+    print(f"whatsapp self-check ok: idle without keys, filters, cooldown, payload, 80 alerts queued in {caller_ms:.1f} ms "
+          f"with no network call, failures counted not raised")
 
 
 def main():
     if "--test" not in sys.argv:
         return selfcheck()
     w = WhatsApp()
-    if not (w.sid and w.token and w.to):
-        raise SystemExit("set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and WHATSAPP_TO first (see `python -m app.whatsapp` docs)")
-    ok = []
-    for i, to in enumerate(w.to):
-        time.sleep(GAP_S if i else 0)
-        ok.append(w.send(to, "*✅ HackHive test*: WhatsApp alerts are working. No incident."))
+    if not (w.token and w.phone_id and w.to):
+        raise SystemExit("set WHATSAPP_TOKEN, WHATSAPP_PHONE_ID and WHATSAPP_TO first (see `python -m app.whatsapp` docs)")
+    ok = [w.send(to, "*✅ HackHive test*: WhatsApp alerts are working. No incident.") for to in w.to]
+    if all(ok):                                         # the API accepts first; delivery is only reported to a webhook
+        print("[whatsapp] accepted. Nothing on the phone within ~10 s? Send any message from that phone to the sending "
+              "number (WhatsApp's 24 h window) and run this again.", flush=True)
     raise SystemExit(0 if all(ok) else 1)
 
 

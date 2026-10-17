@@ -6,7 +6,7 @@ from app import whatsapp
 
 class WhatsApp(unittest.TestCase):
     def test_selfcheck(self):
-        whatsapp.selfcheck()                      # fake Twilio endpoint, no internet, no keys
+        whatsapp.selfcheck()                      # fake Cloud API endpoint, no internet, no keys
 
 
 if __name__ == "__main__":

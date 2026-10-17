@@ -27,7 +27,7 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `cd web && npm run typecheck` TypeScript check · `npm run dev` hot-reload UI on :3000 (needs the API on :8000 for data) · `npm run theme` regenerate M3 colour tokens from the seed
 - `uv run python -m scripts.seed_history` seeded demo history for chat (`--remove` deletes it) · `uv run python -m bench.chat_runner` chat question runner (30 questions, temp DB)
 - `uv run python -m app.console --board` ESP32 console check on the real board (press BOOT twice); flashing: `firmware/esp32/README.md`
-- `uv run python -m app.whatsapp` WhatsApp alerts self-check (fake endpoint) · `--test` sends one real message (needs `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHATSAPP_TO` in the environment; D90)
+- `uv run python -m app.whatsapp` WhatsApp alerts self-check (fake endpoint) · `--test` sends one real message (needs `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TO` in the environment; D90)
 - `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
 - `uv run python -m unittest discover -s tests -t .` unit + synthetic tests · `uv run python -m bench.validate` benchmark data checks (exit 1 on invalid) · `uv run python -m bench.diagnose` detector-only view of the dev clips
 - Two F1s (D87): `observed_label_macro_f1` (= historical `macro_f1`, dev diagnostic) vs the `fixed` 8-label block; only `fixed.final_metric_valid` may be quoted as the NFR-2 result

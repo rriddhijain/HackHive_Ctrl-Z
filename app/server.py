@@ -44,7 +44,7 @@ R = CFG["events"]["rating"]
 
 P: Pipeline = None
 CON: Console = None                               # ESP32 guard console (D89); None = off
-WA: WhatsApp = None                               # WhatsApp alerts (D90); None = no Twilio keys in the environment
+WA: WhatsApp = None                               # WhatsApp alerts (D90); None = no WhatsApp keys in the environment
 LOOP: asyncio.AbstractEventLoop = None
 SUBS: set[asyncio.Queue] = set()
 LAST_OBS, MOSAICS, O2A, S2C = {}, {}, [], []      # camera -> newest observation / mosaic jpeg; latency samples (ms)
