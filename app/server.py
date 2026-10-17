@@ -91,9 +91,11 @@ def emit(kind, d):
             if CON:
                 CON.alert(d)                      # the board blinks too; a pending stopwatch mark stops here
             if WA:
-                WA.alert(d)                       # D90: a queue put; a slow or missing network never delays the alert
+                WA.alert(d, o2a)                  # D90: a queue put; a slow or missing network never delays the alert
         elif kind in ("event_update", "event_close"):
             out = [(kind, clean(d))]
+            if WA and kind == "event_update":
+                WA.details(d)                     # D90: the key frame + summary follow-up, once per alerted event
         elif kind == "observation":
             LAST_OBS[d["camera_id"]] = d
             out = [(kind, d)]

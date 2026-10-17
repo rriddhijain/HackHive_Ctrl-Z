@@ -83,7 +83,7 @@ events:
   down_guard: { enabled: false, blind_frac: 0.5, verify_s: 10.0 }
 
 console: { enabled: true, port: null }   # D89 ESP32 guard console over USB serial; port null = first /dev/cu.usbserial-*; no board = idle
-whatsapp: { enabled: true, severities: [critical, high], cooldown_s: 60 }   # D90 WhatsApp alerts via Meta's Cloud API; idle unless WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TO are set (environment only, never here)
+whatsapp: { enabled: true, severities: [critical, high], cooldown_s: 60, snapshot: true }   # D90 WhatsApp alerts via Meta's Cloud API; idle unless WHATSAPP_TOKEN, WHATSAPP_PHONE_ID, WHATSAPP_TO are set (environment only, never here); snapshot: follow-up photo (key frame) + model summary, false = the alert text only
 classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, built only if dev macro F1 < 0.70 (D48)
 detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only
 
