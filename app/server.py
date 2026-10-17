@@ -14,6 +14,7 @@ import base64
 import csv
 import io
 import json
+import os
 import re
 import sys
 import threading
@@ -32,6 +33,7 @@ from app import chat as chatbot
 from app.config import CFG, ROOT
 from app.ingest import source_type
 from app.notify import Notifier
+from app.pager import Pager
 from app.pipeline import Pipeline, load_labels, ms, pct
 from app.scheduler import persons
 from scripts.list_cameras import names as device_names
@@ -553,7 +555,7 @@ def notify_set(body: dict):
     if not isinstance(body.get("enabled"), bool):
         raise HTTPException(400, "body must be {\"enabled\": true|false}")
     if body["enabled"] and not NOTIFY.channels():
-        raise HTTPException(409, "no channel configured: set HACKHIVE_NTFY_URL or HACKHIVE_TELEGRAM_TOKEN + HACKHIVE_TELEGRAM_CHAT")
+        raise HTTPException(409, "no channel: start with HONEYVIEW_PAGER=1 (local phones), or set HACKHIVE_NTFY_URL / the Telegram pair")
     NOTIFY.enabled = body["enabled"]
     return NOTIFY.status()
 
@@ -579,7 +581,11 @@ def serve(port=8000):
     global P, NOTIFY
     P = Pipeline([], emit=emit)                  # P3b: nothing runs at boot; config.yaml cameras are Live presets
     P.start()
-    NOTIFY = Notifier()
+    pager = None
+    if (CFG.get("pager") or {}).get("enabled") or os.environ.get("HONEYVIEW_PAGER") == "1":
+        pager = Pager().start()                   # D89: read-only, token-protected, LAN only; the dashboard stays on 127.0.0.1
+        print("HoneyView Pager (open on phones on the same Wi-Fi / hotspot):\n  " + "\n  ".join(pager.urls()), flush=True)
+    NOTIFY = Notifier(pager=pager)
     NOTIFY.start()
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")   # no auth: never on venue Wi-Fi

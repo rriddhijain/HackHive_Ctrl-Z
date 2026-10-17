@@ -38,8 +38,9 @@ def ist(ts):
 
 
 class Notifier(threading.Thread):
-    def __init__(self, cfg=None, env=None, post=None):
-        """cfg: the notify: block; env: os.environ (tests pass a dict); post(url, **kw): httpx.post (tests pass a fake)."""
+    def __init__(self, cfg=None, env=None, post=None, pager=None):
+        """cfg: the notify: block; env: os.environ (tests pass a dict); post(url, **kw): httpx.post (tests pass a fake);
+        pager: app.pager.Pager, the local-network channel (no internet)."""
         super().__init__(daemon=True, name="notify")
         self.cfg, env = dict(C if cfg is None else cfg), os.environ if env is None else env
         self.enabled = bool(self.cfg.get("enabled", False))
@@ -50,11 +51,12 @@ class Notifier(threading.Thread):
         self.log = deque(maxlen=50)                          # (ts, event_id, channel, ok, ms, error)
         self.dropped = 0
         self._post = post
+        self.pager = pager
         self._halt = False
 
     # ---- called from the pipeline thread: never blocks, never raises ----
     def channels(self):
-        return [c for c, on in (("ntfy", self.ntfy), ("telegram", self.tg_token and self.tg_chat)) if on]
+        return [c for c, on in (("pager", self.pager), ("ntfy", self.ntfy), ("telegram", self.tg_token and self.tg_chat)) if on]
 
     def alert(self, ev, camera_name=None):
         try:
@@ -88,6 +90,7 @@ class Notifier(threading.Thread):
 
     def status(self):
         return {"enabled": self.enabled, "channels": self.channels(), "queued": self.q.qsize(), "dropped": self.dropped,
+                "pager": {"urls": self.pager.urls(), "phones": self.pager.phones()} if self.pager else None,
                 "cooldown_s": self.cfg.get("cooldown_s", 60), "min_confidence": self.cfg.get("min_confidence", 0.6),
                 "recent": [{"ts": t, "event_id": e, "channel": c, "ok": ok, "ms": ms, "error": err} for t, e, c, ok, ms, err in list(self.log)[-10:]]}
 
@@ -114,6 +117,12 @@ class Notifier(threading.Thread):
         for ch in self.channels():
             t0, ok, err = time.time(), False, None
             try:
+                if ch == "pager":                            # local network, no internet: straight to open phone pages
+                    n = self.pager.push({"title": title, "camera": m["camera"], "ts": m["ts"], "confidence": m["confidence"],
+                                         "event_id": m["event_id"]})
+                    ok, err = n > 0, None if n else "no phone connected"
+                    self.log.append((time.time(), m["event_id"], ch, ok, round((time.time() - m["queued"]) * 1000), err))
+                    continue
                 if ch == "ntfy":
                     tag = LABEL.get(m["category"], ("", "warning"))[1]
                     r = post(self.ntfy, content=body.encode("utf-8"), timeout=timeout,

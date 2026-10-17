@@ -104,3 +104,7 @@ notify:                     # D89 (proposed): opt-in phone notifications (app/no
   queue: 50                 # oldest dropped when full; the alert path never waits
   # channels and secrets are environment variables, never this file: HACKHIVE_NTFY_URL,
   # HACKHIVE_TELEGRAM_TOKEN + HACKHIVE_TELEGRAM_CHAT
+
+pager:                      # D89 (proposed): local phone pager (app/pager.py): alerts from this laptop to phones on the same
+  enabled: false            # Wi-Fi / hotspot, no internet. Or start with HONEYVIEW_PAGER=1. Read-only, token in the link.
+  port: 8100

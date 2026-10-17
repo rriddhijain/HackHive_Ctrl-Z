@@ -38,10 +38,11 @@ function NotifyToggle() {
   }, []);
   if (!st || st.channels.length === 0) return null;
   const last = st.recent[st.recent.length - 1];
+  const phones = st.pager ? ` ${st.pager.phones} phone${st.pager.phones === 1 ? "" : "s"} connected to the local pager (${st.pager.urls[0]}).` : "";
   const tip = st.enabled
     ? `Phone alerts ON via ${st.channels.join(" + ")}: critical alerts, metadata only, max one per camera and category per ${st.cooldown_s} s.` +
-      (last ? ` Last: ${last.ok ? "delivered" : "failed (" + last.error + ")"} in ${last.ms} ms.` : "") + " Click to turn off."
-    : "Phone alerts OFF (the system is fully offline). Click to send critical alerts to subscribed phones.";
+      phones + (last ? ` Last: ${last.ok ? "delivered" : "failed (" + last.error + ")"} in ${last.ms} ms.` : "") + " Click to turn off."
+    : "Phone alerts OFF." + phones + " Click to send critical alerts to the phones.";
   const flip = () => { setBusy(true); api.setNotify(!st.enabled).then(setSt).catch(() => {}).finally(() => setBusy(false)); };
   return (
     <Tooltip rich={{ subhead: "Phone alerts", body: tip }}>

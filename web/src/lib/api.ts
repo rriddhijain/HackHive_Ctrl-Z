@@ -5,6 +5,7 @@ import type { Camera, ChatAnswer, Clip, Device, Digest, Event, EventDetail, Mode
 /** D89: GET /api/notify. */
 export interface NotifyStatus {
   enabled: boolean; channels: string[]; queued: number; dropped: number; cooldown_s: number; min_confidence: number;
+  pager: { urls: string[]; phones: number } | null;
   recent: { ts: number; event_id: number; channel: string; ok: boolean; ms: number; error: string | null }[];
 }
 
