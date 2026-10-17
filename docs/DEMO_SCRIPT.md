@@ -13,7 +13,7 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 ## The rehearsal settles (write the answers on the paper copy)
 
 - Which camera the shove pair plays to (webcam or iPhone), and where the X is taped.
-- Wi-Fi off with a cable, or Wi-Fi radio on with no network (pre-show step 3).
+- Which network the M5 joins for the WhatsApp alerts (pre-show step 3), and where the phone sits so the judges can see it.
 - Whether "iPhone (live)" and "<webcam>" are swapped (D70), and the webcam's exact button name.
 - Chrome zoom: default (the layout fits 1512×982 and 1920×1080).
 - Rehearsal events do NOT survive: every server start wipes the live rows (`replay.reset_live_tables_on_start`) and run_demo.sh re-seeds the demo history, so the pre-show start begins with the seeded history only, and Act 3's "last 10 minutes" question shows just this demo's events.
@@ -24,13 +24,13 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 **Aryan: the machine**
 1. M5 on mains. System Settings → Battery → Low Power Mode: Never. Lock Screen → turn display off on power adapter: Never. Focus: Do Not Disturb.
 2. Mirror the display to the projector (mirror, not extend) so Aryan sees what the judges see.
-3. Internet off. Wireless Continuity Camera needs the Wi-Fi and Bluetooth radios on (no network needed), so decide with Abhinav: USB-C cable to the iPhone and Wi-Fi off, or Wi-Fi on but joined to no network. Either way nothing leaves the laptop, which is the claim we make.
-4. Terminal, in the repo folder, on `main` (it now equals `ui-next`): `git pull`, then `cd web && npm ci && npm run build && cd ..` once if the dashboard changed since the last build (needs the network, so before step 3), then `./run_demo.sh`.
-   It checks uv, Chrome, the YOLO weights and the Python env, starts Ollama, warms the model, re-seeds the chat history (times relative to now), rebuilds the dashboard if stale, starts the server and opens Chrome at http://localhost:8000. It ends with "dashboard ready". Any red line names its own fix (port 8000 busy → it prints the `kill` to run); fix it and re-run.
+3. Internet on, for one thing only: the WhatsApp alert to the guard's phone (D90). Join a network that works (a phone hotspot as backup); every model still runs on the laptop. Continuity Camera is unaffected (it needs the Wi-Fi and Bluetooth radios on anyway). No network → everything else works and only WhatsApp stays quiet: say so.
+4. Terminal, in the repo folder, on `main` (it now equals `ui-next`): `git pull`, then `cd web && npm ci && npm run build && cd ..` once if the dashboard changed since the last build. Then, in the same Terminal, `export WHATSAPP_TOKEN='<token from the Meta app page>' WHATSAPP_PHONE_ID=1345620295308894 WHATSAPP_TO=+918886008081` (the token never goes in a file) and `uv run python -m app.whatsapp --test`: "✅ HackHive test" arrives on the phone. Then `./run_demo.sh`.
+   It checks uv, Chrome, the YOLO weights and the Python env, starts Ollama, warms the model, re-seeds the chat history (times relative to now), rebuilds the dashboard if stale, starts the server and opens Chrome at http://localhost:8000. It ends with "dashboard ready"; with the three WhatsApp variables set the server also prints "WhatsApp alerts on: 1 phone(s)". Any red line names its own fix (port 8000 busy → it prints the `kill` to run); fix it and re-run.
 5. Chrome, not Safari. One window, one tab, full screen (View → Enter Full Screen). Default zoom. Terminal stays behind Chrome.
 6. Navbar: six tabs "Clips", "Live", "Alerts", "Ask", "Pipeline", "Report"; the "Local · offline" text has a green dot (red "Reconnecting" = the server is gone); "Clips" is the selected tab (a small dot on it = the server's mode). Click the blue "Arm sound" (top right) until it turns into a bell icon (again after any reload). The sun/moon button switches light/dark; dark is the default.
 7. The Clips tab has three columns, "Slot 1 clip", "Slot 2 clip", "Slot 3 clip". Open any slot's dropdown: it lists the demo and dev clips grouped by folder, each with its label and onset, including the five used today: v011.avi, sample_bus.mp4, floor_sit.mp4, fire_bucket.mp4 and the fallback p3c_shove_sit_hug.mp4. Missing → the gitignored `data/` folder was not copied: copy it from the dev Mac, or choose "Upload video" at the bottom of the dropdown (or drop a file on a column).
-8. One smoke test: "Slot 1 clip" → v011.avi → a red "Critical · Fighting" notification pops up bottom right and the "Alerts" tab gets a red count; click "Acknowledge" on the notification. Then ■ on the tile and nothing else on the GPU until the demo (heat).
+8. One smoke test: "Slot 1 clip" → v011.avi → a red "Critical · Fighting" notification pops up bottom right and the "Alerts" tab gets a red count; click "Acknowledge" on the notification. The phone gets the WhatsApp alert, then the key frame with the model's summary. Then ■ on the tile and nothing else on the GPU until the demo (heat).
 
 **Abhinav: the cameras**
 9. iPhone mounted ~2 m high, floor in view, landscape, rear camera to the room, locked and still, charger on, same Apple ID as the M5, Bluetooth on (Continuity's own rules).
@@ -44,10 +44,11 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 
 **Shivansh**
 15. REPORT.md to hand for Q&A (§1 is the one-minute version). Decides every fallback; nobody argues with the machine on stage.
+16. The WhatsApp phone: unlocked on the chat with the test number (+1 555-203-1725), sound on, Do Not Disturb off. Send "hi" from it to that number now: WhatsApp lets our alerts through only within 24 h of the phone's last message. Meta's quick-start token lasts only an hour or two, so generate a fresh one within the hour before the demo (or use a never-expiring System user token), then redo step 4's export and test.
 
 ## Opening (1 min, Shivansh)
 
-"Everything you will see runs on this laptop: detection, the vision-language model, the database, the chat. The internet is off. Three acts: recorded clips, live cameras, then questions."
+"Everything you will see runs on this laptop: detection, the vision-language model, the database, the chat. No cloud AI: the one thing that leaves the laptop is the alert we send to the guard's phone on WhatsApp. Three acts: recorded clips, live cameras, then questions."
 
 ## Act 1: Clips (4 min) — on the "Clips" tab, three empty columns
 
@@ -56,6 +57,7 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 - Say: "A fight clip from a public dataset. YOLO tracks every person; a cheap rule, two people in contact and moving fast, decides when to wake the vision-language model. Watch the bottom right."
 - Alert: beep, a red "Critical · Fighting" notification bottom right (it stays until "Acknowledge" or "False alarm"), a red ring and a "Fighting · N%" chip on the tile, a red count on the "Alerts" tab. The tile turns "Finished"; "Verdict" reads "Detected", with the expected label, what was detected and the alert time in the clip.
 - Say: "Alert, a second or two after the model looked. The bar is the model's top three categories; the summary is written from the frames, not from a template." Click the notification's text: the "Alerts" tab opens on that alert's report (key frame, summary, top-three bar, "Trigger → alert"). Click "Acknowledge" there; an unacknowledged critical stacks the next one as "1 more unacknowledged". Every alert has exactly two actions: "Acknowledge" and "False alarm".
+- Shivansh holds up the phone: the WhatsApp alert (what, where, how sure, how many seconds after the fight began, what to do), then the key frame with the model's one-line summary. Say: "The guard doesn't have to be at this screen: the same alert reaches their phone, with the frame the model saw. Only that still and the text leave the laptop, never video." No WhatsApp within ~10 s: don't wait; "the phone alert needs the internet; the dashboard alert is the one that counts", and move on.
 - Aryan: click the "Pipeline" tab. Say: "Each stage of that model call, timed: frame, YOLO, gate, VLM, event. Below it, what the model actually saw: the mosaic of recent frames, the hint we sent with it, and the raw JSON it streamed back." Point at the hint: "The rule tells the model what it saw and what it might be instead, a fight, or people hugging or helping someone up, and leaves the call to the frames." Click "Clips".
 - If no alert by "Finished" ("Verdict" reads "Finishing", then "Missed"): open "Pipeline", point at the raw JSON ("the model's verdict is on screen either way") and move on. Do not replay.
 - If the tile sticks on "connecting": the ↻ button beside the slot's dropdown plays it again (a new play replaces the old one).
@@ -92,7 +94,7 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 - Aryan: click the "Live" tab → "Switch to Live" (clips stop; history stays). "Slot 1 source" → "iPhone (live)", "Slot 2 source" → "<webcam>"; each starts as soon as it is chosen. Two tiles: "Connecting…" → green dot and "Live", boxes on people; each camera's details and its alerts sit under its tile.
 - Say: "Two live cameras: the phone up high with the floor in view, and the webcam. Same pipeline, nothing recorded in between. The 'Now' line under each tile is the detector describing the scene between model calls."
 - Abhinav and Riddhi walk at each other on the taped X, grab and shove each other chest to chest for two or three seconds, then push apart. A sustained grapple, not a tap: the model looks the moment the rule fires, and a fight it can see in those frames alerts on that first look; a brief bump can wait for the next look a few seconds later. The rehearsal decides which camera they play to: the webcam is the one proven on the shove (D72); the iPhone's high angle is not yet.
-- Alert: red notification bottom right, a red ring on that camera's tile. Click "Acknowledge" on the notification after the line below. Say: "Caught live, a second or two after the model looked; the stopwatch from first contact is the onset-to-alert number in the report."
+- Alert: red notification bottom right, a red ring on that camera's tile. Click "Acknowledge" on the notification after the line below. Say: "Caught live, a second or two after the model looked; the stopwatch from first contact is the onset-to-alert number in the report." The phone buzzes again (live, it counts from the moment the rule fired: nobody labelled the onset).
 - Abhinav sits down on the floor and stays down for a few seconds.
 - Say: "The look-alike: a person on the floor. Sitting down is not a fall; the model is told what it might be instead and judges the frames. No alert." (Time left: a hug; the rule wakes the model, the model says normal. If the hug alerts, say so: it is the look-alike our report counts.)
 - If "iPhone (live)" is missing: iPhone locked, landscape, still, Bluetooth on, same Apple Account as this Mac, not paired to another Mac (Continuity serves one Mac at a time); click "Rescan" (top right of the Live tab; the list also refreshes when the window regains focus). Still missing → USB-C cable and Rescan; still missing → webcam alone, and say so.
@@ -116,11 +118,11 @@ Words in quotes are the dashboard's own labels. "VLM" = the vision-language mode
 
 ## Close (1 min, Shivansh)
 
-"Three acts, one laptop: alerts a second or two after the model looks, look-alikes declined, a fire caught with no rule behind it, and questions answered only from stored events. How we set every threshold, what we measured, and what we still get wrong are in REPORT.md. Questions?"
+"Three acts, one laptop: alerts a second or two after the model looks, on screen and on the guard's phone, look-alikes declined, a fire caught with no rule behind it, and questions answered only from stored events. How we set every threshold, what we measured, and what we still get wrong are in REPORT.md. Questions?"
 
 ## Q&A crib (read numbers from REPORT.md, never from memory)
 
-1. Cloud? None. YOLO, the Qwen VLM in Ollama, SQLite and the chat run on this laptop; the internet is off right now. Open weights, no API keys, no CDN.
+1. Cloud? No cloud AI. YOLO, the Qwen VLM in Ollama, SQLite and the chat run on this laptop; open weights, no API keys for any model, no CDN. The one thing that leaves it is the WhatsApp alert to the guard's phone (the alert text and one key frame with its summary, never video), through Meta's WhatsApp API. It is opt-in: without its three environment variables the system runs fully offline (D90).
 2. Design: gate → VLM → chat. A cheap always-on gate (person tracks plus rules: fast drop, a body wider than tall, contact plus speed) decides when to look now; a regular look every few seconds covers what no rule sees (fire, crowds, vandalism, theft). The VLM sees a letterboxed mosaic of recent frames and returns structured JSON (category, probabilities from its log-probabilities, summary); events go to SQLite; the chat answers only from stored events.
 3. Why a gate? A VLM on every frame does not fit on a laptop. The gate plus the regular looks (skipped while nothing and nobody moves) let one model serve several cameras.
 4. How did you set the thresholds? One real pass records every model call; we replay those recordings offline with any setting, sweep each threshold on the dev clips only, re-ask the model on the recorded frames after a prompt change, then confirm with one real pass (REPORT.md §4). The thresholds sat on a plateau; the wording of the hint was what mattered (§5d).
