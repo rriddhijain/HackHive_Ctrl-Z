@@ -2,6 +2,13 @@
 // Non-2xx rejects with ApiError carrying the server's `detail` as a string (422 arrays are stringified).
 import type { Camera, ChatAnswer, Clip, Device, Digest, Event, EventDetail, Mode, Report, Slot, Started } from "./types";
 
+/** D89: GET /api/notify. */
+export interface NotifyStatus {
+  enabled: boolean; channels: string[]; queued: number; dropped: number; cooldown_s: number; min_confidence: number;
+  pager: { urls: string[]; phones: number } | null;
+  recent: { ts: number; event_id: number; channel: string; ok: boolean; ms: number; error: string | null }[];
+}
+
 export class ApiError extends Error {
   constructor(public status: number, public detail: string) { super(detail); }
 }
@@ -44,4 +51,7 @@ export const api = {
   /** E-17: a plain download link. */ feedbackCsv: "/api/report/feedback.csv",
   /** E-18: fire and forget. */ uiLatency: (event_id: number, ms: number) => { fetch("/api/ui/latency", json("POST", { event_id, ms })).catch(() => {}); },
   /** E-9 */ snapshotUrl: (id: string) => `/snapshot/${id}`,
+  /** D89: opt-in phone notifications. */ notify: () => req<NotifyStatus>("/api/notify"),
+  /** D89 */ setNotify: (enabled: boolean) => req<NotifyStatus>("/api/notify", json("POST", { enabled })),
+  /** D89 */ notifyTest: () => req<{ queued: boolean }>("/api/notify/test", { method: "POST" }),
 };

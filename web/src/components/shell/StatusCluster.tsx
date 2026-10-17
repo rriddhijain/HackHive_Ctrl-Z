@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Divider, Dot, Icon, IconButton, Tooltip } from "@/components/m3";
+import { api, type NotifyStatus } from "@/lib/api";
 import { ist, ms } from "@/lib/format";
 import { useLive, useStore } from "@/lib/store";
 
@@ -25,6 +26,30 @@ function Clock() {
   const [t, setT] = useState<number | null>(null);   // null on the prerender: no clock until the client ticks
   useEffect(() => { setT(Date.now() / 1000); const i = setInterval(() => setT(Date.now() / 1000), 1000); return () => clearInterval(i); }, []);
   return <span className="whitespace-nowrap font-mono text-label-m text-on-surface">{t ? `${ist(t)} IST` : "—"}</span>;
+}
+
+/** D89: opt-in phone notifications. Hidden until the server reports a channel; off at boot; one click turns it on. */
+function NotifyToggle() {
+  const [st, setSt] = useState<NotifyStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const load = () => api.notify().then(setSt).catch(() => setSt(null));
+    load(); const i = setInterval(load, 10000); return () => clearInterval(i);
+  }, []);
+  if (!st || st.channels.length === 0) return null;
+  const last = st.recent[st.recent.length - 1];
+  const phones = st.pager ? ` ${st.pager.phones} phone${st.pager.phones === 1 ? "" : "s"} connected to the local pager (${st.pager.urls[0]}).` : "";
+  const tip = st.enabled
+    ? `Phone alerts ON via ${st.channels.join(" + ")}: critical alerts, metadata only, max one per camera and category per ${st.cooldown_s} s.` +
+      phones + (last ? ` Last: ${last.ok ? "delivered" : "failed (" + last.error + ")"} in ${last.ms} ms.` : "") + " Click to turn off."
+    : "Phone alerts OFF." + phones + " Click to send critical alerts to the phones.";
+  const flip = () => { setBusy(true); api.setNotify(!st.enabled).then(setSt).catch(() => {}).finally(() => setBusy(false)); };
+  return (
+    <Tooltip rich={{ subhead: "Phone alerts", body: tip }}>
+      <IconButton icon={st.enabled ? "phonelink_ring" : "phonelink_erase"} selected={st.enabled} disabled={busy}
+        aria-label={st.enabled ? "Phone alerts on, click to turn off" : "Phone alerts off, click to turn on"} onClick={flip} />
+    </Tooltip>
+  );
 }
 
 /** Status cluster (B-12..B-17, DESIGN §5.2) plus the sound and theme toggles. Below 1680 px the Model / GPU / onset labels move into the tooltips; values and the connection text stay. */
@@ -56,6 +81,7 @@ export function StatusCluster() {
           ? <IconButton icon="notifications_active" selected aria-label="Alert sound on, click to test" onClick={armSound} />
           : <Button variant="filled" size="s" icon="notifications_off" onClick={armSound}>Arm sound</Button>}
       </div>
+      <NotifyToggle />
       <IconButton icon={theme === "dark" ? "light_mode" : "dark_mode"} aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={toggleTheme} />
     </div>
   );

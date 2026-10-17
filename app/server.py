@@ -14,6 +14,7 @@ import base64
 import csv
 import io
 import json
+import os
 import re
 import sys
 import threading
@@ -31,6 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from app import chat as chatbot
 from app.config import CFG, ROOT
 from app.ingest import source_type
+from app.notify import Notifier
+from app.pager import Pager
 from app.pipeline import Pipeline, load_labels, ms, pct
 from app.scheduler import persons
 from scripts.list_cameras import names as device_names
@@ -72,6 +75,8 @@ def emit(kind, d):
         out = []
         if kind == "alert":                       # emitted right after the event row is INSERTed
             t_stored, cam = time.time(), P.cams.get(d["camera_id"])
+            if NOTIFY is not None:                # D89: queue put only; phones never delay an alert
+                NOTIFY.alert(d, cam.name if cam else None)
             label, onset = LABELS.get(Path(str(cam.source)).name, (None, None)) if cam else (None, None)
             o2a = (ms(cam.t_first + onset, d["_t_alert"]) if cam and not cam.loop and cam.t_first
                    and onset is not None and label == d["category"] else None)   # §12, labelled clip played once
@@ -531,6 +536,40 @@ async def ui_latency(request: Request):
     return {"accepted": True}
 
 
+NOTIFY: Notifier = None                          # D89: opt-in phone notifications, off by default
+
+
+@app.get("/api/notify")
+def notify_status():
+    """D89: whether phone notifications are on, which channels are configured, the last deliveries."""
+    if NOTIFY is None:
+        raise HTTPException(503, "notifier not running")
+    return NOTIFY.status()
+
+
+@app.post("/api/notify")
+def notify_set(body: dict):
+    """D89: switch phone notifications on or off at runtime (the demo turns them on only after the offline run)."""
+    if NOTIFY is None:
+        raise HTTPException(503, "notifier not running")
+    if not isinstance(body.get("enabled"), bool):
+        raise HTTPException(400, "body must be {\"enabled\": true|false}")
+    if body["enabled"] and not NOTIFY.channels():
+        raise HTTPException(409, "no channel: start with HONEYVIEW_PAGER=1 (local phones), or set HACKHIVE_NTFY_URL / the Telegram pair")
+    NOTIFY.enabled = body["enabled"]
+    return NOTIFY.status()
+
+
+@app.post("/api/notify/test")
+def notify_test():
+    """D89: one test message to every configured channel, through the same worker (returns at once). Works while
+    notifications are off, on purpose: it checks a phone is listening before they are switched on."""
+    if NOTIFY is None or not NOTIFY.channels():
+        raise HTTPException(409, "no channel configured")
+    NOTIFY.test()                                 # drop-oldest when full: never a 500
+    return {"queued": True}
+
+
 app.mount("/media/keyframes", StaticFiles(directory=DATA / "keyframes", check_dir=False), name="keyframes")
 app.mount("/media/thumbs", StaticFiles(directory=DATA / "thumbs", check_dir=False), name="thumbs")
 if DIST.exists():
@@ -539,9 +578,15 @@ if DIST.exists():
 
 def serve(port=8000):
     import uvicorn
-    global P
+    global P, NOTIFY
     P = Pipeline([], emit=emit)                  # P3b: nothing runs at boot; config.yaml cameras are Live presets
     P.start()
+    pager = None
+    if (CFG.get("pager") or {}).get("enabled") or os.environ.get("HONEYVIEW_PAGER") == "1":
+        pager = Pager().start()                   # D89: read-only, token-protected, LAN only; the dashboard stays on 127.0.0.1
+        print("HoneyView Pager (open on phones on the same Wi-Fi / hotspot):\n  " + "\n  ".join(pager.urls()), flush=True)
+    NOTIFY = Notifier(pager=pager)
+    NOTIFY.start()
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")   # no auth: never on venue Wi-Fi
     finally:

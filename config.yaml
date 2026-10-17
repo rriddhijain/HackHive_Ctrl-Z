@@ -93,3 +93,18 @@ chat:
   llm: true                 # D75: the model reads every question and writes the answer; false = chat v1 (rules + templates)
   base_url: "same-as-vlm"
   model: "same-as-vlm"        # or any local Ollama model, e.g. "qwen3.5:2b": swapped independently of the VLM (D86)
+
+notify:                     # D89 (proposed): opt-in phone notifications (app/notify.py). The system is fully offline without them.
+  enabled: false            # off at boot; POST /api/notify {"enabled": true} turns them on at runtime
+  categories: [fire_smoke, fighting, person_down, crowd_incident]
+  min_confidence: 0.6       # alert confidence needed to notify
+  cooldown_s: 60            # at most one message per camera + category per minute
+  include_summary: false    # metadata only by default: category, camera, time, confidence, event id; never frames
+  timeout_s: 3
+  queue: 50                 # oldest dropped when full; the alert path never waits
+  # channels and secrets are environment variables, never this file: HACKHIVE_NTFY_URL,
+  # HACKHIVE_TELEGRAM_TOKEN + HACKHIVE_TELEGRAM_CHAT
+
+pager:                      # D89 (proposed): local phone pager (app/pager.py): alerts from this laptop to phones on the same
+  enabled: false            # Wi-Fi / hotspot, no internet. Or start with HONEYVIEW_PAGER=1. Read-only, token in the link.
+  port: 8100
