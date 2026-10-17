@@ -82,6 +82,7 @@ events:
   # it: fighting -> re-labelled, confident normal -> retracted (E-9), else confirmed. enabled: false = v1.21 behaviour.
   down_guard: { enabled: false, blind_frac: 0.5, verify_s: 10.0 }
 
+console: { enabled: true, port: null }   # D89 ESP32 guard console over USB serial; port null = first /dev/cu.usbserial-*; no board = idle
 classifier: { enabled: false, encoder: siglip2-base, fusion_w: 0.5 }   # FR-9b, built only if dev macro F1 < 0.70 (D48)
 detector_pose_ab: { model: models/yolo26n-pose.pt }                 # FR-6a, P2 comparison only
 

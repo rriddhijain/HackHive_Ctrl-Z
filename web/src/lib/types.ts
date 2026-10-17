@@ -91,6 +91,11 @@ export interface Metrics {
   };
   latency: { onset_to_alert_ms: Pctl; store_to_card_ms: Pctl };
   system: { mem_used_pct: number | null; uptime_s: number | null };
+  /** ESP32 guard console (D89); null when switched off in config.yaml. */
+  console?: {
+    connected: boolean; port: string | null; timing: boolean;
+    last: { event_id: number; category: string | null; ms: number; ts: number } | null;
+  } | null;
 }
 
 /** SSE `trace`, newest per camera. Stage order: capture → gate, queue, prefill → 1st token, 1st token → category, category → done, store (SQLite). */

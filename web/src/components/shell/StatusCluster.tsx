@@ -31,7 +31,7 @@ function Clock() {
 export function StatusCluster() {
   const { sound, armSound, theme, toggleTheme } = useStore();
   const { m, conn } = useLive();
-  const x = m?.vlm, o2a = m?.latency?.onset_to_alert_ms;
+  const x = m?.vlm, o2a = m?.latency?.onset_to_alert_ms, con = m?.console;
   return (
     <div className="flex shrink-0 items-center gap-1">
       <div className="flex h-10 items-center rounded-full bg-surface-container p-1">
@@ -43,6 +43,15 @@ export function StatusCluster() {
         <Item icon="timer" label="onset→alert p50" terse value={o2a?.n ? ms(o2a.p50) : "—"}
           tip="Labelled incident onset in the clip → alert (§12), p50. Only for labelled clips played once." />
         <Divider vertical inset />
+        {con && (con.connected || con.last) && <>
+          <Item icon="developer_board" label="Console" terse
+            value={con.timing ? "timing…" : con.last ? ms(con.last.ms) : "ready"}
+            className={con.timing ? "bg-primary-container text-on-primary-container" : ""}
+            tip={con.connected
+              ? "ESP32 console: press its button when an incident starts; the first alert stops the stopwatch (onset → alert as you saw it). Pressing it during an alarm acknowledges the alert."
+              : "ESP32 console unplugged; showing its last stopwatch time"} />
+          <Divider vertical inset />
+        </>}
         <Item label={conn ? "Local · offline" : "Reconnecting"} lead={<Dot tone={conn ? "ok" : "critical"} size={8} />}
           className={conn ? "" : "bg-critical-container text-on-critical-container"}
           tip={conn ? "Connected to the local server; no network needed" : "Lost the local server; retrying"} />

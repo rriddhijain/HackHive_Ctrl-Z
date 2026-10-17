@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import chat as chatbot
 from app.config import CFG, ROOT
+from app.console import Console
 from app.ingest import source_type
 from app.pipeline import Pipeline, load_labels, ms, pct
 from app.scheduler import persons
@@ -41,6 +42,7 @@ UPLOAD_MAX = 500 * 1024 * 1024
 R = CFG["events"]["rating"]
 
 P: Pipeline = None
+CON: Console = None                               # ESP32 guard console (D89); None = off
 LOOP: asyncio.AbstractEventLoop = None
 SUBS: set[asyncio.Queue] = set()
 LAST_OBS, MOSAICS, O2A, S2C = {}, {}, [], []      # camera -> newest observation / mosaic jpeg; latency samples (ms)
@@ -84,6 +86,8 @@ def emit(kind, d):
                               "trigger_to_alert_ms": d["time_to_alert_ms"], "t_stored": t_stored,
                               "onset_to_alert_ms": o2a}),
                    ("event_open", clean(d))]
+            if CON:
+                CON.alert(d)                      # the board blinks too; a pending stopwatch mark stops here
         elif kind in ("event_update", "event_close"):
             out = [(kind, clean(d))]
         elif kind == "observation":
@@ -150,7 +154,8 @@ def metrics():
                     "errors": P.vlm_errors, "gpu_duty_pct": round(100 * P.arb.duty(60), 1),
                     "baselines_skipped": P.sched.skipped, "vetoes": sum(v["p_before"] >= 0.3 for v in P.vetoes)},
             "latency": {"onset_to_alert_ms": lat(O2A), "store_to_card_ms": lat(S2C[-200:])},
-            "system": {"mem_used_pct": psutil.virtual_memory().percent, "uptime_s": round(time.time() - P.t0)}}
+            "system": {"mem_used_pct": psutil.virtual_memory().percent, "uptime_s": round(time.time() - P.t0)},
+            "console": dict(CON.state) if CON else None}
 
 
 @asynccontextmanager
@@ -410,13 +415,20 @@ def event(eid: int):
 
 @app.post("/api/events/{eid}/ack")
 def ack(eid: int):
+    return ack_event(eid)
+
+
+def ack_event(eid, out=send):
+    """Dashboard button, or the console's button (D89: out=notify, from the console thread)."""
     P.db.update("events", eid, {"status": "acknowledged"})
     for ev in list(P.events.open.values()):
         if ev["id"] == eid:
             ev["status"] = "acknowledged"
-    out = event(eid)
-    send("event_update", {k: v for k, v in out.items() if k != "observations"})
-    return out
+    e = event(eid)
+    out("event_update", {k: v for k, v in e.items() if k != "observations"})
+    if CON:
+        CON.clear(eid)
+    return e
 
 
 @app.post("/api/events/{eid}/dismiss")
@@ -427,6 +439,8 @@ def dismiss(eid: int):
     P.db.update("events", eid, {"status": "dismissed", "dismiss_reason": "operator"})
     P.events.dismiss(eid)
     save_feedback(eid)
+    if CON:
+        CON.clear(eid)
     out = event(eid)
     send("event_update", {k: v for k, v in out.items() if k != "observations"})
     return out
@@ -539,9 +553,11 @@ if DIST.exists():
 
 def serve(port=8000):
     import uvicorn
-    global P
+    global P, CON
     P = Pipeline([], emit=emit)                  # P3b: nothing runs at boot; config.yaml cameras are Live presets
     P.start()
+    if CFG.get("console", {}).get("enabled"):   # D89: idles until a board is plugged in
+        CON = Console(on_ack=lambda eid: ack_event(eid, out=notify), port=CFG["console"].get("port")).start()
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")   # no auth: never on venue Wi-Fi
     finally:

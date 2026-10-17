@@ -17,7 +17,7 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - Never commit videos, weights or `data/` (gitignored).
 
 ## Layout
-`app/` pipeline (config, ingest, detect, gate, scheduler, models, vlm, events, db, chat, server, pipeline) · `web/` React dashboard · `bench/` benchmarks · `scripts/` tooling · `models/` weights (gitignored) · `data/` videos, DB, frames (gitignored).
+`app/` pipeline (config, ingest, detect, gate, scheduler, models, vlm, events, db, chat, server, pipeline) · `web/` React dashboard · `firmware/esp32/` ESP32 guard console (D89) · `bench/` benchmarks · `scripts/` tooling · `models/` weights (gitignored) · `data/` videos, DB, frames (gitignored).
 
 ## Run
 - `uv run python -m app.preview` live camera grid with YOLO boxes (P1 validation)
@@ -26,6 +26,7 @@ Local AI video incident detection for the Honeywell hackathon (PS3). **SPEC.md i
 - `cd web && npm run build` (Next.js static export → `web/dist`) then `uv run python -m app.server` dashboard at http://localhost:8000: boots in Clips mode with nothing running; six tabs Clips, Live, Alerts, Ask, Pipeline, Report (`--selfcheck` for the self-check)
 - `cd web && npm run typecheck` TypeScript check · `npm run dev` hot-reload UI on :3000 (needs the API on :8000 for data) · `npm run theme` regenerate M3 colour tokens from the seed
 - `uv run python -m scripts.seed_history` seeded demo history for chat (`--remove` deletes it) · `uv run python -m bench.chat_runner` chat question runner (30 questions, temp DB)
+- `uv run python -m app.console --board` ESP32 console check on the real board (press BOOT twice); flashing: `firmware/esp32/README.md`
 - `uv run python -m bench.ab --gate --check` gate regression check on every dev clip (CPU, ~45 s, exit 1 on failure)
 - `uv run python -m unittest discover -s tests -t .` unit + synthetic tests · `uv run python -m bench.validate` benchmark data checks (exit 1 on invalid) · `uv run python -m bench.diagnose` detector-only view of the dev clips
 - Two F1s (D87): `observed_label_macro_f1` (= historical `macro_f1`, dev diagnostic) vs the `fixed` 8-label block; only `fixed.final_metric_valid` may be quoted as the NFR-2 result

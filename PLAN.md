@@ -16,7 +16,7 @@
   - **Riddhi:** chat with key frames + the brief's "camera 2" question; try to break it.
   - Tailgating door zone per clip: approved (D73), built when a door clip exists in `data/dev/tailgating/`.
   - `web/dist` is gitignored: the M5 needs `cd web && npm ci && npm run build` once (internet) or a copied `web/dist`; captain to decide whether to commit it.
-- [ ] **P7 (after Round 1): ESP32 guard console.** Hardware latency stopwatch, SOS → AI assessment of every camera, annunciate/acknowledge/escalate/shelve, false-alarm hold, fault watchdog; arm/disarm is a stretch. Needs: the board model, buzzer/relay yes/no, and `pyserial` approval (USB) or Wi-Fi + a shared secret.
+- [~] **P7 (after Round 1): ESP32 guard console.** First cut built (D89): stopwatch + alarm LED + acknowledge over USB on a bare board; still open: SOS, escalate/shelve, buzzer/display. Hardware latency stopwatch, SOS → AI assessment of every camera, annunciate/acknowledge/escalate/shelve, false-alarm hold, fault watchdog; arm/disarm is a stretch. Needs: the board model, buzzer/relay yes/no, and `pyserial` approval (USB) or Wi-Fi + a shared secret.
 - [ ] **P6 (after Round 1):** a Kaggle evaluation runner for public datasets, only if the dev set outgrows the Mac. Calibration and reported numbers stay on the M5.
 - [ ] PLAN P6 row: per-clip error rows + confusion-pair review (sample-level debugging), never averages only.
 
