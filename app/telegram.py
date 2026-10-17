@@ -152,15 +152,19 @@ class Telegram:
     def send(self, chat, text=None, photo=None, caption=None):
         """One Bot API call: sendMessage(text) or sendPhoto(photo bytes, caption). The token sits in the URL, so errors
         print only the exception's type, never its message."""
+        def call():
+            if photo is None:
+                return self.http()(f"{API}/bot{self.token}/sendMessage", timeout=5,
+                                   json={"chat_id": chat, "text": text, "parse_mode": "HTML"})
+            return self.http()(f"{API}/bot{self.token}/sendPhoto", timeout=15,
+                               data={"chat_id": chat, "caption": caption, "parse_mode": "HTML"},
+                               files={"photo": ("keyframe.jpg", photo, "image/jpeg")})
         t0 = time.time()
         try:
-            if photo is None:
-                r = self.http()(f"{API}/bot{self.token}/sendMessage", timeout=5,
-                                json={"chat_id": chat, "text": text, "parse_mode": "HTML"})
-            else:
-                r = self.http()(f"{API}/bot{self.token}/sendPhoto", timeout=15,
-                                data={"chat_id": chat, "caption": caption, "parse_mode": "HTML"},
-                                files={"photo": ("keyframe.jpg", photo, "image/jpeg")})
+            r = call()
+            if r.status_code == 429:                    # flood limit (~1 message/s per chat): wait as told, retry once
+                time.sleep(min(float((r.json().get("parameters") or {}).get("retry_after", 1)), 10))
+                r = call()
             err = None if r.status_code == 200 else reason(r)
         except Exception as e:                          # offline, DNS, timeout
             err = type(e).__name__
@@ -287,6 +291,9 @@ def selfcheck():
     assert not e.send("5551234", text="x") and e.state["last_error"] == f"HTTP 401: Unauthorized ({HINT[401]})", e.state
     n = Telegram(env=keys, post=lambda url, **kw: R(400, {"ok": False, "description": "Bad Request: chat not found"}), cfg=cfg)
     assert not n.send("5551234", text="x") and HINT["chat not found"] in n.state["last_error"], n.state
+    flood = [R(429, {"ok": False, "parameters": {"retry_after": 0.01}}), R(200, {"ok": True})]
+    fl = Telegram(env=keys, post=lambda url, **kw: flood.pop(0), cfg=cfg)
+    assert fl.send("5551234", text="x") and not flood and fl.state["sent"] == 1, "429: wait retry_after, retry once"
 
     class G(R):
         pass
