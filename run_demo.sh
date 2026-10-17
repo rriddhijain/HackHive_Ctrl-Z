@@ -7,6 +7,8 @@ cd "$(dirname "$0")"
 T0=$(date +%s)
 die() { printf '\n\033[31mrun_demo: %s\033[0m\n' "$*" >&2; exit 1; }
 say() { printf '[%3ss] %s\n' "$(($(date +%s) - T0))" "$*"; }
+# Telegram keys (D91) from a local .env if there is one: KEY=value lines, gitignored, never committed
+if [ -f .env ]; then set -a; . ./.env; set +a; say "loaded .env"; fi
 
 command -v uv >/dev/null || die "uv not found: install uv, then run 'uv sync' in $(pwd)"
 [ -d "/Applications/Google Chrome.app" ] || die "Google Chrome not found in /Applications (the demo runs in Chrome, not Safari)"
