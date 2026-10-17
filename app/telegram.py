@@ -97,7 +97,7 @@ class Telegram:
         """env: os.environ (tests pass a dict); post: httpx.post (tests pass a fake); cfg: config.yaml's telegram block."""
         env = os.environ if env is None else env
         self.cfg = C if cfg is None else cfg
-        self.token = env.get("TELEGRAM_BOT_TOKEN")
+        self.token = (env.get("TELEGRAM_BOT_TOKEN") or "").strip()   # a pasted space would end up in the URL
         self.to = [c.strip() for c in (env.get("TELEGRAM_CHAT_ID") or "").split(",") if c.strip()]
         self.post, self.q, self.last, self.pending = post, queue.Queue(maxsize=50), {}, {}
         self.state = {"sent": 0, "failed": 0, "dropped": 0, "last_error": None}
@@ -199,8 +199,10 @@ def chat_ids(token, get=None):
     if get is None:
         import httpx
         get = httpx.get
-    out = {}
-    for u in get(f"{API}/bot{token}/getUpdates", timeout=10).json().get("result", []):
+    r, out = get(f"{API}/bot{token}/getUpdates", timeout=10), {}
+    if r.status_code != 200:                            # a wrong token is not "nobody tapped Start"
+        sys.exit(f"getUpdates {reason(r)}")
+    for u in r.json().get("result", []):
         c = (u.get("message") or u.get("my_chat_member") or {}).get("chat") or {}
         if c.get("id"):
             out[c["id"]] = " ".join(x for x in (c.get("first_name"), c.get("last_name"), c.get("title")) if x)
@@ -299,6 +301,12 @@ def selfcheck():
         pass
     ups = {"ok": True, "result": [{"update_id": 1, "message": {"chat": {"id": 777, "first_name": "Shivansh"}, "text": "/start"}}]}
     assert chat_ids("123:tok", get=lambda url, **kw: G(200, ups)) == {777: "Shivansh"}
+    try:
+        chat_ids("bad", get=lambda url, **kw: G(401, {"ok": False, "description": "Unauthorized"}))
+        raise AssertionError("a wrong token must not read as 'nobody tapped Start'")
+    except SystemExit as x:
+        assert HINT[401] in str(x), x
+    assert Telegram(env=dict(keys, TELEGRAM_BOT_TOKEN=" 123:tok\n"), cfg=cfg).token == "123:tok", "pasted whitespace"
     print(f"telegram self-check ok: idle without keys, filters, cooldown, alert text, HTML escaped, key frame + summary "
           f"once, photo failure -> caption, 80 alerts queued in {caller_ms:.1f} ms with no network call, failures "
           f"counted not raised, chat ids from getUpdates")
@@ -306,7 +314,7 @@ def selfcheck():
 
 def main():
     if "--chat-id" in sys.argv:
-        token = os.environ.get("TELEGRAM_BOT_TOKEN") or sys.exit("set TELEGRAM_BOT_TOKEN first")
+        token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip() or sys.exit("set TELEGRAM_BOT_TOKEN first")
         found = chat_ids(token)
         for cid, name in found.items():
             print(f"{cid}  {name}")

@@ -316,7 +316,10 @@ def add_source(body: dict):
         else:                                     # no slot asked: the first free column, if any
             slot = next((k for k in range(1, N_SLOTS + 1) if not in_slot(k)), None)
         cfg = next((c for c in CFG["cameras"] if c["source"] == src), {})   # keeps its door/watch zone (E-16)
-        out = start({"name": body.get("name") or cfg.get("name") or str(src), "source": src,
+        # a typed URL names the camera by scheme://host:port only: user:pass@, path and query can hold its credentials,
+        # and the name reaches the dashboard, the DB, chat and the Telegram alert (D91)
+        out = start({"name": body.get("name") or cfg.get("name")
+                     or (f"{url.scheme}://{url.netloc.rpartition('@')[2]}" if url else str(src)), "source": src,
                      "door_zone": cfg.get("door_zone"), "watch_zone": cfg.get("watch_zone")}, loop=True)
         if slot:
             SLOTS[out["id"]] = slot
