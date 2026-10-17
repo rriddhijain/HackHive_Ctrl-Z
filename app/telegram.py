@@ -12,7 +12,7 @@ so the system runs fully offline without them. Detection stays on this machine; 
 with telegram.snapshot, one still frame and the summary. Never video.
 
 Never on the alert path: alert() and details() only filter and put on a queue. One worker thread makes the HTTPS
-calls (5 s timeout, 15 s for a photo); a failure (no internet, a wrong token) is printed and counted, never raised, and
+calls (15 s timeout, 30 s for a photo: a TLS handshake to Telegram took up to 3.4 s on the venue network); a failure (no internet, a wrong token) is printed and counted, never raised, and
 a photo that fails goes out as its caption. Unlike Meta's WhatsApp API, Telegram answers 200 only once the message is
 in the chat, so "sent" means the phone will show it.
 
@@ -154,9 +154,9 @@ class Telegram:
         print only the exception's type, never its message."""
         def call():
             if photo is None:
-                return self.http()(f"{API}/bot{self.token}/sendMessage", timeout=5,
+                return self.http()(f"{API}/bot{self.token}/sendMessage", timeout=15,
                                    json={"chat_id": chat, "text": text, "parse_mode": "HTML"})
-            return self.http()(f"{API}/bot{self.token}/sendPhoto", timeout=15,
+            return self.http()(f"{API}/bot{self.token}/sendPhoto", timeout=30,
                                data={"chat_id": chat, "caption": caption, "parse_mode": "HTML"},
                                files={"photo": ("keyframe.jpg", photo, "image/jpeg")})
         t0 = time.time()
